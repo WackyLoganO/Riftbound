@@ -1,4 +1,5 @@
 import math
+import random
 
 import pygame
 
@@ -14,6 +15,44 @@ PLAYER_SIZE = 55
 WORLD_WIDTH = 2400
 WORLD_HEIGHT = 1600
 
+MAX_STAMINA = 100
+SPRINT_STAMINA_DRAIN_PER_SECOND = 30
+SPRINT_STAMINA_REGEN_PER_SECOND = 24
+SPRINT_RECOVERY_THRESHOLD = 20
+
+# -----------------------------------------------------------------------------
+# SHOOTING LABORATORY SETTINGS
+# Keeping weapon values together makes balancing and adding weapons easier.
+# -----------------------------------------------------------------------------
+PISTOL = {
+    "name": "Pistol",
+    "damage": 25,
+    "bullet_speed": 3500,
+    "bullet_radius": 5,
+    "magazine_size": 12,
+    "starting_reserve_ammo": 36 ,
+    "seconds_per_shot": 0.20,
+    "reload_time": 1.2,
+    "standing_spread": 0.03,
+    "walking_spread": 0.06,
+    "running_spread": 0.10,
+}
+
+# At 100% spread, a shot could deviate by as much as 45 degrees either way.
+MAX_SPREAD_DEGREES = 45
+
+# Bullet marks persist in world space. The oldest mark is removed when this
+# limit is reached so long matches do not collect an unlimited number of them.
+MAX_BULLET_MARKS = 300
+BULLET_MARK_MIN_RADIUS = 5
+BULLET_MARK_MAX_RADIUS = 8
+BULLET_MARK_LIFETIME = 12.0
+BULLET_MARK_FADE_TIME = 4.0
+
+TARGET_MAX_HEALTH = 100
+TARGET_RADIUS = 32
+TARGET_RESPAWN_TIME = 1.25
+
 BACKGROUND_COLOR = (31, 37, 46)
 GRID_COLOR = (42, 49, 60)
 WALL_COLOR = (104, 114, 128)
@@ -21,6 +60,12 @@ WALL_EDGE_COLOR = (180, 192, 208)
 PLAYER_COLOR = (48, 150, 220)
 PLAYER_EDGE_COLOR = (193, 232, 255)
 TEXT_COLOR = (235, 241, 248)
+BULLET_COLOR = (255, 211, 86)
+BULLET_MARK_RIM_COLOR = (54, 59, 67)
+BULLET_MARK_HOLE_COLOR = (19, 21, 25)
+TARGET_COLOR = (208, 73, 82)
+TARGET_EDGE_COLOR = (255, 190, 196)
+HEALTH_COLOR = (82, 210, 118)
 
 
 def make_walls():
@@ -50,6 +95,17 @@ def make_walls():
     ]
 
 
+def make_practice_target():
+    """Create the target and the values needed to damage and respawn it."""
+    return {
+        "position": pygame.Vector2(1100, 650),
+        "health": TARGET_MAX_HEALTH,
+        "alive": True,
+        "respawn_timer": 0.0,
+        "defeated_count": 0,
+    }
+
+
 def get_movement_input():
     """Read WASD movement and whether either Shift key is being held."""
     keys = pygame.key.get_pressed()
@@ -57,13 +113,13 @@ def get_movement_input():
         int(keys[pygame.K_d]) - int(keys[pygame.K_a]),
         int(keys[pygame.K_s]) - int(keys[pygame.K_w]),
     )
-    sprinting = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
+    sprint_key_held = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
 
     # Normalizing prevents diagonal movement from being faster than straight movement.
     if direction.length_squared() > 0:
         direction = direction.normalize()
 
-    return direction, sprinting
+    return direction, sprint_key_held
 
 
 def move_player(position, movement, walls):
@@ -91,6 +147,148 @@ def move_player(position, movement, walls):
             position.y = player_rect.centery
 
     return player_rect
+
+
+def get_pistol_spread(movement_state):
+    """Return the pistol's spread percentage for the current movement state."""
+    if movement_state == "Running":
+        return PISTOL["running_spread"]
+    if movement_state == "Walking":
+        return PISTOL["walking_spread"]
+    return PISTOL["standing_spread"]
+
+
+def create_bullet(player_position, aim_angle, spread_percent):
+    """Create one bullet with random deviation inside the current spread range."""
+    maximum_deviation = MAX_SPREAD_DEGREES * spread_percent
+    deviation_degrees = random.uniform(-maximum_deviation, maximum_deviation)
+    bullet_angle = aim_angle + math.radians(deviation_degrees)
+
+    direction = pygame.Vector2(math.cos(bullet_angle), math.sin(bullet_angle))
+    muzzle_distance = PLAYER_SIZE / 2 + PISTOL["bullet_radius"] + 7
+
+    return {
+        "position": pygame.Vector2(player_position) + direction * muzzle_distance,
+        "velocity": direction * PISTOL["bullet_speed"],
+        "damage": PISTOL["damage"],
+        "radius": PISTOL["bullet_radius"],
+    }
+
+
+def get_bullet_hit_wall(bullet, walls):
+    """Return the wall struck by the bullet, or None if there is no collision."""
+    radius = bullet["radius"]
+    bullet_rect = pygame.Rect(0, 0, radius * 2, radius * 2)
+    bullet_rect.center = (
+        round(bullet["position"].x),
+        round(bullet["position"].y),
+    )
+
+    for wall in walls:
+        if bullet_rect.colliderect(wall):
+            return wall
+
+    return None
+
+
+def create_bullet_mark(bullet, wall):
+    """Create a fixed world-space mark clamped onto the struck wall's surface."""
+    mark_radius = random.randint(BULLET_MARK_MIN_RADIUS, BULLET_MARK_MAX_RADIUS)
+
+    # Clamping keeps the center of the mark on the visible top of the wall.
+    mark_x = max(
+        wall.left + mark_radius,
+        min(bullet["position"].x, wall.right - mark_radius),
+    )
+    mark_y = max(
+        wall.top + mark_radius,
+        min(bullet["position"].y, wall.bottom - mark_radius),
+    )
+
+    return {
+        "position": pygame.Vector2(mark_x, mark_y),
+        "radius": mark_radius,
+        "rotation": random.uniform(0, math.tau),
+        "time_remaining": BULLET_MARK_LIFETIME,
+    }
+
+
+def update_bullet_marks(bullet_marks, delta_time):
+    """Age impact marks and remove them after their lifetime expires."""
+    for mark in bullet_marks:
+        mark["time_remaining"] -= delta_time
+
+    bullet_marks[:] = [
+        mark for mark in bullet_marks if mark["time_remaining"] > 0
+    ]
+
+
+def clear_bullet_marks(bullet_marks):
+    """Remove every impact mark; the future round manager calls this at round end."""
+    bullet_marks.clear()
+
+
+def update_bullets(bullets, delta_time, walls, target, bullet_marks):
+    """Move bullets and remove them when they hit a wall, target, or map edge."""
+    surviving_bullets = []
+
+    for bullet in bullets:
+        total_movement = bullet["velocity"] * delta_time
+        step_length = max(1, bullet["radius"] * 2)
+        step_count = max(1, math.ceil(total_movement.length() / step_length))
+        movement_step = total_movement / step_count
+        bullet_removed = False
+
+        # Small movement steps prevent fast bullets from skipping through thin walls.
+        for _ in range(step_count):
+            bullet["position"] += movement_step
+
+            outside_world = not (
+                0 <= bullet["position"].x <= WORLD_WIDTH
+                and 0 <= bullet["position"].y <= WORLD_HEIGHT
+            )
+            if outside_world:
+                bullet_removed = True
+                break
+
+            hit_wall = get_bullet_hit_wall(bullet, walls)
+            if hit_wall is not None:
+                bullet_marks.append(create_bullet_mark(bullet, hit_wall))
+                if len(bullet_marks) > MAX_BULLET_MARKS:
+                    del bullet_marks[0]
+
+                bullet_removed = True
+                break
+
+            if target["alive"]:
+                distance_to_target = bullet["position"].distance_to(target["position"])
+                if distance_to_target <= bullet["radius"] + TARGET_RADIUS:
+                    target["health"] = max(0, target["health"] - bullet["damage"])
+
+                    if target["health"] == 0:
+                        target["alive"] = False
+                        target["respawn_timer"] = TARGET_RESPAWN_TIME
+                        target["defeated_count"] += 1
+
+                    bullet_removed = True
+                    break
+
+        if not bullet_removed:
+            surviving_bullets.append(bullet)
+
+    return surviving_bullets
+
+
+def update_target(target, delta_time):
+    """Restore the practice target after a short delay when it is defeated."""
+    if target["alive"]:
+        return
+
+    target["respawn_timer"] -= delta_time
+    if target["respawn_timer"] <= 0:
+        target["health"] = TARGET_MAX_HEALTH
+        target["alive"] = True
+        target["respawn_timer"] = 0.0
 
 
 def calculate_camera(player_position, screen_size):
@@ -134,6 +332,71 @@ def draw_world(screen, walls, camera):
         pygame.draw.rect(screen, WALL_EDGE_COLOR, screen_rect, width=3, border_radius=5)
 
 
+def draw_bullet_marks(screen, bullet_marks, camera):
+    """Draw world-space impact holes and fade them near the end of their life."""
+    mark_layer = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+    screen_rect = screen.get_rect().inflate(40, 40)
+
+    for mark in bullet_marks:
+        center = mark["position"] - camera
+        center_tuple = (round(center.x), round(center.y))
+        radius = mark["radius"]
+
+        if not screen_rect.collidepoint(center_tuple):
+            continue
+
+        if mark["time_remaining"] < BULLET_MARK_FADE_TIME:
+            fade_fraction = mark["time_remaining"] / BULLET_MARK_FADE_TIME
+        else:
+            fade_fraction = 1.0
+
+        alpha = max(0, min(255, round(255 * fade_fraction)))
+        rim_color = (*BULLET_MARK_RIM_COLOR, alpha)
+        hole_color = (*BULLET_MARK_HOLE_COLOR, alpha)
+        highlight_color = (91, 97, 107, alpha)
+
+        # Three short cracks create a readable impact without requiring artwork.
+        for crack_index in range(3):
+            crack_angle = mark["rotation"] + crack_index * (math.tau / 3)
+            crack_start = center + pygame.Vector2(
+                math.cos(crack_angle),
+                math.sin(crack_angle),
+            ) * (radius - 1)
+            crack_end = center + pygame.Vector2(
+                math.cos(crack_angle),
+                math.sin(crack_angle),
+            ) * (radius + 5)
+            pygame.draw.line(
+                mark_layer,
+                rim_color,
+                (round(crack_start.x), round(crack_start.y)),
+                (round(crack_end.x), round(crack_end.y)),
+                width=2,
+            )
+
+        pygame.draw.circle(
+            mark_layer,
+            rim_color,
+            center_tuple,
+            radius + 2,
+        )
+        pygame.draw.circle(
+            mark_layer,
+            hole_color,
+            center_tuple,
+            radius,
+        )
+        pygame.draw.circle(
+            mark_layer,
+            highlight_color,
+            center_tuple,
+            radius,
+            width=1,
+        )
+
+    screen.blit(mark_layer, (0, 0))
+
+
 def draw_player(screen, player_position, aim_angle, camera):
     """Draw a readable placeholder character facing toward the mouse."""
     center = pygame.Vector2(player_position - camera)
@@ -152,15 +415,120 @@ def draw_player(screen, player_position, aim_angle, camera):
     pygame.draw.polygon(screen, PLAYER_EDGE_COLOR, (arrow_tip, arrow_left, arrow_right))
 
 
-def draw_crosshair(screen, mouse_position):
-    """Draw a small aiming reticle at the mouse position."""
+def draw_bullets(screen, bullets, camera):
+    """Draw every active bullet at its camera-adjusted position."""
+    for bullet in bullets:
+        screen_position = bullet["position"] - camera
+        pygame.draw.circle(
+            screen,
+            BULLET_COLOR,
+            (round(screen_position.x), round(screen_position.y)),
+            bullet["radius"],
+        )
+
+
+def draw_target(screen, font, target, camera):
+    """Draw the practice target, its health bar, or its respawn countdown."""
+    center = target["position"] - camera
+    center_tuple = (round(center.x), round(center.y))
+
+    if target["alive"]:
+        pygame.draw.circle(screen, (35, 20, 24), center_tuple, TARGET_RADIUS + 6)
+        pygame.draw.circle(screen, TARGET_COLOR, center_tuple, TARGET_RADIUS)
+        pygame.draw.circle(screen, TARGET_EDGE_COLOR, center_tuple, TARGET_RADIUS, width=4)
+        pygame.draw.circle(screen, TARGET_EDGE_COLOR, center_tuple, 10, width=3)
+
+        bar_width = 90
+        bar_height = 10
+        bar_x = round(center.x - bar_width / 2)
+        bar_y = round(center.y - TARGET_RADIUS - 28)
+        health_fraction = target["health"] / TARGET_MAX_HEALTH
+        pygame.draw.rect(screen, (26, 29, 36), (bar_x, bar_y, bar_width, bar_height))
+        pygame.draw.rect(
+            screen,
+            HEALTH_COLOR,
+            (bar_x, bar_y, round(bar_width * health_fraction), bar_height),
+        )
+        pygame.draw.rect(
+            screen,
+            TARGET_EDGE_COLOR,
+            (bar_x, bar_y, bar_width, bar_height),
+            width=2,
+        )
+    else:
+        pygame.draw.circle(
+            screen,
+            (79, 61, 66),
+            center_tuple,
+            TARGET_RADIUS,
+            width=3,
+        )
+        countdown = font.render(
+            f"{target['respawn_timer']:.1f}",
+            True,
+            TARGET_EDGE_COLOR,
+        )
+        countdown_rect = countdown.get_rect(center=center_tuple)
+        screen.blit(countdown, countdown_rect)
+
+
+def draw_crosshair(screen, mouse_position, spread_percent):
+    """Expand the aiming reticle to indicate the current movement spread."""
     x, y = mouse_position
     color = (118, 211, 255)
-    pygame.draw.circle(screen, color, mouse_position, 9, width=2)
-    pygame.draw.line(screen, color, (x - 15, y), (x - 5, y), width=2)
-    pygame.draw.line(screen, color, (x + 5, y), (x + 15, y), width=2)
-    pygame.draw.line(screen, color, (x, y - 15), (x, y - 5), width=2)
-    pygame.draw.line(screen, color, (x, y + 5), (x, y + 15), width=2)
+    spread_number = spread_percent * 100
+    gap = 5 + round(spread_number * 1.4)
+    line_end = gap + 10
+
+    pygame.draw.circle(screen, color, mouse_position, gap + 3, width=2)
+    pygame.draw.line(screen, color, (x - line_end, y), (x - gap, y), width=2)
+    pygame.draw.line(screen, color, (x + gap, y), (x + line_end, y), width=2)
+    pygame.draw.line(screen, color, (x, y - line_end), (x, y - gap), width=2)
+    pygame.draw.line(screen, color, (x, y + gap), (x, y + line_end), width=2)
+
+
+def draw_stamina_panel(screen, font, stamina, sprinting, sprint_exhausted):
+    """Draw the player's current stamina and sprint condition."""
+    panel_width = 355
+    panel_height = 78
+    panel_x = 18
+    panel_y = screen.get_height() - panel_height - 18
+
+    panel = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+    panel.fill((10, 13, 18, 220))
+    screen.blit(panel, (panel_x, panel_y))
+
+    if sprint_exhausted:
+        label = "STAMINA - EXHAUSTED (RELEASE SHIFT)"
+        bar_color = (215, 78, 78)
+    elif sprinting:
+        label = "STAMINA - RUNNING"
+        bar_color = (255, 174, 66)
+    else:
+        label = "STAMINA"
+        bar_color = (76, 183, 232)
+
+    label_text = font.render(label, True, TEXT_COLOR)
+    screen.blit(label_text, (panel_x + 16, panel_y + 10))
+
+    bar_x = panel_x + 16
+    bar_y = panel_y + 40
+    bar_width = panel_width - 32
+    bar_height = 20
+    stamina_fraction = stamina / MAX_STAMINA
+
+    pygame.draw.rect(screen, (29, 34, 43), (bar_x, bar_y, bar_width, bar_height))
+    pygame.draw.rect(
+        screen,
+        bar_color,
+        (bar_x, bar_y, round(bar_width * stamina_fraction), bar_height),
+    )
+    pygame.draw.rect(
+        screen,
+        TEXT_COLOR,
+        (bar_x, bar_y, bar_width, bar_height),
+        width=2,
+    )
 
 
 def draw_debug_panel(
@@ -168,22 +536,26 @@ def draw_debug_panel(
     font,
     player_position,
     aim_angle,
-    current_speed,
+    actual_speed,
     movement_state,
+    spread_percent,
+    stamina,
     current_fps,
 ):
     """Show the values that matter while testing movement."""
     lines = [
-        "MOVEMENT LABORATORY 0.1",
-        "WASD: Move    SHIFT: Run    Mouse: Aim    ESC: Quit",
+        "SHOOTING LABORATORY 0.2",
+        "WASD: Move    SHIFT: Run    LMB: Fire    R: Reload    ESC: Quit",
         f"Position: ({player_position.x:.1f}, {player_position.y:.1f})",
         f"Facing: {math.degrees(aim_angle):.1f} degrees",
         f"Movement: {movement_state}",
-        f"Current speed: {current_speed:.0f} pixels/second",
+        f"Current speed: {actual_speed:.0f} pixels/second",
+        f"Pistol spread: {spread_percent * 100:.0f}%",
+        f"Stamina: {stamina:.0f} / {MAX_STAMINA}",
         f"FPS: {current_fps:.0f}",
     ]
 
-    panel = pygame.Surface((560, 203), pygame.SRCALPHA)
+    panel = pygame.Surface((700, 253), pygame.SRCALPHA)
     panel.fill((10, 13, 18, 205))
     screen.blit(panel, (18, 18))
 
@@ -192,42 +564,149 @@ def draw_debug_panel(
         screen.blit(rendered_text, (34, 32 + index * 25))
 
 
+def draw_weapon_panel(
+    screen,
+    regular_font,
+    large_font,
+    magazine_ammo,
+    reserve_ammo,
+    reloading,
+    reload_timer,
+    target,
+):
+    """Display ammunition, reload status, target health, and target defeats."""
+    panel_width = 355
+    panel_height = 175
+    panel_x = screen.get_width() - panel_width - 18
+    panel_y = screen.get_height() - panel_height - 18
+
+    panel = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+    panel.fill((10, 13, 18, 220))
+    screen.blit(panel, (panel_x, panel_y))
+
+    weapon_name = regular_font.render(PISTOL["name"].upper(), True, TEXT_COLOR)
+    screen.blit(weapon_name, (panel_x + 18, panel_y + 14))
+
+    ammunition = large_font.render(
+        f"{magazine_ammo} / {reserve_ammo}",
+        True,
+        BULLET_COLOR,
+    )
+    screen.blit(ammunition, (panel_x + 18, panel_y + 38))
+
+    if reloading:
+        weapon_status = f"RELOADING: {reload_timer:.1f}s"
+    elif magazine_ammo == 0:
+        weapon_status = "OUT OF AMMO"
+    else:
+        weapon_status = "READY"
+
+    status_text = regular_font.render(weapon_status, True, TEXT_COLOR)
+    screen.blit(status_text, (panel_x + 18, panel_y + 87))
+
+    if target["alive"]:
+        target_status = f"Target health: {target['health']} / {TARGET_MAX_HEALTH}"
+    else:
+        target_status = "Target defeated"
+
+    target_text = regular_font.render(target_status, True, TEXT_COLOR)
+    defeat_text = regular_font.render(
+        f"Targets defeated: {target['defeated_count']}",
+        True,
+        TEXT_COLOR,
+    )
+    screen.blit(target_text, (panel_x + 18, panel_y + 117))
+    screen.blit(defeat_text, (panel_x + 18, panel_y + 143))
+
+
 def main():
     pygame.init()
 
     screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-    pygame.display.set_caption("Riftbound - Movement Laboratory")
+    pygame.display.set_caption("Riftbound - Shooting Laboratory")
     pygame.mouse.set_visible(False)
 
     clock = pygame.time.Clock()
     debug_font = pygame.font.Font(None, 26)
+    ammunition_font = pygame.font.Font(None, 48)
     walls = make_walls()
+    target = make_practice_target()
 
     player_position = pygame.Vector2(260, 240)
     aim_angle = 0.0
+    bullets = []
+    bullet_marks = []
+
+    magazine_ammo = PISTOL["magazine_size"]
+    reserve_ammo = PISTOL["starting_reserve_ammo"]
+    shot_cooldown = 0.0
+    reloading = False
+    reload_timer = 0.0
+    stamina = MAX_STAMINA
+    sprint_exhausted = False
     game_running = True
 
     while game_running:
-        # Delta time keeps movement speed consistent even if the frame rate changes.
+        # Delta time keeps movement, bullets, and timers consistent at any frame rate.
         delta_time = min(clock.tick(FPS) / 1000.0, 0.05)
+        reload_requested = False
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 game_running = False
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                game_running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    game_running = False
+                elif event.key == pygame.K_r:
+                    reload_requested = True
 
-        movement_direction, sprinting = get_movement_input()
-        current_speed = PLAYER_SPEED * SPRINT_MULTIPLIER if sprinting else PLAYER_SPEED
-        movement = movement_direction * current_speed * delta_time
+        movement_direction, sprint_key_held = get_movement_input()
+        moving = movement_direction.length_squared() > 0
+        sprinting = (
+            moving
+            and sprint_key_held
+            and not sprint_exhausted
+            and stamina > 0
+        )
+
+        if sprinting:
+            stamina = max(
+                0.0,
+                stamina - SPRINT_STAMINA_DRAIN_PER_SECOND * delta_time,
+            )
+            if stamina == 0:
+                sprint_exhausted = True
+        else:
+            stamina = min(
+                MAX_STAMINA,
+                stamina + SPRINT_STAMINA_REGEN_PER_SECOND * delta_time,
+            )
+
+            # Releasing Shift after recovering prevents rapid run/walk stuttering.
+            if (
+                sprint_exhausted
+                and not sprint_key_held
+                and stamina >= SPRINT_RECOVERY_THRESHOLD
+            ):
+                sprint_exhausted = False
+
+        selected_speed = (
+            PLAYER_SPEED * SPRINT_MULTIPLIER if sprinting else PLAYER_SPEED
+        )
+        movement = movement_direction * selected_speed * delta_time
         move_player(player_position, movement, walls)
 
         if movement_direction.length_squared() == 0:
             movement_state = "Idle"
+            actual_speed = 0
         elif sprinting:
             movement_state = "Running"
+            actual_speed = selected_speed
         else:
             movement_state = "Walking"
+            actual_speed = selected_speed
+
+        current_spread = get_pistol_spread(movement_state)
 
         camera = calculate_camera(player_position, screen.get_size())
         mouse_screen_position = pygame.Vector2(pygame.mouse.get_pos())
@@ -236,19 +715,88 @@ def main():
         if aim_vector.length_squared() > 0:
             aim_angle = math.atan2(aim_vector.y, aim_vector.x)
 
+        shot_cooldown = max(0.0, shot_cooldown - delta_time)
+
+        if reload_requested and not reloading:
+            magazine_has_space = magazine_ammo < PISTOL["magazine_size"]
+            if magazine_has_space and reserve_ammo > 0:
+                reloading = True
+                reload_timer = PISTOL["reload_time"]
+
+        if reloading:
+            reload_timer -= delta_time
+            if reload_timer <= 0:
+                ammunition_needed = PISTOL["magazine_size"] - magazine_ammo
+                ammunition_loaded = min(ammunition_needed, reserve_ammo)
+                magazine_ammo += ammunition_loaded
+                reserve_ammo -= ammunition_loaded
+                reloading = False
+                reload_timer = 0.0
+
+        firing = pygame.mouse.get_pressed()[0]
+        can_fire = (
+            firing
+            and not reloading
+            and magazine_ammo > 0
+            and shot_cooldown <= 0
+        )
+        if can_fire:
+            bullets.append(
+                create_bullet(player_position, aim_angle, current_spread)
+            )
+            magazine_ammo -= 1
+            shot_cooldown = PISTOL["seconds_per_shot"]
+
+        # Reaching zero starts the same reload used by the R key.
+        if not reloading and magazine_ammo == 0 and reserve_ammo > 0:
+            reloading = True
+            reload_timer = PISTOL["reload_time"]
+
+        bullets = update_bullets(
+            bullets,
+            delta_time,
+            walls,
+            target,
+            bullet_marks,
+        )
+        update_bullet_marks(bullet_marks, delta_time)
+        update_target(target, delta_time)
+
         screen.fill(BACKGROUND_COLOR)
         draw_world(screen, walls, camera)
+        draw_bullet_marks(screen, bullet_marks, camera)
+        draw_target(screen, debug_font, target, camera)
+        draw_bullets(screen, bullets, camera)
         draw_player(screen, player_position, aim_angle, camera)
         draw_debug_panel(
             screen,
             debug_font,
             player_position,
             aim_angle,
-            current_speed,
+            actual_speed,
             movement_state,
+            current_spread,
+            stamina,
             clock.get_fps(),
         )
-        draw_crosshair(screen, pygame.mouse.get_pos())
+        draw_weapon_panel(
+            screen,
+            debug_font,
+            ammunition_font,
+            magazine_ammo,
+            reserve_ammo,
+            reloading,
+            reload_timer,
+            target,
+        )
+        draw_stamina_panel(
+            screen,
+            debug_font,
+            stamina,
+            sprinting,
+            sprint_exhausted,
+        )
+        draw_crosshair(screen, pygame.mouse.get_pos(), current_spread)
 
         pygame.display.flip()
 
