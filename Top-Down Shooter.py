@@ -28,6 +28,7 @@ PISTOL = {
     "slot": 1,
     "name": "Pistol",
     "fire_mode": "semi",
+    "projectiles_per_shot": 1,
     "damage": 25,
     "bullet_speed": 3500,
     "bullet_radius": 5,
@@ -49,6 +50,7 @@ RIFLE = {
     "slot": 2,
     "name": "Rifle",
     "fire_mode": "automatic",
+    "projectiles_per_shot": 1,
     "damage": 20,
     "bullet_speed": 4200,
     "bullet_radius": 4,
@@ -66,7 +68,32 @@ RIFLE = {
     "sustained_camera_sway": 70.0,
 }
 
-WEAPONS = [PISTOL, RIFLE]
+SHOTGUN = {
+    "slot": 3,
+    "name": "Shotgun",
+    "fire_mode": "semi",
+    "projectiles_per_shot": 8,
+    "damage": 14,
+    "damage_falloff_start": 300,
+    "damage_falloff_end": 1000,
+    "minimum_damage_multiplier": 0.25,
+    "bullet_speed": 3000,
+    "bullet_radius": 4,
+    "magazine_size": 6,
+    "starting_reserve_ammo": 24,
+    "seconds_per_shot": 0.75,
+    "reload_time": 2.4,
+    "standing_spread": 0.14,
+    "walking_spread": 0.19,
+    "running_spread": 0.26,
+    "sustained_spread_per_shot": 0.0,
+    "maximum_sustained_spread": 0.0,
+    "tap_camera_shake": 7.0,
+    "sustained_camera_kick": 0.0,
+    "sustained_camera_sway": 0.0,
+}
+
+WEAPONS = [PISTOL, RIFLE, SHOTGUN]
 
 CAMERA_RECOIL_SPRING = 90.0
 CAMERA_RECOIL_DAMPING = 12.0
@@ -82,6 +109,9 @@ BULLET_MARK_MIN_RADIUS = 5
 BULLET_MARK_MAX_RADIUS = 8
 BULLET_MARK_LIFETIME = 12.0
 BULLET_MARK_FADE_TIME = 4.0
+BULLET_MARK_MIN_LIFETIME = 4.0
+BULLET_MARK_NEAR_DISTANCE = 200
+BULLET_MARK_FAR_DISTANCE = 1400
 
 TARGET_MAX_HEALTH = 100
 TARGET_RADIUS = 32
@@ -218,7 +248,38 @@ def create_bullet(player_position, aim_angle, spread_percent, weapon):
         "velocity": direction * weapon["bullet_speed"],
         "damage": weapon["damage"],
         "radius": weapon["bullet_radius"],
+        "distance_traveled": 0.0,
+        "damage_falloff_start": weapon.get("damage_falloff_start"),
+        "damage_falloff_end": weapon.get("damage_falloff_end"),
+        "minimum_damage_multiplier": weapon.get(
+            "minimum_damage_multiplier",
+            1.0,
+        ),
     }
+
+
+def calculate_bullet_damage(bullet):
+    """Calculate integer damage using optional distance-based falloff."""
+    falloff_start = bullet["damage_falloff_start"]
+    falloff_end = bullet["damage_falloff_end"]
+
+    if falloff_start is None or falloff_end is None:
+        return bullet["damage"]
+
+    distance = bullet["distance_traveled"]
+    if distance <= falloff_start:
+        multiplier = 1.0
+    elif distance >= falloff_end:
+        multiplier = bullet["minimum_damage_multiplier"]
+    else:
+        falloff_progress = (
+            (distance - falloff_start) / (falloff_end - falloff_start)
+        )
+        multiplier = 1.0 + (
+            bullet["minimum_damage_multiplier"] - 1.0
+        ) * falloff_progress
+
+    return max(1, round(bullet["damage"] * multiplier))
 
 
 def get_bullet_hit_wall(bullet, walls):
@@ -237,6 +298,22 @@ def get_bullet_hit_wall(bullet, walls):
     return None
 
 
+def calculate_bullet_mark_lifetime(distance):
+    """Return a shorter mark lifetime for an impact farther from its shooter."""
+    if distance <= BULLET_MARK_NEAR_DISTANCE:
+        return BULLET_MARK_LIFETIME
+    if distance >= BULLET_MARK_FAR_DISTANCE:
+        return BULLET_MARK_MIN_LIFETIME
+
+    distance_progress = (
+        (distance - BULLET_MARK_NEAR_DISTANCE)
+        / (BULLET_MARK_FAR_DISTANCE - BULLET_MARK_NEAR_DISTANCE)
+    )
+    return BULLET_MARK_LIFETIME + (
+        BULLET_MARK_MIN_LIFETIME - BULLET_MARK_LIFETIME
+    ) * distance_progress
+
+
 def create_bullet_mark(bullet, wall):
     """Create a fixed world-space mark clamped onto the struck wall's surface."""
     mark_radius = random.randint(BULLET_MARK_MIN_RADIUS, BULLET_MARK_MAX_RADIUS)
@@ -251,11 +328,16 @@ def create_bullet_mark(bullet, wall):
         min(bullet["position"].y, wall.bottom - mark_radius),
     )
 
+    mark_lifetime = calculate_bullet_mark_lifetime(
+        bullet["distance_traveled"]
+    )
+
     return {
         "position": pygame.Vector2(mark_x, mark_y),
         "radius": mark_radius,
         "rotation": random.uniform(0, math.tau),
-        "time_remaining": BULLET_MARK_LIFETIME,
+        "time_remaining": mark_lifetime,
+        "fade_time": min(BULLET_MARK_FADE_TIME, mark_lifetime / 2),
     }
 
 
@@ -283,11 +365,13 @@ def update_bullets(bullets, delta_time, walls, target, bullet_marks):
         step_length = max(1, bullet["radius"] * 2)
         step_count = max(1, math.ceil(total_movement.length() / step_length))
         movement_step = total_movement / step_count
+        movement_step_length = movement_step.length()
         bullet_removed = False
 
         # Small movement steps prevent fast bullets from skipping through thin walls.
         for _ in range(step_count):
             bullet["position"] += movement_step
+            bullet["distance_traveled"] += movement_step_length
 
             outside_world = not (
                 0 <= bullet["position"].x <= WORLD_WIDTH
@@ -309,7 +393,8 @@ def update_bullets(bullets, delta_time, walls, target, bullet_marks):
             if target["alive"]:
                 distance_to_target = bullet["position"].distance_to(target["position"])
                 if distance_to_target <= bullet["radius"] + TARGET_RADIUS:
-                    target["health"] = max(0, target["health"] - bullet["damage"])
+                    hit_damage = calculate_bullet_damage(bullet)
+                    target["health"] = max(0, target["health"] - hit_damage)
 
                     if target["health"] == 0:
                         target["alive"] = False
@@ -463,8 +548,8 @@ def draw_bullet_marks(screen, bullet_marks, camera):
         if not screen_rect.collidepoint(center_tuple):
             continue
 
-        if mark["time_remaining"] < BULLET_MARK_FADE_TIME:
-            fade_fraction = mark["time_remaining"] / BULLET_MARK_FADE_TIME
+        if mark["time_remaining"] < mark["fade_time"]:
+            fade_fraction = mark["time_remaining"] / mark["fade_time"]
         else:
             fade_fraction = 1.0
 
@@ -664,7 +749,7 @@ def draw_debug_panel(
     """Show the values that matter while testing movement."""
     lines = [
         "SHOOTING LABORATORY 0.2",
-        "WASD: Move  SHIFT: Run  LMB: Fire  R: Reload  1/2: Weapons  ESC: Quit",
+        "WASD: Move  SHIFT: Run  LMB: Fire  R: Reload  1/2/3: Weapons  ESC: Quit",
         f"Position: ({player_position.x:.1f}, {player_position.y:.1f})",
         f"Facing: {math.degrees(aim_angle):.1f} degrees",
         f"Movement: {movement_state}",
@@ -728,7 +813,11 @@ def draw_weapon_panel(
     status_text = regular_font.render(weapon_status, True, TEXT_COLOR)
     screen.blit(status_text, (panel_x + 18, panel_y + 87))
 
-    slots_text = regular_font.render("1: Pistol    2: Rifle", True, (166, 180, 198))
+    slots_text = regular_font.render(
+        "1: Pistol    2: Rifle    3: Shotgun",
+        True,
+        (166, 180, 198),
+    )
     screen.blit(slots_text, (panel_x + 18, panel_y + 113))
 
     if target["alive"]:
@@ -793,6 +882,8 @@ def main():
                     weapon_switch_requested = 0
                 elif event.key == pygame.K_2:
                     weapon_switch_requested = 1
+                elif event.key == pygame.K_3:
+                    weapon_switch_requested = 2
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 trigger_just_pressed = True
 
@@ -936,14 +1027,15 @@ def main():
                 and active_weapon_state["sustained_shots"] > 0
                 and not trigger_just_pressed
             )
-            bullets.append(
-                create_bullet(
-                    player_position,
-                    aim_angle,
-                    current_spread,
-                    active_weapon,
+            for _ in range(active_weapon["projectiles_per_shot"]):
+                bullets.append(
+                    create_bullet(
+                        player_position,
+                        aim_angle,
+                        current_spread,
+                        active_weapon,
+                    )
                 )
-            )
             active_weapon_state["magazine_ammo"] -= 1
             active_weapon_state["shot_cooldown"] = active_weapon["seconds_per_shot"]
             camera_shake_strength, recoil_sway_direction = add_shot_recoil(
