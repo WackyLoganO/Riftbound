@@ -17,7 +17,7 @@ WORLD_HEIGHT = 1600
 
 MAX_STAMINA = 100
 SPRINT_STAMINA_DRAIN_PER_SECOND = 30
-SPRINT_STAMINA_REGEN_PER_SECOND = 24
+SPRINT_STAMINA_REGEN_PER_SECOND = 15
 SPRINT_RECOVERY_THRESHOLD = 20
 
 # -----------------------------------------------------------------------------
@@ -25,7 +25,9 @@ SPRINT_RECOVERY_THRESHOLD = 20
 # Keeping weapon values together makes balancing and adding weapons easier.
 # -----------------------------------------------------------------------------
 PISTOL = {
+    "slot": 1,
     "name": "Pistol",
+    "fire_mode": "semi",
     "damage": 25,
     "bullet_speed": 3500,
     "bullet_radius": 5,
@@ -36,7 +38,39 @@ PISTOL = {
     "standing_spread": 0.03,
     "walking_spread": 0.06,
     "running_spread": 0.10,
+    "sustained_spread_per_shot": 0.0,
+    "maximum_sustained_spread": 0.0,
+    "tap_camera_shake": 3.0,
+    "sustained_camera_kick": 0.0,
+    "sustained_camera_sway": 0.0,
 }
+
+RIFLE = {
+    "slot": 2,
+    "name": "Rifle",
+    "fire_mode": "automatic",
+    "damage": 20,
+    "bullet_speed": 4200,
+    "bullet_radius": 4,
+    "magazine_size": 30,
+    "starting_reserve_ammo": 90,
+    "seconds_per_shot": 0.095,
+    "reload_time": 1.8,
+    "standing_spread": 0.02,
+    "walking_spread": 0.05,
+    "running_spread": 0.09,
+    "sustained_spread_per_shot": 0.007,
+    "maximum_sustained_spread": 0.05,
+    "tap_camera_shake": 4.0,
+    "sustained_camera_kick": 135.0,
+    "sustained_camera_sway": 70.0,
+}
+
+WEAPONS = [PISTOL, RIFLE]
+
+CAMERA_RECOIL_SPRING = 90.0
+CAMERA_RECOIL_DAMPING = 12.0
+CAMERA_SHAKE_DECAY_PER_SECOND = 32.0
 
 # At 100% spread, a shot could deviate by as much as 45 degrees either way.
 MAX_SPREAD_DEGREES = 45
@@ -106,6 +140,18 @@ def make_practice_target():
     }
 
 
+def make_weapon_state(weapon):
+    """Create ammunition and timing values that belong to one carried weapon."""
+    return {
+        "magazine_ammo": weapon["magazine_size"],
+        "reserve_ammo": weapon["starting_reserve_ammo"],
+        "shot_cooldown": 0.0,
+        "reloading": False,
+        "reload_timer": 0.0,
+        "sustained_shots": 0,
+    }
+
+
 def get_movement_input():
     """Read WASD movement and whether either Shift key is being held."""
     keys = pygame.key.get_pressed()
@@ -149,29 +195,29 @@ def move_player(position, movement, walls):
     return player_rect
 
 
-def get_pistol_spread(movement_state):
-    """Return the pistol's spread percentage for the current movement state."""
+def get_weapon_spread(weapon, movement_state):
+    """Return the active weapon's spread for the current movement state."""
     if movement_state == "Running":
-        return PISTOL["running_spread"]
+        return weapon["running_spread"]
     if movement_state == "Walking":
-        return PISTOL["walking_spread"]
-    return PISTOL["standing_spread"]
+        return weapon["walking_spread"]
+    return weapon["standing_spread"]
 
 
-def create_bullet(player_position, aim_angle, spread_percent):
+def create_bullet(player_position, aim_angle, spread_percent, weapon):
     """Create one bullet with random deviation inside the current spread range."""
     maximum_deviation = MAX_SPREAD_DEGREES * spread_percent
     deviation_degrees = random.uniform(-maximum_deviation, maximum_deviation)
     bullet_angle = aim_angle + math.radians(deviation_degrees)
 
     direction = pygame.Vector2(math.cos(bullet_angle), math.sin(bullet_angle))
-    muzzle_distance = PLAYER_SIZE / 2 + PISTOL["bullet_radius"] + 7
+    muzzle_distance = PLAYER_SIZE / 2 + weapon["bullet_radius"] + 7
 
     return {
         "position": pygame.Vector2(player_position) + direction * muzzle_distance,
-        "velocity": direction * PISTOL["bullet_speed"],
-        "damage": PISTOL["damage"],
-        "radius": PISTOL["bullet_radius"],
+        "velocity": direction * weapon["bullet_speed"],
+        "damage": weapon["damage"],
+        "radius": weapon["bullet_radius"],
     }
 
 
@@ -304,6 +350,78 @@ def calculate_camera(player_position, screen_size):
         max(0, min(camera_x, maximum_x)),
         max(0, min(camera_y, maximum_y)),
     )
+
+
+def update_camera_recoil(recoil_offset, recoil_velocity, shake_strength, delta_time):
+    """Return the camera toward center with a damped spring after each shot."""
+    recoil_velocity += -recoil_offset * CAMERA_RECOIL_SPRING * delta_time
+    recoil_velocity *= math.exp(-CAMERA_RECOIL_DAMPING * delta_time)
+    recoil_offset += recoil_velocity * delta_time
+    shake_strength = max(
+        0.0,
+        shake_strength - CAMERA_SHAKE_DECAY_PER_SECOND * delta_time,
+    )
+
+    if recoil_offset.length_squared() < 0.0025 and recoil_velocity.length_squared() < 0.25:
+        recoil_offset.update(0, 0)
+        recoil_velocity.update(0, 0)
+
+    return shake_strength
+
+
+def add_shot_recoil(
+    weapon,
+    aim_angle,
+    sustained_shot,
+    recoil_velocity,
+    shake_strength,
+    sway_direction,
+):
+    """Apply tap shake or directional automatic-fire recoil for one shot."""
+    if sustained_shot and weapon["fire_mode"] == "automatic":
+        firing_direction = pygame.Vector2(
+            math.cos(aim_angle),
+            math.sin(aim_angle),
+        )
+        sideways_direction = pygame.Vector2(
+            -firing_direction.y,
+            firing_direction.x,
+        )
+
+        recoil_velocity -= firing_direction * weapon["sustained_camera_kick"]
+        recoil_velocity += (
+            sideways_direction
+            * weapon["sustained_camera_sway"]
+            * sway_direction
+        )
+        sway_direction *= -1
+    else:
+        shake_strength = max(shake_strength, weapon["tap_camera_shake"])
+
+    return shake_strength, sway_direction
+
+
+def apply_camera_effects(
+    base_camera,
+    recoil_offset,
+    shake_strength,
+    screen_size,
+):
+    """Add recoil and shake, then keep the final camera inside the map."""
+    if shake_strength > 0:
+        shake_offset = pygame.Vector2(
+            random.uniform(-shake_strength, shake_strength),
+            random.uniform(-shake_strength, shake_strength),
+        )
+    else:
+        shake_offset = pygame.Vector2()
+
+    camera = base_camera + recoil_offset + shake_offset
+    maximum_x = max(0, WORLD_WIDTH - screen_size[0])
+    maximum_y = max(0, WORLD_HEIGHT - screen_size[1])
+    camera.x = max(0, min(camera.x, maximum_x))
+    camera.y = max(0, min(camera.y, maximum_y))
+    return camera
 
 
 def draw_grid(screen, camera):
@@ -540,22 +658,23 @@ def draw_debug_panel(
     movement_state,
     spread_percent,
     stamina,
+    active_weapon,
     current_fps,
 ):
     """Show the values that matter while testing movement."""
     lines = [
         "SHOOTING LABORATORY 0.2",
-        "WASD: Move    SHIFT: Run    LMB: Fire    R: Reload    ESC: Quit",
+        "WASD: Move  SHIFT: Run  LMB: Fire  R: Reload  1/2: Weapons  ESC: Quit",
         f"Position: ({player_position.x:.1f}, {player_position.y:.1f})",
         f"Facing: {math.degrees(aim_angle):.1f} degrees",
         f"Movement: {movement_state}",
         f"Current speed: {actual_speed:.0f} pixels/second",
-        f"Pistol spread: {spread_percent * 100:.0f}%",
+        f"{active_weapon['name']} spread: {spread_percent * 100:.0f}%",
         f"Stamina: {stamina:.0f} / {MAX_STAMINA}",
         f"FPS: {current_fps:.0f}",
     ]
 
-    panel = pygame.Surface((700, 253), pygame.SRCALPHA)
+    panel = pygame.Surface((880, 253), pygame.SRCALPHA)
     panel.fill((10, 13, 18, 205))
     screen.blit(panel, (18, 18))
 
@@ -568,15 +687,13 @@ def draw_weapon_panel(
     screen,
     regular_font,
     large_font,
-    magazine_ammo,
-    reserve_ammo,
-    reloading,
-    reload_timer,
+    active_weapon,
+    weapon_state,
     target,
 ):
     """Display ammunition, reload status, target health, and target defeats."""
     panel_width = 355
-    panel_height = 175
+    panel_height = 200
     panel_x = screen.get_width() - panel_width - 18
     panel_y = screen.get_height() - panel_height - 18
 
@@ -584,25 +701,35 @@ def draw_weapon_panel(
     panel.fill((10, 13, 18, 220))
     screen.blit(panel, (panel_x, panel_y))
 
-    weapon_name = regular_font.render(PISTOL["name"].upper(), True, TEXT_COLOR)
+    fire_mode_label = (
+        "AUTO" if active_weapon["fire_mode"] == "automatic" else "SEMI"
+    )
+    weapon_name = regular_font.render(
+        f"SLOT {active_weapon['slot']}: {active_weapon['name'].upper()} [{fire_mode_label}]",
+        True,
+        TEXT_COLOR,
+    )
     screen.blit(weapon_name, (panel_x + 18, panel_y + 14))
 
     ammunition = large_font.render(
-        f"{magazine_ammo} / {reserve_ammo}",
+        f"{weapon_state['magazine_ammo']} / {weapon_state['reserve_ammo']}",
         True,
         BULLET_COLOR,
     )
     screen.blit(ammunition, (panel_x + 18, panel_y + 38))
 
-    if reloading:
-        weapon_status = f"RELOADING: {reload_timer:.1f}s"
-    elif magazine_ammo == 0:
+    if weapon_state["reloading"]:
+        weapon_status = f"RELOADING: {weapon_state['reload_timer']:.1f}s"
+    elif weapon_state["magazine_ammo"] == 0:
         weapon_status = "OUT OF AMMO"
     else:
         weapon_status = "READY"
 
     status_text = regular_font.render(weapon_status, True, TEXT_COLOR)
     screen.blit(status_text, (panel_x + 18, panel_y + 87))
+
+    slots_text = regular_font.render("1: Pistol    2: Rifle", True, (166, 180, 198))
+    screen.blit(slots_text, (panel_x + 18, panel_y + 113))
 
     if target["alive"]:
         target_status = f"Target health: {target['health']} / {TARGET_MAX_HEALTH}"
@@ -615,8 +742,8 @@ def draw_weapon_panel(
         True,
         TEXT_COLOR,
     )
-    screen.blit(target_text, (panel_x + 18, panel_y + 117))
-    screen.blit(defeat_text, (panel_x + 18, panel_y + 143))
+    screen.blit(target_text, (panel_x + 18, panel_y + 142))
+    screen.blit(defeat_text, (panel_x + 18, panel_y + 168))
 
 
 def main():
@@ -637,11 +764,12 @@ def main():
     bullets = []
     bullet_marks = []
 
-    magazine_ammo = PISTOL["magazine_size"]
-    reserve_ammo = PISTOL["starting_reserve_ammo"]
-    shot_cooldown = 0.0
-    reloading = False
-    reload_timer = 0.0
+    weapon_states = [make_weapon_state(weapon) for weapon in WEAPONS]
+    active_weapon_index = 0
+    camera_recoil_offset = pygame.Vector2()
+    camera_recoil_velocity = pygame.Vector2()
+    camera_shake_strength = 0.0
+    recoil_sway_direction = 1
     stamina = MAX_STAMINA
     sprint_exhausted = False
     game_running = True
@@ -650,6 +778,8 @@ def main():
         # Delta time keeps movement, bullets, and timers consistent at any frame rate.
         delta_time = min(clock.tick(FPS) / 1000.0, 0.05)
         reload_requested = False
+        weapon_switch_requested = None
+        trigger_just_pressed = False
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -659,6 +789,30 @@ def main():
                     game_running = False
                 elif event.key == pygame.K_r:
                     reload_requested = True
+                elif event.key == pygame.K_1:
+                    weapon_switch_requested = 0
+                elif event.key == pygame.K_2:
+                    weapon_switch_requested = 1
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                trigger_just_pressed = True
+
+        if (
+            weapon_switch_requested is not None
+            and weapon_switch_requested != active_weapon_index
+        ):
+            # Switching weapons cancels, rather than completes, the current reload.
+            old_weapon_state = weapon_states[active_weapon_index]
+            old_weapon_state["reloading"] = False
+            old_weapon_state["reload_timer"] = 0.0
+            old_weapon_state["sustained_shots"] = 0
+            active_weapon_index = weapon_switch_requested
+            weapon_states[active_weapon_index]["sustained_shots"] = 0
+
+        active_weapon = WEAPONS[active_weapon_index]
+        active_weapon_state = weapon_states[active_weapon_index]
+        trigger_held = pygame.mouse.get_pressed()[0]
+        if trigger_just_pressed or not trigger_held:
+            active_weapon_state["sustained_shots"] = 0
 
         movement_direction, sprint_key_held = get_movement_input()
         moving = movement_direction.length_squared() > 0
@@ -706,51 +860,112 @@ def main():
             movement_state = "Walking"
             actual_speed = selected_speed
 
-        current_spread = get_pistol_spread(movement_state)
+        base_spread = get_weapon_spread(active_weapon, movement_state)
+        sustained_spread = min(
+            active_weapon_state["sustained_shots"]
+            * active_weapon["sustained_spread_per_shot"],
+            active_weapon["maximum_sustained_spread"],
+        )
+        current_spread = base_spread + sustained_spread
 
-        camera = calculate_camera(player_position, screen.get_size())
+        camera_shake_strength = update_camera_recoil(
+            camera_recoil_offset,
+            camera_recoil_velocity,
+            camera_shake_strength,
+            delta_time,
+        )
+        base_camera = calculate_camera(player_position, screen.get_size())
+        camera = apply_camera_effects(
+            base_camera,
+            camera_recoil_offset,
+            camera_shake_strength,
+            screen.get_size(),
+        )
         mouse_screen_position = pygame.Vector2(pygame.mouse.get_pos())
         mouse_world_position = mouse_screen_position + camera
         aim_vector = mouse_world_position - player_position
         if aim_vector.length_squared() > 0:
             aim_angle = math.atan2(aim_vector.y, aim_vector.x)
 
-        shot_cooldown = max(0.0, shot_cooldown - delta_time)
+        for weapon_state in weapon_states:
+            weapon_state["shot_cooldown"] = max(
+                0.0,
+                weapon_state["shot_cooldown"] - delta_time,
+            )
 
-        if reload_requested and not reloading:
-            magazine_has_space = magazine_ammo < PISTOL["magazine_size"]
-            if magazine_has_space and reserve_ammo > 0:
-                reloading = True
-                reload_timer = PISTOL["reload_time"]
+        if reload_requested and not active_weapon_state["reloading"]:
+            magazine_has_space = (
+                active_weapon_state["magazine_ammo"]
+                < active_weapon["magazine_size"]
+            )
+            if magazine_has_space and active_weapon_state["reserve_ammo"] > 0:
+                active_weapon_state["reloading"] = True
+                active_weapon_state["reload_timer"] = active_weapon["reload_time"]
+                active_weapon_state["sustained_shots"] = 0
 
-        if reloading:
-            reload_timer -= delta_time
-            if reload_timer <= 0:
-                ammunition_needed = PISTOL["magazine_size"] - magazine_ammo
-                ammunition_loaded = min(ammunition_needed, reserve_ammo)
-                magazine_ammo += ammunition_loaded
-                reserve_ammo -= ammunition_loaded
-                reloading = False
-                reload_timer = 0.0
+        if active_weapon_state["reloading"]:
+            active_weapon_state["reload_timer"] -= delta_time
+            if active_weapon_state["reload_timer"] <= 0:
+                ammunition_needed = (
+                    active_weapon["magazine_size"]
+                    - active_weapon_state["magazine_ammo"]
+                )
+                ammunition_loaded = min(
+                    ammunition_needed,
+                    active_weapon_state["reserve_ammo"],
+                )
+                active_weapon_state["magazine_ammo"] += ammunition_loaded
+                active_weapon_state["reserve_ammo"] -= ammunition_loaded
+                active_weapon_state["reloading"] = False
+                active_weapon_state["reload_timer"] = 0.0
 
-        firing = pygame.mouse.get_pressed()[0]
+        if active_weapon["fire_mode"] == "semi":
+            firing = trigger_just_pressed
+        else:
+            firing = trigger_held or trigger_just_pressed
+
         can_fire = (
             firing
-            and not reloading
-            and magazine_ammo > 0
-            and shot_cooldown <= 0
+            and not active_weapon_state["reloading"]
+            and active_weapon_state["magazine_ammo"] > 0
+            and active_weapon_state["shot_cooldown"] <= 0
         )
         if can_fire:
-            bullets.append(
-                create_bullet(player_position, aim_angle, current_spread)
+            sustained_shot = (
+                active_weapon["fire_mode"] == "automatic"
+                and active_weapon_state["sustained_shots"] > 0
+                and not trigger_just_pressed
             )
-            magazine_ammo -= 1
-            shot_cooldown = PISTOL["seconds_per_shot"]
+            bullets.append(
+                create_bullet(
+                    player_position,
+                    aim_angle,
+                    current_spread,
+                    active_weapon,
+                )
+            )
+            active_weapon_state["magazine_ammo"] -= 1
+            active_weapon_state["shot_cooldown"] = active_weapon["seconds_per_shot"]
+            camera_shake_strength, recoil_sway_direction = add_shot_recoil(
+                active_weapon,
+                aim_angle,
+                sustained_shot,
+                camera_recoil_velocity,
+                camera_shake_strength,
+                recoil_sway_direction,
+            )
+            if active_weapon["fire_mode"] == "automatic":
+                active_weapon_state["sustained_shots"] += 1
 
         # Reaching zero starts the same reload used by the R key.
-        if not reloading and magazine_ammo == 0 and reserve_ammo > 0:
-            reloading = True
-            reload_timer = PISTOL["reload_time"]
+        if (
+            not active_weapon_state["reloading"]
+            and active_weapon_state["magazine_ammo"] == 0
+            and active_weapon_state["reserve_ammo"] > 0
+        ):
+            active_weapon_state["reloading"] = True
+            active_weapon_state["reload_timer"] = active_weapon["reload_time"]
+            active_weapon_state["sustained_shots"] = 0
 
         bullets = update_bullets(
             bullets,
@@ -777,16 +992,15 @@ def main():
             movement_state,
             current_spread,
             stamina,
+            active_weapon,
             clock.get_fps(),
         )
         draw_weapon_panel(
             screen,
             debug_font,
             ammunition_font,
-            magazine_ammo,
-            reserve_ammo,
-            reloading,
-            reload_timer,
+            active_weapon,
+            active_weapon_state,
             target,
         )
         draw_stamina_panel(
