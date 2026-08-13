@@ -146,8 +146,8 @@ BULLET_MARK_FAR_DISTANCE = 1400
 VISION_BASE_RAY_COUNT = 16
 VISION_CORNER_ANGLE_OFFSET = 0.0001
 VISION_MAX_DISTANCE = math.hypot(WORLD_WIDTH, WORLD_HEIGHT)
-# Recalculate visibility every second rendered frame: 40 vision updates while
-# targeting 80 FPS. Frame-based skipping also recovers when performance dips.
+# While the player moves, recalculate visibility every second rendered frame.
+# While stationary, reuse the cached geometry until movement or cover changes.
 VISION_RENDER_FRAMES_PER_UPDATE = 2
 # Wall-shadow geometry is calculated at half resolution, then smoothly scaled.
 # Actors keep a fast full-size mask so only one mask is enlarged each frame.
@@ -206,6 +206,10 @@ MAX_CREDITS = 9000
 BUY_PHASE_DURATION = 30.0
 MAX_OWNED_WEAPONS = 3
 STARTING_WEAPON_INDICES = (0, 1)
+WEAPON_SHARE_RANGE = 100
+WEAPON_SHARE_DRAW_DISTANCE = 520
+DROPPED_WEAPON_RADIUS = 18
+SHARE_STATUS_DURATION = 2.5
 
 BACKGROUND_COLOR = (31, 37, 46)
 GRID_COLOR = (42, 49, 60)
@@ -603,6 +607,119 @@ def try_buy_weapon(actor, weapon_index):
     actor["owned_weapon_indices"].append(weapon_index)
     actor["owned_weapon_indices"].sort()
     return True, f"BOUGHT {weapon['name'].upper()} FOR {price}"
+
+
+def make_dropped_weapon(owner, weapon_index, weapon_state):
+    """Create one team-shareable purchased weapon at an actor's position."""
+    return {
+        "team": owner["team"],
+        "weapon_index": weapon_index,
+        "position": pygame.Vector2(owner["position"]),
+        "weapon_state": dict(weapon_state),
+    }
+
+
+def drop_player_weapon(player, weapon_index, weapon_states, dropped_weapons):
+    """Drop the equipped purchased weapon so a teammate can take it."""
+    if not actor_can_fight(player):
+        return False, "YOU CANNOT DROP A WEAPON RIGHT NOW"
+
+    if weapon_index in STARTING_WEAPON_INDICES:
+        return False, "KNIFE AND PISTOL CANNOT BE DROPPED"
+
+    if not actor_owns_weapon(player, weapon_index):
+        return False, "YOU DO NOT OWN THAT WEAPON"
+
+    dropped_weapons.append(
+        make_dropped_weapon(
+            player,
+            weapon_index,
+            weapon_states[weapon_index],
+        )
+    )
+    player["owned_weapon_indices"].remove(weapon_index)
+
+    # The dropped copy keeps its current ammunition. If this player later buys
+    # another copy, that fresh purchase starts with normal full ammunition.
+    weapon_states[weapon_index] = make_weapon_state(WEAPONS[weapon_index])
+    return True, f"DROPPED {WEAPONS[weapon_index]['name'].upper()}"
+
+
+def get_nearest_shareable_weapon(actor, dropped_weapons):
+    """Return the nearest friendly dropped weapon within pickup range."""
+    candidates = []
+    for dropped_weapon in dropped_weapons:
+        weapon_index = dropped_weapon["weapon_index"]
+        if dropped_weapon["team"] != actor["team"]:
+            continue
+        if actor_owns_weapon(actor, weapon_index):
+            continue
+
+        distance = actor["position"].distance_to(dropped_weapon["position"])
+        if distance <= WEAPON_SHARE_RANGE:
+            candidates.append((distance, dropped_weapon))
+
+    if not candidates:
+        return None
+    return min(candidates, key=lambda candidate: candidate[0])[1]
+
+
+def try_pickup_shared_weapon(actor, dropped_weapons, weapon_states=None):
+    """Give one nearby friendly dropped weapon to an actor with inventory room."""
+    if not actor_can_fight(actor):
+        return False, None, "YOU CANNOT PICK UP A WEAPON RIGHT NOW"
+
+    if len(actor["owned_weapon_indices"]) >= MAX_OWNED_WEAPONS:
+        return False, None, "INVENTORY FULL - MAX 3 WEAPONS"
+
+    dropped_weapon = get_nearest_shareable_weapon(actor, dropped_weapons)
+    if dropped_weapon is None:
+        return False, None, "NO SHARED WEAPON NEARBY"
+
+    weapon_index = dropped_weapon["weapon_index"]
+    actor["owned_weapon_indices"].append(weapon_index)
+    actor["owned_weapon_indices"].sort()
+
+    if weapon_states is not None:
+        weapon_states[weapon_index] = dict(dropped_weapon["weapon_state"])
+
+    dropped_weapons.remove(dropped_weapon)
+    return (
+        True,
+        weapon_index,
+        f"PICKED UP {WEAPONS[weapon_index]['name'].upper()}",
+    )
+
+
+def update_bot_weapon_pickups(actors, dropped_weapons):
+    """Let bots accept nearby shared weapons and report successful pickups."""
+    pickup_events = []
+    for actor in actors:
+        if actor["is_player"] or not actor_can_fight(actor):
+            continue
+        if len(actor["owned_weapon_indices"]) >= MAX_OWNED_WEAPONS:
+            continue
+
+        picked_up, weapon_index, _ = try_pickup_shared_weapon(
+            actor,
+            dropped_weapons,
+        )
+        if picked_up:
+            pickup_events.append((actor, weapon_index))
+
+    return pickup_events
+
+
+def get_bot_weapon_index(bot, target_distance):
+    """Choose a bot firearm from the weapons it actually owns."""
+    owned = bot["owned_weapon_indices"]
+    if 3 in owned and target_distance <= 420:
+        return 3
+    if 2 in owned:
+        return 2
+    if 3 in owned:
+        return 3
+    return 1
 
 
 def get_movement_input():
@@ -1286,6 +1403,34 @@ def get_bot_rift_destination(bot, rift_state, walls):
     )
 
 
+def get_bot_revival_destination(bot, downed_ally, walls):
+    """Choose a route point that leads a bot toward a downed teammate."""
+    target_position = downed_ally["position"]
+    if has_line_of_sight(bot["position"], target_position, walls):
+        return target_position
+
+    waypoint_pool = [
+        pygame.Vector2(point)
+        for route in BOT_ROUTES
+        for point in route
+    ]
+    visible_waypoints = [
+        waypoint
+        for waypoint in waypoint_pool
+        if has_line_of_sight(bot["position"], waypoint, walls)
+    ]
+    if not visible_waypoints:
+        return target_position
+
+    return min(
+        visible_waypoints,
+        key=lambda waypoint: (
+            waypoint.distance_squared_to(target_position)
+            + 0.20 * bot["position"].distance_squared_to(waypoint)
+        ),
+    )
+
+
 def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
     """Run bot priorities: revive, fight, then contest or defend the Rift."""
     if not actor_can_fight(bot):
@@ -1304,17 +1449,14 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
         downed_only=True,
     )
     if downed_ally is not None:
+        # A bot no longer has to SEE the downed teammate before volunteering.
+        # The nearest standing bot is assigned, then navigates toward the revive.
         possible_revivers = [
             actor
             for actor in actors
             if actor["team"] == bot["team"]
             and not actor["is_player"]
             and actor_can_fight(actor)
-            and has_line_of_sight(
-                actor["position"],
-                downed_ally["position"],
-                walls,
-            )
         ]
         if possible_revivers:
             designated_reviver = min(
@@ -1330,10 +1472,15 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
 
     if downed_ally is not None:
         ally_distance = bot["position"].distance_to(downed_ally["position"])
-        if ally_distance > REVIVE_RANGE:
+        ally_visible = has_line_of_sight(
+            bot["position"],
+            downed_ally["position"],
+            walls,
+        )
+        if ally_distance > REVIVE_RANGE or not ally_visible:
             move_actor_toward(
                 bot,
-                downed_ally["position"],
+                get_bot_revival_destination(bot, downed_ally, walls),
                 BOT_SPEED,
                 delta_time,
                 walls,
@@ -1406,16 +1553,30 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
         )
 
     if bot["shot_cooldown"] <= 0 and target_in_line_of_sight:
-        bullets.append(
-            create_bullet(
-                bot,
-                bot["aim_angle"],
-                BOT_SPREAD,
-                RIFLE,
-                damage_override=BOT_BULLET_DAMAGE,
+        bot_weapon_index = get_bot_weapon_index(bot, target_distance)
+        bot_weapon = WEAPONS[bot_weapon_index]
+        projectile_count = bot_weapon.get("projectiles_per_shot", 1)
+        bot_spread = max(BOT_SPREAD, bot_weapon["standing_spread"])
+        if projectile_count > 1:
+            damage_override = max(1, round(BOT_BULLET_DAMAGE * 0.65))
+        else:
+            damage_override = BOT_BULLET_DAMAGE
+
+        for _ in range(projectile_count):
+            bullets.append(
+                create_bullet(
+                    bot,
+                    bot["aim_angle"],
+                    bot_spread,
+                    bot_weapon,
+                    damage_override=damage_override,
+                )
             )
+
+        bot["shot_cooldown"] = max(
+            BOT_FIRE_INTERVAL,
+            bot_weapon["seconds_per_shot"],
         )
-        bot["shot_cooldown"] = BOT_FIRE_INTERVAL
 
 
 def reset_revival_sources(actors):
@@ -2769,6 +2930,57 @@ def draw_debug_panel(
         screen.blit(rendered_text, (34, 32 + index * 25))
 
 
+def draw_dropped_weapons(screen, font, dropped_weapons, player, obstacles, camera):
+    """Draw nearby shared weapons only when the local player can actually see them."""
+    for dropped_weapon in dropped_weapons:
+        if dropped_weapon["team"] != player["team"]:
+            continue
+
+        world_position = dropped_weapon["position"]
+        distance = player["position"].distance_to(world_position)
+        if distance > WEAPON_SHARE_DRAW_DISTANCE:
+            continue
+        if not has_line_of_sight(player["position"], world_position, obstacles):
+            continue
+
+        screen_position = world_position - camera
+        center = (round(screen_position.x), round(screen_position.y))
+        if not screen.get_rect().inflate(100, 100).collidepoint(center):
+            continue
+
+        weapon = WEAPONS[dropped_weapon["weapon_index"]]
+        pygame.draw.circle(
+            screen,
+            (22, 26, 34),
+            center,
+            DROPPED_WEAPON_RADIUS + 5,
+        )
+        pygame.draw.circle(
+            screen,
+            BULLET_COLOR,
+            center,
+            DROPPED_WEAPON_RADIUS,
+            width=3,
+        )
+        pygame.draw.line(
+            screen,
+            BULLET_COLOR,
+            (center[0] - 10, center[1] + 6),
+            (center[0] + 10, center[1] - 6),
+            width=5,
+        )
+
+        if distance <= WEAPON_SHARE_RANGE:
+            label_text = f"F - PICK UP {weapon['name'].upper()}"
+        else:
+            label_text = weapon["name"].upper()
+        label = font.render(label_text, True, TEXT_COLOR)
+        label_rect = label.get_rect(center=(center[0], center[1] - 36))
+        background = label_rect.inflate(14, 8)
+        pygame.draw.rect(screen, (10, 13, 18), background, border_radius=4)
+        screen.blit(label, label_rect)
+
+
 def draw_weapon_panel(
     screen,
     regular_font,
@@ -2779,7 +2991,7 @@ def draw_weapon_panel(
 ):
     """Display ammunition and the local player's combat condition."""
     panel_width = 470
-    panel_height = 226
+    panel_height = 252
     panel_x = screen.get_width() - panel_width - 18
     panel_y = screen.get_height() - panel_height - 18
 
@@ -2855,9 +3067,15 @@ def draw_weapon_panel(
         True,
         BULLET_COLOR,
     )
+    share_text = regular_font.render(
+        "G: Drop bought weapon   F: Pick up shared weapon",
+        True,
+        (166, 180, 198),
+    )
     screen.blit(player_text, (panel_x + 18, panel_y + 142))
     screen.blit(life_text, (panel_x + 18, panel_y + 168))
     screen.blit(credits_text, (panel_x + 18, panel_y + 194))
+    screen.blit(share_text, (panel_x + 18, panel_y + 220))
 
 
 def count_team_states(actors, team):
@@ -3004,7 +3222,7 @@ def draw_buy_phase(screen, regular_font, large_font, match_state, player, status
         )
 
     instruction = regular_font.render(
-        "Combat begins automatically when the timer reaches 0.",
+        "Combat begins at 0. During combat: G drops, F picks up shared weapons.",
         True,
         (182, 198, 218),
     )
@@ -3050,6 +3268,7 @@ def reset_round(
     bullet_marks,
     destructible_objects,
     rift_state,
+    dropped_weapons,
 ):
     """Reset combat state and select the next round's active Rift."""
     for actor in actors:
@@ -3060,6 +3279,7 @@ def reset_round(
     clear_bullet_marks(bullet_marks)
     reset_destructible_objects(destructible_objects)
     reset_rift_state(rift_state)
+    dropped_weapons.clear()
 
 
 def begin_new_match(
@@ -3071,6 +3291,7 @@ def begin_new_match(
     bullet_marks,
     destructible_objects,
     rift_state,
+    dropped_weapons,
 ):
     """Restore the score and begin round one."""
     scores["blue"] = 0
@@ -3089,6 +3310,7 @@ def begin_new_match(
         bullet_marks,
         destructible_objects,
         rift_state,
+        dropped_weapons,
     )
 
 
@@ -3161,6 +3383,7 @@ def main():
     aim_angle = 0.0
     bullets = []
     bullet_marks = []
+    dropped_weapons = []
 
     weapon_states = [make_weapon_state(weapon) for weapon in WEAPONS]
     active_weapon_index = 0
@@ -3180,7 +3403,10 @@ def main():
     vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
     cached_world_polygon = []
     cached_vision_camera = pygame.Vector2()
+    active_vision_mask_camera = pygame.Vector2(-999999, -999999)
+    cached_vision_player_position = pygame.Vector2(player["position"])
     buy_status_message = ""
+    share_status_timer = 0.0
     game_running = True
 
     while game_running:
@@ -3189,6 +3415,8 @@ def main():
         reload_requested = False
         weapon_switch_requested = None
         purchase_weapon_requested = None
+        drop_weapon_requested = False
+        pickup_weapon_requested = False
         trigger_just_pressed = False
         restart_requested = False
 
@@ -3200,6 +3428,10 @@ def main():
                     game_running = False
                 elif event.key == pygame.K_r:
                     reload_requested = True
+                elif event.key == pygame.K_g:
+                    drop_weapon_requested = True
+                elif event.key == pygame.K_f:
+                    pickup_weapon_requested = True
                 elif event.key == pygame.K_1:
                     weapon_switch_requested = 0
                 elif event.key == pygame.K_2:
@@ -3229,9 +3461,14 @@ def main():
                 bullet_marks,
                 destructible_objects,
                 rift_state,
+                dropped_weapons,
             )
             active_weapon_index = 0
             buy_status_message = ""
+            share_status_timer = 0.0
+            cached_world_polygon = []
+            active_vision_mask_camera.update(-999999, -999999)
+            cached_vision_player_position.update(player["position"])
             stamina = MAX_STAMINA
             sprint_exhausted = False
             camera_recoil_offset.update(0, 0)
@@ -3250,11 +3487,16 @@ def main():
                     bullet_marks,
                     destructible_objects,
                     rift_state,
+                    dropped_weapons,
                 )
                 match_state["phase"] = "buying"
                 match_state["timer"] = BUY_PHASE_DURATION
                 match_state["message"] = ""
                 buy_status_message = ""
+                share_status_timer = 0.0
+                cached_world_polygon = []
+                active_vision_mask_camera.update(-999999, -999999)
+                cached_vision_player_position.update(player["position"])
                 if not actor_owns_weapon(player, active_weapon_index):
                     active_weapon_index = 1
                 stamina = MAX_STAMINA
@@ -3272,11 +3514,38 @@ def main():
             if actor_owns_weapon(player, purchase_weapon_requested):
                 active_weapon_index = purchase_weapon_requested
 
+        if match_state["phase"] == "playing" and drop_weapon_requested:
+            dropped, buy_status_message = drop_player_weapon(
+                player,
+                active_weapon_index,
+                weapon_states,
+                dropped_weapons,
+            )
+            if dropped:
+                active_weapon_index = 1
+                share_status_timer = SHARE_STATUS_DURATION
+
+        if match_state["phase"] == "playing" and pickup_weapon_requested:
+            picked_up, picked_weapon_index, buy_status_message = try_pickup_shared_weapon(
+                player,
+                dropped_weapons,
+                weapon_states,
+            )
+            if picked_up:
+                active_weapon_index = picked_weapon_index
+                share_status_timer = SHARE_STATUS_DURATION
+
         if match_state["phase"] == "buying":
             match_state["timer"] = max(0.0, match_state["timer"] - delta_time)
             if match_state["timer"] <= 0:
                 match_state["phase"] = "playing"
                 match_state["message"] = ""
+                buy_status_message = ""
+                share_status_timer = 0.0
+
+        if match_state["phase"] == "playing" and share_status_timer > 0:
+            share_status_timer = max(0.0, share_status_timer - delta_time)
+            if share_status_timer == 0:
                 buy_status_message = ""
 
         current_obstacle_signature = tuple(
@@ -3543,6 +3812,15 @@ def main():
                     active_obstacles,
                 )
 
+            bot_pickups = update_bot_weapon_pickups(actors, dropped_weapons)
+            if bot_pickups:
+                pickup_actor, pickup_weapon_index = bot_pickups[0]
+                buy_status_message = (
+                    f"{pickup_actor['name']} PICKED UP "
+                    f"{WEAPONS[pickup_weapon_index]['name'].upper()}"
+                )
+                share_status_timer = SHARE_STATUS_DURATION
+
             for actor in actors:
                 if not actor["is_player"]:
                     update_bot(
@@ -3622,15 +3900,24 @@ def main():
         update_bullet_marks(bullet_marks, delta_time)
         # Only the local player's line of sight controls the world. Teammates
         # are shown separately as always-readable blue position/health markers.
-        # Visibility geometry updates every second rendered frame and cached
-        # polygons remain camera-aligned between calculations.
+        # Visibility geometry updates every second moving frame. While the
+        # player is stationary, cached geometry is reused instead of rebuilding
+        # full-screen masks that have not changed.
         vision_frames_since_update += 1
+        player_moved_for_vision = (
+            player["position"].distance_squared_to(cached_vision_player_position)
+            >= 0.25
+        )
         refresh_visibility = (
-            vision_frames_since_update >= VISION_RENDER_FRAMES_PER_UPDATE
-            or not cached_world_polygon
+            not cached_world_polygon
+            or (
+                player_moved_for_vision
+                and vision_frames_since_update >= VISION_RENDER_FRAMES_PER_UPDATE
+            )
         )
         if refresh_visibility:
             vision_frames_since_update = 0
+            cached_vision_player_position.update(player["position"])
             world_camera = pygame.Vector2()
             cached_world_polygon = calculate_vision_polygon(
                 player["position"],
@@ -3659,12 +3946,20 @@ def main():
         if refresh_visibility:
             save_visibility_cache(vision_buffers)
             cached_vision_camera.update(camera)
+            active_vision_mask_camera.update(camera)
         else:
-            restore_visibility_cache(
-                vision_buffers,
-                cached_vision_camera,
-                camera,
+            active_mask_pixel = (
+                round(active_vision_mask_camera.x),
+                round(active_vision_mask_camera.y),
             )
+            current_camera_pixel = (round(camera.x), round(camera.y))
+            if active_mask_pixel != current_camera_pixel:
+                restore_visibility_cache(
+                    vision_buffers,
+                    cached_vision_camera,
+                    camera,
+                )
+                active_vision_mask_camera.update(camera)
 
         screen.fill(BACKGROUND_COLOR)
         draw_grid(screen, camera)
@@ -3711,6 +4006,15 @@ def main():
             debug_font,
             rift_state,
             player["position"],
+            camera,
+        )
+
+        draw_dropped_weapons(
+            screen,
+            debug_font,
+            dropped_weapons,
+            player,
+            active_obstacles,
             camera,
         )
 
@@ -3805,7 +4109,21 @@ def main():
             actors,
             rift_state,
         )
-        draw_crosshair(screen, pygame.mouse.get_pos(), current_spread)
+        if match_state["phase"] == "playing" and buy_status_message:
+            share_status = debug_font.render(
+                buy_status_message,
+                True,
+                BULLET_COLOR,
+            )
+            screen.blit(
+                share_status,
+                share_status.get_rect(
+                    center=(screen.get_width() // 2, screen.get_height() - 52)
+                ),
+            )
+
+        if player_can_act:
+            draw_crosshair(screen, pygame.mouse.get_pos(), current_spread)
         draw_buy_phase(
             screen,
             debug_font,
