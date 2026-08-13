@@ -12,8 +12,8 @@ FPS = 80
 PLAYER_SPEED = 250
 SPRINT_MULTIPLIER = 1.3
 PLAYER_SIZE = 55
-WORLD_WIDTH = 2400
-WORLD_HEIGHT = 1600
+WORLD_WIDTH = 3200
+WORLD_HEIGHT = 2200
 
 MAX_STAMINA = 100
 SPRINT_STAMINA_DRAIN_PER_SECOND = 30
@@ -24,9 +24,30 @@ SPRINT_RECOVERY_THRESHOLD = 20
 # SHOOTING LABORATORY SETTINGS
 # Keeping weapon values together makes balancing and adding weapons easier.
 # -----------------------------------------------------------------------------
-PISTOL = {
+KNIFE = {
     "slot": 1,
+    "name": "Knife",
+    "price": 0,
+    "fire_mode": "melee",
+    "damage": 50,
+    "melee_range": 105,
+    "melee_arc_degrees": 80,
+    "seconds_per_shot": 0.50,
+    "attack_animation_time": 0.18,
+    "magazine_size": 0,
+    "starting_reserve_ammo": 0,
+    "reload_time": 0.0,
+    "standing_spread": 0.0,
+    "walking_spread": 0.0,
+    "running_spread": 0.0,
+    "sustained_spread_per_shot": 0.0,
+    "maximum_sustained_spread": 0.0,
+}
+
+PISTOL = {
+    "slot": 2,
     "name": "Pistol",
+    "price": 0,
     "fire_mode": "semi",
     "projectiles_per_shot": 1,
     "damage": 25,
@@ -47,8 +68,9 @@ PISTOL = {
 }
 
 RIFLE = {
-    "slot": 2,
+    "slot": 3,
     "name": "Rifle",
+    "price": 700,
     "fire_mode": "automatic",
     "projectiles_per_shot": 1,
     "damage": 20,
@@ -69,8 +91,9 @@ RIFLE = {
 }
 
 SHOTGUN = {
-    "slot": 3,
+    "slot": 4,
     "name": "Shotgun",
+    "price": 600,
     "fire_mode": "semi",
     "projectiles_per_shot": 8,
     "damage": 14,
@@ -93,7 +116,7 @@ SHOTGUN = {
     "sustained_camera_sway": 0.0,
 }
 
-WEAPONS = [PISTOL, RIFLE, SHOTGUN]
+WEAPONS = [KNIFE, PISTOL, RIFLE, SHOTGUN]
 
 CAMERA_RECOIL_SPRING = 90.0
 CAMERA_RECOIL_DAMPING = 12.0
@@ -134,7 +157,7 @@ VISION_MASK_SCALE = 0.5
 VISION_SHADOW_COLOR = (10, 12, 18, 175)
 
 # -----------------------------------------------------------------------------
-# FIRST MATCH 0.5 SETTINGS
+# RIFT HUNT 0.6 SETTINGS
 # The player joins two blue bots against three red bots.
 # -----------------------------------------------------------------------------
 ACTOR_MAX_HEALTH = 100
@@ -153,6 +176,36 @@ BOT_FIRE_INTERVAL = 0.32
 BOT_BULLET_DAMAGE = 12
 BOT_SPREAD = 0.08
 ACTOR_SEPARATION_DISTANCE = PLAYER_SIZE + 10
+
+RIFT_LOCATIONS = [
+    {"name": "NORTH", "position": (1650, 520)},
+    {"name": "EAST", "position": (2450, 1050)},
+    {"name": "SOUTH", "position": (1650, 1620)},
+]
+RIFT_RADIUS = 145
+RIFT_CAPTURE_TIME = 5.0
+RIFT_HOLD_TIME_TO_WIN = 60.0
+RIFT_CAPTURE_DECAY_PER_SECOND = 1.0
+RIFT_INTEL_INTERVAL = 5.0
+RIFT_INTEL_DURATION = 1.5
+RIFT_NEUTRAL_COLOR = (151, 102, 219)
+RIFT_BLUE_COLOR = (73, 188, 255)
+RIFT_RED_COLOR = (255, 91, 105)
+RIFT_CONTESTED_COLOR = (255, 194, 75)
+
+# -----------------------------------------------------------------------------
+# ECONOMY 0.7 SETTINGS
+# Credits persist between rounds but reset when a completely new match begins.
+# The small win/loss reward gap reduces economy snowballing while we test it.
+# -----------------------------------------------------------------------------
+STARTING_CREDITS = 800
+ROUND_WIN_CREDITS = 700
+ROUND_LOSS_CREDITS = 500
+ROUND_DRAW_CREDITS = 600
+MAX_CREDITS = 9000
+BUY_PHASE_DURATION = 30.0
+MAX_OWNED_WEAPONS = 3
+STARTING_WEAPON_INDICES = (0, 1)
 
 BACKGROUND_COLOR = (31, 37, 46)
 GRID_COLOR = (42, 49, 60)
@@ -176,24 +229,50 @@ ENEMY_EDGE_COLOR = (255, 190, 196)
 DOWNED_COLOR = (225, 158, 65)
 ELIMINATED_COLOR = (79, 61, 66)
 
-BLUE_SPAWNS = [(260, 240), (260, 690), (260, 1320)]
-RED_SPAWNS = [(2140, 240), (2140, 800), (2140, 1360)]
+# Destructible objects use warm material colors so they cannot be confused
+# with the permanent gray concrete walls, even while terrain is darkened.
+CRATE_MAX_HEALTH = 80
+DOOR_MAX_HEALTH = 140
+CRATE_COLOR = (151, 99, 52)
+CRATE_EDGE_COLOR = (232, 177, 103)
+HIDDEN_CRATE_COLOR = (68, 51, 38)
+HIDDEN_CRATE_EDGE_COLOR = (106, 78, 54)
+DOOR_COLOR = (121, 76, 46)
+DOOR_EDGE_COLOR = (237, 188, 96)
+HIDDEN_DOOR_COLOR = (62, 47, 39)
+HIDDEN_DOOR_EDGE_COLOR = (111, 80, 57)
+
+BLUE_SPAWNS = [(260, 240), (260, 1100), (260, 1960)]
+RED_SPAWNS = [(2940, 240), (2940, 1100), (2940, 1960)]
 
 # Each lane is a simple route around the laboratory walls. This is intentionally
 # understandable waypoint AI; proper navigation can replace it later.
 BOT_ROUTES = [
-    [(300, 190), (1050, 180), (1950, 180), (1950, 380), (2100, 380), (2100, 700)],
     [
-        (300, 650),
-        (800, 700),
-        (800, 950),
-        (1000, 950),
-        (1030, 780),
-        (1120, 730),
-        (1600, 760),
-        (2100, 800),
+        (300, 190),
+        (1050, 180),
+        (1650, 520),
+        (2050, 520),
+        (2450, 520),
+        (2850, 300),
     ],
-    [(300, 1320), (1100, 1320), (1320, 1450), (2050, 1400)],
+    [
+        (300, 1100),
+        (800, 950),
+        (1200, 900),
+        (1650, 850),
+        (2050, 1050),
+        (2450, 1050),
+        (2850, 1100),
+    ],
+    [
+        (300, 1960),
+        (900, 1960),
+        (1250, 1950),
+        (1650, 1620),
+        (2200, 1800),
+        (2850, 1960),
+    ],
 ]
 
 
@@ -212,16 +291,202 @@ def make_walls():
         pygame.Rect(420, 300, 520, 70),
         pygame.Rect(870, 370, 70, 420),
         pygame.Rect(1250, 230, 620, 70),
-        pygame.Rect(1250, 300, 70, 390),
+        # This wall has a 120-pixel opening occupied by a destructible door.
+        pygame.Rect(1250, 300, 70, 150),
+        pygame.Rect(1250, 570, 70, 120),
         pygame.Rect(420, 1050, 610, 70),
         pygame.Rect(1430, 930, 70, 420),
         pygame.Rect(1500, 1280, 480, 70),
 
-        # Small pieces of cover
-        pygame.Rect(1090, 820, 110, 110),
-        pygame.Rect(1770, 630, 150, 90),
-        pygame.Rect(650, 760, 120, 120),
+        # Expanded east wing
+        pygame.Rect(2200, 300, 500, 70),
+        pygame.Rect(2630, 370, 70, 440),
+        pygame.Rect(2050, 900, 70, 500),
+        pygame.Rect(2300, 1450, 600, 70),
+        pygame.Rect(2550, 1170, 360, 70),
+
+        # Expanded south wing
+        pygame.Rect(420, 1650, 700, 70),
+        pygame.Rect(1120, 1550, 70, 350),
+        pygame.Rect(1450, 1800, 650, 70),
     ]
+
+
+def make_destructible_object(object_type, rectangle, maximum_health):
+    """Create one bullet-damageable object that also blocks movement and sight."""
+    return {
+        "type": object_type,
+        "rect": pygame.Rect(rectangle),
+        "max_health": maximum_health,
+        "health": maximum_health,
+        "destroyed": False,
+    }
+
+
+def make_destructible_objects():
+    """Create the laboratory's crates and reinforced destructible door."""
+    return [
+        make_destructible_object(
+            "crate",
+            (1090, 820, 110, 110),
+            CRATE_MAX_HEALTH,
+        ),
+        make_destructible_object(
+            "crate",
+            (1770, 630, 150, 90),
+            CRATE_MAX_HEALTH,
+        ),
+        make_destructible_object(
+            "crate",
+            (650, 760, 120, 120),
+            CRATE_MAX_HEALTH,
+        ),
+        make_destructible_object(
+            "door",
+            (1250, 450, 70, 120),
+            DOOR_MAX_HEALTH,
+        ),
+        make_destructible_object(
+            "crate",
+            (2310, 700, 120, 120),
+            CRATE_MAX_HEALTH,
+        ),
+        make_destructible_object(
+            "crate",
+            (2500, 1570, 120, 120),
+            CRATE_MAX_HEALTH,
+        ),
+    ]
+
+
+def reset_destructible_objects(destructible_objects):
+    """Restore every destructible object when a new round begins."""
+    for destructible in destructible_objects:
+        destructible["health"] = destructible["max_health"]
+        destructible["destroyed"] = False
+
+
+def get_active_obstacle_rects(walls, destructible_objects):
+    """Return permanent walls plus destructible objects that still exist."""
+    return walls + [
+        destructible["rect"]
+        for destructible in destructible_objects
+        if not destructible["destroyed"]
+    ]
+
+
+def make_rift_state():
+    """Create the round-persistent state for one randomly selected Rift."""
+    rift_state = {"site_index": -1}
+    reset_rift_state(rift_state)
+    return rift_state
+
+
+def reset_rift_state(rift_state):
+    """Activate a new Rift site and clear control progress for a round."""
+    site_index = random.randrange(len(RIFT_LOCATIONS))
+    site = RIFT_LOCATIONS[site_index]
+    rift_state.clear()
+    rift_state.update(
+        {
+            "site_index": site_index,
+            "site_name": site["name"],
+            "position": pygame.Vector2(site["position"]),
+            "owner": None,
+            "capture_team": None,
+            "capture_progress": 0.0,
+            "hold_progress": {"blue": 0.0, "red": 0.0},
+            "contested": False,
+            "occupants": {"blue": 0, "red": 0},
+            "intel_timer": 0.0,
+            "intel_remaining": 0.0,
+        }
+    )
+
+
+def update_rift_state(rift_state, actors, delta_time):
+    """Advance Rift capture, control, intel pulses, and the Rift victory timer."""
+    captured_this_frame = False
+    occupants = {"blue": 0, "red": 0}
+    for actor in actors:
+        if (
+            actor_can_fight(actor)
+            and actor["position"].distance_to(rift_state["position"])
+            <= RIFT_RADIUS
+        ):
+            occupants[actor["team"]] += 1
+
+    rift_state["occupants"] = occupants
+    blue_present = occupants["blue"] > 0
+    red_present = occupants["red"] > 0
+    rift_state["contested"] = blue_present and red_present
+
+    occupying_team = None
+    if blue_present and not red_present:
+        occupying_team = "blue"
+    elif red_present and not blue_present:
+        occupying_team = "red"
+
+    if rift_state["contested"]:
+        pass
+    elif occupying_team is None:
+        rift_state["capture_progress"] = max(
+            0.0,
+            rift_state["capture_progress"]
+            - RIFT_CAPTURE_DECAY_PER_SECOND * delta_time,
+        )
+        if rift_state["capture_progress"] == 0:
+            rift_state["capture_team"] = None
+    elif occupying_team == rift_state["owner"]:
+        rift_state["capture_progress"] = max(
+            0.0,
+            rift_state["capture_progress"]
+            - RIFT_CAPTURE_DECAY_PER_SECOND * delta_time,
+        )
+        if rift_state["capture_progress"] == 0:
+            rift_state["capture_team"] = None
+    else:
+        if rift_state["capture_team"] != occupying_team:
+            rift_state["capture_team"] = occupying_team
+            rift_state["capture_progress"] = 0.0
+
+        rift_state["capture_progress"] += delta_time
+        if rift_state["capture_progress"] >= RIFT_CAPTURE_TIME:
+            rift_state["owner"] = occupying_team
+            rift_state["capture_team"] = None
+            rift_state["capture_progress"] = 0.0
+            rift_state["hold_progress"] = {"blue": 0.0, "red": 0.0}
+            rift_state["intel_timer"] = 0.0
+            rift_state["intel_remaining"] = RIFT_INTEL_DURATION
+            captured_this_frame = True
+
+    owner = rift_state["owner"]
+    if owner is None:
+        rift_state["intel_remaining"] = 0.0
+        return None
+
+    if not captured_this_frame:
+        # Owning the Rift starts the alternate-victory clock. The clock pauses
+        # while both teams contest the zone or while the enemy is taking it.
+        owner_challenged = (
+            rift_state["contested"]
+            or (occupying_team is not None and occupying_team != owner)
+        )
+        if not owner_challenged:
+            rift_state["hold_progress"][owner] += delta_time
+
+        rift_state["intel_remaining"] = max(
+            0.0,
+            rift_state["intel_remaining"] - delta_time,
+        )
+        rift_state["intel_timer"] += delta_time
+        if rift_state["intel_timer"] >= RIFT_INTEL_INTERVAL:
+            rift_state["intel_timer"] %= RIFT_INTEL_INTERVAL
+            rift_state["intel_remaining"] = RIFT_INTEL_DURATION
+
+    if rift_state["hold_progress"][owner] >= RIFT_HOLD_TIME_TO_WIN:
+        return owner
+    return None
 
 
 def make_actor(name, team, spawn_position, is_player=False, route=None):
@@ -233,6 +498,8 @@ def make_actor(name, team, spawn_position, is_player=False, route=None):
         "spawn_position": pygame.Vector2(spawn_position),
         "position": pygame.Vector2(spawn_position),
         "health": ACTOR_MAX_HEALTH,
+        "credits": STARTING_CREDITS,
+        "owned_weapon_indices": list(STARTING_WEAPON_INDICES),
         "alive": True,
         "downed": False,
         "eliminated": False,
@@ -299,7 +566,43 @@ def make_weapon_state(weapon):
         "reloading": False,
         "reload_timer": 0.0,
         "sustained_shots": 0,
+        "attack_animation_timer": 0.0,
     }
+
+
+def reset_actor_loadout(actor):
+    """Return an actor to the free Knife + Pistol starting loadout."""
+    actor["owned_weapon_indices"] = list(STARTING_WEAPON_INDICES)
+
+
+def actor_owns_weapon(actor, weapon_index):
+    """Return whether this actor currently owns the requested weapon slot."""
+    return weapon_index in actor["owned_weapon_indices"]
+
+
+def try_buy_weapon(actor, weapon_index):
+    """Buy one weapon during the buy phase and return a short status message."""
+    if weapon_index < 0 or weapon_index >= len(WEAPONS):
+        return False, "INVALID WEAPON"
+
+    weapon = WEAPONS[weapon_index]
+    if actor_owns_weapon(actor, weapon_index):
+        return False, f"{weapon['name'].upper()} ALREADY OWNED"
+
+    if len(actor["owned_weapon_indices"]) >= MAX_OWNED_WEAPONS:
+        return False, "INVENTORY FULL - MAX 3 WEAPONS"
+
+    price = weapon.get("price", 0)
+    if price <= 0:
+        return False, f"{weapon['name'].upper()} IS NOT FOR SALE"
+
+    if actor["credits"] < price:
+        return False, f"NEED {price - actor['credits']} MORE CREDITS"
+
+    actor["credits"] -= price
+    actor["owned_weapon_indices"].append(weapon_index)
+    actor["owned_weapon_indices"].sort()
+    return True, f"BOUGHT {weapon['name'].upper()} FOR {price}"
 
 
 def get_movement_input():
@@ -426,6 +729,25 @@ def get_bullet_hit_wall(bullet, walls):
     return None
 
 
+def get_bullet_hit_destructible(bullet, destructible_objects):
+    """Return the active destructible object struck by a bullet, if any."""
+    radius = bullet["radius"]
+    bullet_rect = pygame.Rect(0, 0, radius * 2, radius * 2)
+    bullet_rect.center = (
+        round(bullet["position"].x),
+        round(bullet["position"].y),
+    )
+
+    for destructible in destructible_objects:
+        if (
+            not destructible["destroyed"]
+            and bullet_rect.colliderect(destructible["rect"])
+        ):
+            return destructible
+
+    return None
+
+
 def calculate_bullet_mark_lifetime(distance):
     """Return a shorter mark lifetime for an impact farther from its shooter."""
     if distance <= BULLET_MARK_NEAR_DISTANCE:
@@ -510,9 +832,117 @@ def revive_actor(actor):
     actor["revive_source"] = None
 
 
-def update_bullets(bullets, delta_time, walls, actors, bullet_marks):
-    """Move bullets and damage the first enemy actor or wall they strike."""
+def perform_knife_attack(
+    attacker,
+    aim_angle,
+    knife,
+    actors,
+    obstacles,
+    destructible_objects,
+    bullet_marks,
+):
+    """Damage the nearest enemy, crate, or door inside the knife's arc."""
+    attack_direction = pygame.Vector2(
+        math.cos(aim_angle),
+        math.sin(aim_angle),
+    )
+    minimum_facing_dot = math.cos(
+        math.radians(knife["melee_arc_degrees"] / 2)
+    )
+    valid_targets = []
+
+    for actor in actors:
+        if (
+            actor is attacker
+            or actor["team"] == attacker["team"]
+            or not actor_can_fight(actor)
+        ):
+            continue
+
+        target_vector = actor["position"] - attacker["position"]
+        target_distance = target_vector.length()
+        if target_distance <= 0 or target_distance > knife["melee_range"]:
+            continue
+
+        target_direction = target_vector / target_distance
+        if attack_direction.dot(target_direction) < minimum_facing_dot:
+            continue
+        if not has_line_of_sight(
+            attacker["position"],
+            actor["position"],
+            obstacles,
+        ):
+            continue
+
+        valid_targets.append((target_distance, "actor", actor))
+
+    for destructible in destructible_objects:
+        if destructible["destroyed"]:
+            continue
+
+        rectangle = destructible["rect"]
+        contact_point = pygame.Vector2(
+            max(rectangle.left, min(attacker["position"].x, rectangle.right)),
+            max(rectangle.top, min(attacker["position"].y, rectangle.bottom)),
+        )
+        target_vector = contact_point - attacker["position"]
+        target_distance = target_vector.length()
+        if target_distance <= 0 or target_distance > knife["melee_range"]:
+            continue
+
+        target_direction = target_vector / target_distance
+        if attack_direction.dot(target_direction) < minimum_facing_dot:
+            continue
+        if not has_line_of_sight(
+            attacker["position"],
+            contact_point,
+            obstacles,
+            ignored_wall=rectangle,
+        ):
+            continue
+
+        valid_targets.append(
+            (target_distance, "destructible", destructible)
+        )
+
+    if not valid_targets:
+        return None, False
+
+    _, target_type, target = min(
+        valid_targets,
+        key=lambda candidate: candidate[0],
+    )
+    target["health"] = max(0, target["health"] - knife["damage"])
+
+    if target_type == "actor":
+        if target["health"] == 0:
+            down_or_eliminate_actor(target)
+        return target, False
+
+    if target["health"] == 0:
+        target["destroyed"] = True
+        target_rect = target["rect"]
+        bullet_marks[:] = [
+            mark
+            for mark in bullet_marks
+            if mark.get("wall") is not target_rect
+        ]
+        return target, True
+
+    return target, False
+
+
+def update_bullets(
+    bullets,
+    delta_time,
+    walls,
+    destructible_objects,
+    actors,
+    bullet_marks,
+):
+    """Move bullets and damage the first actor, object, or wall they strike."""
     surviving_bullets = []
+    obstacle_geometry_changed = False
 
     for bullet in bullets:
         total_movement = bullet["velocity"] * delta_time
@@ -532,6 +962,35 @@ def update_bullets(bullets, delta_time, walls, actors, bullet_marks):
                 and 0 <= bullet["position"].y <= WORLD_HEIGHT
             )
             if outside_world:
+                bullet_removed = True
+                break
+
+            hit_destructible = get_bullet_hit_destructible(
+                bullet,
+                destructible_objects,
+            )
+            if hit_destructible is not None:
+                hit_rect = hit_destructible["rect"]
+                hit_destructible["health"] = max(
+                    0,
+                    hit_destructible["health"]
+                    - calculate_bullet_damage(bullet),
+                )
+
+                if hit_destructible["health"] == 0:
+                    hit_destructible["destroyed"] = True
+                    obstacle_geometry_changed = True
+                    # Remove marks attached to an object that no longer exists.
+                    bullet_marks[:] = [
+                        mark
+                        for mark in bullet_marks
+                        if mark.get("wall") is not hit_rect
+                    ]
+                else:
+                    bullet_marks.append(create_bullet_mark(bullet, hit_rect))
+                    if len(bullet_marks) > MAX_BULLET_MARKS:
+                        del bullet_marks[0]
+
                 bullet_removed = True
                 break
 
@@ -571,7 +1030,7 @@ def update_bullets(bullets, delta_time, walls, actors, bullet_marks):
         if not bullet_removed:
             surviving_bullets.append(bullet)
 
-    return surviving_bullets
+    return surviving_bullets, obstacle_geometry_changed
 
 
 def calculate_camera(player_position, screen_size):
@@ -804,8 +1263,31 @@ def get_bot_patrol_destination(bot):
     return destination
 
 
-def update_bot(bot, actors, walls, bullets, delta_time):
-    """Run understandable bot priorities: revive, seek, move, then fire."""
+def get_bot_rift_destination(bot, rift_state, walls):
+    """Choose a visible route point that advances the bot toward the Rift."""
+    rift_position = rift_state["position"]
+    if has_line_of_sight(bot["position"], rift_position, walls):
+        return rift_position
+
+    visible_waypoints = [
+        waypoint
+        for waypoint in bot["route"]
+        if has_line_of_sight(bot["position"], waypoint, walls)
+    ]
+    if not visible_waypoints:
+        return get_bot_patrol_destination(bot)
+
+    return min(
+        visible_waypoints,
+        key=lambda waypoint: (
+            waypoint.distance_squared_to(rift_position)
+            + 0.20 * bot["position"].distance_squared_to(waypoint)
+        ),
+    )
+
+
+def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
+    """Run bot priorities: revive, fight, then contest or defend the Rift."""
     if not actor_can_fight(bot):
         return
 
@@ -861,22 +1343,37 @@ def update_bot(bot, actors, walls, bullets, delta_time):
         return
 
     enemy_team = "red" if bot["team"] == "blue" else "blue"
+    team_has_rift_intel = (
+        rift_state["owner"] == bot["team"]
+        and rift_state["intel_remaining"] > 0
+    )
     visible_enemies = [
         actor
         for actor in actors
         if actor["team"] == enemy_team
         and actor_can_fight(actor)
-        and is_actor_visible(bot["position"], actor, walls)
+        and (
+            team_has_rift_intel
+            or is_actor_visible(bot["position"], actor, walls)
+        )
     ]
 
     if not visible_enemies:
-        move_actor_toward(
-            bot,
-            get_bot_patrol_destination(bot),
-            BOT_SPEED,
-            delta_time,
-            walls,
-        )
+        rift_distance = bot["position"].distance_to(rift_state["position"])
+        if rift_distance > RIFT_RADIUS * 0.60:
+            move_actor_toward(
+                bot,
+                get_bot_rift_destination(bot, rift_state, walls),
+                BOT_SPEED,
+                delta_time,
+                walls,
+            )
+        else:
+            # Face outward while holding the site instead of piling into its
+            # exact center. Actor separation handles the remaining spacing.
+            outward = bot["position"] - rift_state["position"]
+            if outward.length_squared() > 0:
+                bot["aim_angle"] = math.atan2(outward.y, outward.x)
         return
 
     target = min(
@@ -890,6 +1387,11 @@ def update_bot(bot, actors, walls, bullets, delta_time):
 
     forward = target_vector.normalize()
     bot["aim_angle"] = math.atan2(forward.y, forward.x)
+    target_in_line_of_sight = is_actor_visible(
+        bot["position"],
+        target,
+        walls,
+    )
 
     if target_distance > BOT_PREFERRED_DISTANCE:
         move_player(bot["position"], forward * BOT_SPEED * delta_time, walls)
@@ -903,7 +1405,7 @@ def update_bot(bot, actors, walls, bullets, delta_time):
             walls,
         )
 
-    if bot["shot_cooldown"] <= 0:
+    if bot["shot_cooldown"] <= 0 and target_in_line_of_sight:
         bullets.append(
             create_bullet(
                 bot,
@@ -1093,6 +1595,118 @@ def draw_hidden_walls(screen, walls, camera):
         )
 
 
+def draw_destructible_object(screen, destructible, camera, hidden=False):
+    """Draw a crate or door with a material style distinct from concrete."""
+    if destructible["destroyed"]:
+        return
+
+    rectangle = destructible["rect"]
+    screen_rect = rectangle.move(-round(camera.x), -round(camera.y))
+    object_type = destructible["type"]
+
+    if object_type == "door":
+        fill_color = HIDDEN_DOOR_COLOR if hidden else DOOR_COLOR
+        edge_color = HIDDEN_DOOR_EDGE_COLOR if hidden else DOOR_EDGE_COLOR
+    else:
+        fill_color = HIDDEN_CRATE_COLOR if hidden else CRATE_COLOR
+        edge_color = HIDDEN_CRATE_EDGE_COLOR if hidden else CRATE_EDGE_COLOR
+
+    pygame.draw.rect(screen, fill_color, screen_rect, border_radius=4)
+    pygame.draw.rect(
+        screen,
+        edge_color,
+        screen_rect,
+        width=3,
+        border_radius=4,
+    )
+
+    inset_rect = screen_rect.inflate(-14, -14)
+    if inset_rect.width > 0 and inset_rect.height > 0:
+        pygame.draw.rect(screen, edge_color, inset_rect, width=2)
+
+    if object_type == "door":
+        # Hinges, inset panels, and a handle make this read as a door instead
+        # of another permanent gray wall section.
+        panel_gap = max(8, screen_rect.height // 3)
+        pygame.draw.line(
+            screen,
+            edge_color,
+            (inset_rect.left, inset_rect.top + panel_gap),
+            (inset_rect.right, inset_rect.top + panel_gap),
+            width=2,
+        )
+        pygame.draw.line(
+            screen,
+            edge_color,
+            (inset_rect.left, inset_rect.bottom - panel_gap),
+            (inset_rect.right, inset_rect.bottom - panel_gap),
+            width=2,
+        )
+        hinge_x = screen_rect.left + 6
+        for hinge_y in (screen_rect.top + 22, screen_rect.bottom - 22):
+            pygame.draw.rect(
+                screen,
+                edge_color,
+                (hinge_x, hinge_y - 6, 7, 12),
+                border_radius=2,
+            )
+        pygame.draw.circle(
+            screen,
+            edge_color,
+            (screen_rect.right - 15, screen_rect.centery),
+            5,
+        )
+    else:
+        # The large X brace is the visual language for destructible crates.
+        pygame.draw.line(
+            screen,
+            edge_color,
+            inset_rect.topleft,
+            inset_rect.bottomright,
+            width=4,
+        )
+        pygame.draw.line(
+            screen,
+            edge_color,
+            inset_rect.topright,
+            inset_rect.bottomleft,
+            width=4,
+        )
+
+    if not hidden:
+        health_fraction = (
+            destructible["health"] / destructible["max_health"]
+        )
+        crack_color = (54, 37, 30)
+        if health_fraction < 0.67:
+            pygame.draw.line(
+                screen,
+                crack_color,
+                screen_rect.center,
+                (screen_rect.centerx - 15, screen_rect.centery + 18),
+                width=3,
+            )
+        if health_fraction < 0.34:
+            pygame.draw.line(
+                screen,
+                crack_color,
+                screen_rect.center,
+                (screen_rect.centerx + 18, screen_rect.centery - 20),
+                width=3,
+            )
+
+
+def draw_hidden_destructibles(screen, destructible_objects, camera):
+    """Keep complete destructible silhouettes readable outside line of sight."""
+    for destructible in destructible_objects:
+        draw_destructible_object(
+            screen,
+            destructible,
+            camera,
+            hidden=True,
+        )
+
+
 def draw_bullet_marks(
     screen,
     bullet_marks,
@@ -1265,8 +1879,267 @@ def draw_actor(screen, font, actor, camera):
     )
 
 
-def make_vision_render_buffers(screen_size, walls):
-    """Allocate efficient half-resolution masks plus full-size display masks."""
+def draw_knife(screen, player, camera, aim_angle, animation_timer):
+    """Draw the equipped knife and visibly sweep it during an attack."""
+    center = pygame.Vector2(player["position"] - camera)
+
+    if animation_timer > 0:
+        swing_progress = 1.0 - min(
+            1.0,
+            animation_timer / KNIFE["attack_animation_time"],
+        )
+        angle_offset = math.radians(-55 + 110 * swing_progress)
+    else:
+        angle_offset = math.radians(-15)
+
+    knife_angle = aim_angle + angle_offset
+    forward = pygame.Vector2(
+        math.cos(knife_angle),
+        math.sin(knife_angle),
+    )
+    sideways = pygame.Vector2(-forward.y, forward.x)
+
+    handle_start = center + forward * 20
+    guard_center = center + forward * 35
+    blade_base = center + forward * 39
+    blade_tip = center + forward * 67
+
+    pygame.draw.line(
+        screen,
+        (48, 36, 28),
+        handle_start,
+        guard_center,
+        width=8,
+    )
+    pygame.draw.line(
+        screen,
+        (221, 174, 78),
+        guard_center - sideways * 8,
+        guard_center + sideways * 8,
+        width=4,
+    )
+    pygame.draw.polygon(
+        screen,
+        (218, 226, 235),
+        (
+            blade_base - sideways * 4,
+            blade_base + sideways * 4,
+            blade_tip,
+        ),
+    )
+    pygame.draw.line(
+        screen,
+        (255, 255, 255),
+        blade_base - sideways * 2,
+        blade_tip,
+        width=2,
+    )
+
+
+def get_rift_color(rift_state):
+    """Return the active Rift color for its current control state."""
+    if rift_state["contested"]:
+        return RIFT_CONTESTED_COLOR
+    if rift_state["owner"] == "blue":
+        return RIFT_BLUE_COLOR
+    if rift_state["owner"] == "red":
+        return RIFT_RED_COLOR
+    if rift_state["capture_team"] == "blue":
+        return RIFT_BLUE_COLOR
+    if rift_state["capture_team"] == "red":
+        return RIFT_RED_COLOR
+    return RIFT_NEUTRAL_COLOR
+
+
+def get_screen_edge_indicator(screen, target_position, margin=70):
+    """Clamp an off-screen target toward the nearest readable screen edge."""
+    screen_rect = screen.get_rect().inflate(-margin * 2, -margin * 2)
+    if screen_rect.collidepoint(target_position):
+        return pygame.Vector2(target_position), False
+
+    center = pygame.Vector2(screen.get_rect().center)
+    direction = pygame.Vector2(target_position) - center
+    if direction.length_squared() == 0:
+        return center, False
+
+    scale_x = (
+        (screen_rect.right - center.x) / direction.x
+        if direction.x > 0
+        else (screen_rect.left - center.x) / direction.x
+        if direction.x < 0
+        else float("inf")
+    )
+    scale_y = (
+        (screen_rect.bottom - center.y) / direction.y
+        if direction.y > 0
+        else (screen_rect.top - center.y) / direction.y
+        if direction.y < 0
+        else float("inf")
+    )
+    scale = min(scale_x, scale_y)
+    return center + direction * scale, True
+
+
+def draw_rift(screen, font, rift_state, player_position, camera):
+    """Draw the active Rift or an edge marker pointing toward it."""
+    world_position = rift_state["position"]
+    screen_position = world_position - camera
+    color = get_rift_color(rift_state)
+    indicator_position, is_offscreen = get_screen_edge_indicator(
+        screen,
+        screen_position,
+    )
+
+    if is_offscreen:
+        screen_center = pygame.Vector2(screen.get_rect().center)
+        direction = screen_position - screen_center
+        if direction.length_squared() > 0:
+            direction = direction.normalize()
+        side = pygame.Vector2(-direction.y, direction.x)
+        tip = indicator_position + direction * 18
+        left = indicator_position - direction * 12 + side * 12
+        right = indicator_position - direction * 12 - side * 12
+        pygame.draw.polygon(screen, color, (tip, left, right))
+        distance = round(player_position.distance_to(world_position))
+        label = font.render(
+            f"RIFT {rift_state['site_name']}  {distance}",
+            True,
+            color,
+        )
+        label_rect = label.get_rect(
+            center=(
+                round(indicator_position.x),
+                round(indicator_position.y + 30),
+            )
+        )
+        screen.blit(label, label_rect)
+        return
+
+    center = (round(screen_position.x), round(screen_position.y))
+    pulse = 5 + round(4 * math.sin(pygame.time.get_ticks() * 0.006))
+    pygame.draw.circle(
+        screen,
+        color,
+        center,
+        RIFT_RADIUS,
+        width=4,
+    )
+    pygame.draw.circle(
+        screen,
+        color,
+        center,
+        38 + pulse,
+        width=5,
+    )
+    pygame.draw.circle(screen, (22, 18, 35), center, 24)
+    pygame.draw.polygon(
+        screen,
+        color,
+        (
+            (center[0], center[1] - 22),
+            (center[0] + 18, center[1]),
+            (center[0], center[1] + 22),
+            (center[0] - 18, center[1]),
+        ),
+    )
+
+    label = font.render(
+        f"RIFT {rift_state['site_name']}",
+        True,
+        color,
+    )
+    screen.blit(
+        label,
+        label.get_rect(center=(center[0], center[1] - RIFT_RADIUS - 22)),
+    )
+
+    bar_width = 180
+    bar_height = 12
+    bar_x = center[0] - bar_width // 2
+    bar_y = center[1] + RIFT_RADIUS + 16
+    if rift_state["capture_team"] is not None:
+        progress = min(
+            1.0,
+            rift_state["capture_progress"] / RIFT_CAPTURE_TIME,
+        )
+    elif rift_state["owner"] is not None:
+        progress = min(
+            1.0,
+            rift_state["hold_progress"][rift_state["owner"]]
+            / RIFT_HOLD_TIME_TO_WIN,
+        )
+    else:
+        progress = 0.0
+
+    pygame.draw.rect(
+        screen,
+        (22, 26, 34),
+        (bar_x, bar_y, bar_width, bar_height),
+    )
+    pygame.draw.rect(
+        screen,
+        color,
+        (bar_x, bar_y, round(bar_width * progress), bar_height),
+    )
+    pygame.draw.rect(
+        screen,
+        TEXT_COLOR,
+        (bar_x, bar_y, bar_width, bar_height),
+        width=2,
+    )
+
+
+def draw_rift_intel(screen, font, actors, camera, rift_state):
+    """Reveal enemy positions and health during a blue Rift intel pulse."""
+    if (
+        rift_state["owner"] != "blue"
+        or rift_state["intel_remaining"] <= 0
+    ):
+        return
+
+    for actor in actors:
+        if actor["team"] != "red" or actor["eliminated"]:
+            continue
+
+        screen_position = actor["position"] - camera
+        marker_position, is_offscreen = get_screen_edge_indicator(
+            screen,
+            screen_position,
+            margin=55,
+        )
+        center = (round(marker_position.x), round(marker_position.y))
+        marker_radius = 12 if is_offscreen else ACTOR_RADIUS + 8
+        pygame.draw.circle(
+            screen,
+            RIFT_RED_COLOR,
+            center,
+            marker_radius,
+            width=3,
+        )
+        pygame.draw.line(
+            screen,
+            RIFT_RED_COLOR,
+            (center[0] - 7, center[1]),
+            (center[0] + 7, center[1]),
+            width=2,
+        )
+        pygame.draw.line(
+            screen,
+            RIFT_RED_COLOR,
+            (center[0], center[1] - 7),
+            (center[0], center[1] + 7),
+            width=2,
+        )
+        status = "DOWN" if actor["downed"] else f"{actor['health']} HP"
+        label = font.render(status, True, RIFT_RED_COLOR)
+        screen.blit(
+            label,
+            label.get_rect(center=(center[0], center[1] - marker_radius - 12)),
+        )
+
+
+def make_vision_render_buffers(screen_size, obstacle_rects):
+    """Allocate masks for permanent and potentially destructible obstacles."""
     mask_size = (
         max(1, round(screen_size[0] * VISION_MASK_SCALE)),
         max(1, round(screen_size[1] * VISION_MASK_SCALE)),
@@ -1283,16 +2156,19 @@ def make_vision_render_buffers(screen_size, walls):
         "wall_piece_masks": [
             pygame.Surface(
                 (
-                    max(1, math.ceil(wall.width * VISION_MASK_SCALE) + 2),
-                    max(1, math.ceil(wall.height * VISION_MASK_SCALE) + 2),
+                    max(1, math.ceil(obstacle.width * VISION_MASK_SCALE) + 2),
+                    max(1, math.ceil(obstacle.height * VISION_MASK_SCALE) + 2),
                 ),
                 pygame.SRCALPHA,
             )
-            for wall in walls
+            for obstacle in obstacle_rects
         ],
         "wall_detail_layers": [
-            pygame.Surface((wall.width, wall.height), pygame.SRCALPHA)
-            for wall in walls
+            pygame.Surface(
+                (obstacle.width, obstacle.height),
+                pygame.SRCALPHA,
+            )
+            for obstacle in obstacle_rects
         ],
         "actor_object_layer": pygame.Surface((160, 140), pygame.SRCALPHA),
         "bullet_object_layer": pygame.Surface((24, 24), pygame.SRCALPHA),
@@ -1405,11 +2281,12 @@ def calculate_wall_shadow_polygon(
 
 def update_wall_visibility_mask(
     player_position,
-    walls,
+    active_obstacles,
+    all_obstacle_indices,
     camera,
     buffers,
 ):
-    """Build the local player's special whole-section wall visibility mask."""
+    """Build whole-section visibility for every active blocking object."""
     wall_mask = buffers["wall_mask"]
     wall_mask_low = buffers["wall_mask_low"]
     wall_occlusion = buffers["wall_occlusion_low"]
@@ -1419,16 +2296,17 @@ def update_wall_visibility_mask(
     wall_occlusion.fill((0, 0, 0, 0))
 
     ordered_wall_indices = sorted(
-        range(len(walls)),
-        key=lambda index: get_wall_distance_squared(
+        range(len(active_obstacles)),
+        key=lambda active_index: get_wall_distance_squared(
             player_position,
-            walls[index],
+            active_obstacles[active_index],
         ),
     )
 
-    for wall_index in ordered_wall_indices:
-        wall = walls[wall_index]
-        wall_piece_mask = wall_piece_masks[wall_index]
+    for active_index in ordered_wall_indices:
+        wall = active_obstacles[active_index]
+        piece_index = all_obstacle_indices[id(wall)]
+        wall_piece_mask = wall_piece_masks[piece_index]
         wall_piece_mask.fill((255, 255, 255, 255))
         wall_screen_rect = make_scaled_screen_rect(wall, camera)
         visible_wall_rect = wall_screen_rect.clip(mask_rect)
@@ -1480,7 +2358,8 @@ def update_wall_visibility_mask(
 def update_visibility_masks(
     visible_polygon,
     player_position,
-    walls,
+    active_obstacles,
+    all_obstacle_indices,
     camera,
     buffers,
     refresh_visibility=True,
@@ -1502,7 +2381,8 @@ def update_visibility_masks(
 
         update_wall_visibility_mask(
             player_position,
-            walls,
+            active_obstacles,
+            all_obstacle_indices,
             camera,
             buffers,
         )
@@ -1601,6 +2481,54 @@ def draw_visible_wall_details(
         blit_surface_through_mask(
             screen,
             wall_layer,
+            visibility_mask,
+            destination,
+        )
+
+
+def draw_visible_destructible_details(
+    screen,
+    destructible_objects,
+    bullet_marks,
+    camera,
+    visibility_mask,
+    detail_layers,
+    first_layer_index,
+):
+    """Restore the visible material colors of active crates and doors."""
+    for object_index, destructible in enumerate(destructible_objects):
+        if destructible["destroyed"]:
+            continue
+
+        rectangle = destructible["rect"]
+        destination = (
+            round(rectangle.left - camera.x),
+            round(rectangle.top - camera.y),
+        )
+        destination_rect = pygame.Rect(
+            destination,
+            (rectangle.width, rectangle.height),
+        )
+        if not destination_rect.colliderect(screen.get_rect()):
+            continue
+
+        detail_layer = detail_layers[first_layer_index + object_index]
+        detail_layer.fill((0, 0, 0, 0))
+        draw_destructible_object(
+            detail_layer,
+            destructible,
+            pygame.Vector2(rectangle.topleft),
+            hidden=False,
+        )
+        draw_bullet_marks(
+            detail_layer,
+            bullet_marks,
+            pygame.Vector2(rectangle.topleft),
+            only_wall=rectangle,
+        )
+        blit_surface_through_mask(
+            screen,
+            detail_layer,
             visibility_mask,
             destination,
         )
@@ -1810,14 +2738,24 @@ def draw_debug_panel(
     current_fps,
 ):
     """Show the values that matter while testing movement."""
+    if active_weapon["fire_mode"] == "melee":
+        weapon_detail = (
+            f"Knife: {active_weapon['damage']} damage | "
+            f"{active_weapon['melee_range']} pixel reach"
+        )
+    else:
+        weapon_detail = (
+            f"{active_weapon['name']} spread: {spread_percent * 100:.0f}%"
+        )
+
     lines = [
-        "FIRST MATCH LABORATORY 0.5",
-        "WASD Move | SHIFT Run | LMB Fire | E Revive | R Reload | 1/2/3 Swap",
+        "RIFT HUNT 0.7 - ECONOMY",
+        "WASD Move | SHIFT Run | LMB Attack | E Revive | R Reload | Number keys swap owned weapons",
         f"Position: ({player_position.x:.1f}, {player_position.y:.1f})",
         f"Facing: {math.degrees(aim_angle):.1f} degrees",
         f"Movement: {movement_state}",
         f"Current speed: {actual_speed:.0f} pixels/second",
-        f"{active_weapon['name']} spread: {spread_percent * 100:.0f}%",
+        weapon_detail,
         f"Stamina: {stamina:.0f} / {MAX_STAMINA}",
         f"FPS: {current_fps:.0f} / target {FPS}",
     ]
@@ -1840,8 +2778,8 @@ def draw_weapon_panel(
     player,
 ):
     """Display ammunition and the local player's combat condition."""
-    panel_width = 355
-    panel_height = 200
+    panel_width = 470
+    panel_height = 226
     panel_x = screen.get_width() - panel_width - 18
     panel_y = screen.get_height() - panel_height - 18
 
@@ -1849,9 +2787,12 @@ def draw_weapon_panel(
     panel.fill((10, 13, 18, 220))
     screen.blit(panel, (panel_x, panel_y))
 
-    fire_mode_label = (
-        "AUTO" if active_weapon["fire_mode"] == "automatic" else "SEMI"
-    )
+    if active_weapon["fire_mode"] == "automatic":
+        fire_mode_label = "AUTO"
+    elif active_weapon["fire_mode"] == "melee":
+        fire_mode_label = "MELEE"
+    else:
+        fire_mode_label = "SEMI"
     weapon_name = regular_font.render(
         f"SLOT {active_weapon['slot']}: {active_weapon['name'].upper()} [{fire_mode_label}]",
         True,
@@ -1859,14 +2800,23 @@ def draw_weapon_panel(
     )
     screen.blit(weapon_name, (panel_x + 18, panel_y + 14))
 
-    ammunition = large_font.render(
-        f"{weapon_state['magazine_ammo']} / {weapon_state['reserve_ammo']}",
-        True,
-        BULLET_COLOR,
-    )
+    if active_weapon["fire_mode"] == "melee":
+        ammunition_label = "MELEE"
+    else:
+        ammunition_label = (
+            f"{weapon_state['magazine_ammo']} / "
+            f"{weapon_state['reserve_ammo']}"
+        )
+    ammunition = large_font.render(ammunition_label, True, BULLET_COLOR)
     screen.blit(ammunition, (panel_x + 18, panel_y + 38))
 
-    if weapon_state["reloading"]:
+    if active_weapon["fire_mode"] == "melee":
+        weapon_status = (
+            "RECOVERING"
+            if weapon_state["shot_cooldown"] > 0
+            else "READY"
+        )
+    elif weapon_state["reloading"]:
         weapon_status = f"RELOADING: {weapon_state['reload_timer']:.1f}s"
     elif weapon_state["magazine_ammo"] == 0:
         weapon_status = "OUT OF AMMO"
@@ -1876,8 +2826,12 @@ def draw_weapon_panel(
     status_text = regular_font.render(weapon_status, True, TEXT_COLOR)
     screen.blit(status_text, (panel_x + 18, panel_y + 87))
 
+    owned_slots = "   ".join(
+        f"{WEAPONS[index]['slot']}: {WEAPONS[index]['name']}"
+        for index in player["owned_weapon_indices"]
+    )
     slots_text = regular_font.render(
-        "1: Pistol    2: Rifle    3: Shotgun",
+        f"Owned: {owned_slots}",
         True,
         (166, 180, 198),
     )
@@ -1896,8 +2850,14 @@ def draw_weapon_panel(
         True,
         TEXT_COLOR,
     )
+    credits_text = regular_font.render(
+        f"Credits: {player['credits']} / {MAX_CREDITS}",
+        True,
+        BULLET_COLOR,
+    )
     screen.blit(player_text, (panel_x + 18, panel_y + 142))
     screen.blit(life_text, (panel_x + 18, panel_y + 168))
+    screen.blit(credits_text, (panel_x + 18, panel_y + 194))
 
 
 def count_team_states(actors, team):
@@ -1909,19 +2869,55 @@ def count_team_states(actors, team):
     return standing, downed, eliminated
 
 
-def draw_match_panel(screen, font, scores, round_number, actors):
-    """Show the first-to-five score and current team conditions."""
+def draw_match_panel(screen, font, scores, round_number, actors, rift_state):
+    """Show the score, team conditions, and active Rift objective state."""
     blue_state = count_team_states(actors, "blue")
     red_state = count_team_states(actors, "red")
+    if rift_state["contested"]:
+        rift_status = "CONTESTED"
+    elif rift_state["capture_team"] is not None:
+        capture_percent = round(
+            100 * rift_state["capture_progress"] / RIFT_CAPTURE_TIME
+        )
+        rift_status = (
+            f"{rift_state['capture_team'].upper()} CAPTURING {capture_percent}%"
+        )
+    elif rift_state["owner"] is not None:
+        owner = rift_state["owner"]
+        rift_status = (
+            f"{owner.upper()} CONTROL "
+            f"{rift_state['hold_progress'][owner]:.1f}/"
+            f"{RIFT_HOLD_TIME_TO_WIN:.0f}s"
+        )
+    else:
+        rift_status = "NEUTRAL"
+
+    if rift_state["owner"] == "blue":
+        if rift_state["intel_remaining"] > 0:
+            intel_status = (
+                f"INTEL ACTIVE {rift_state['intel_remaining']:.1f}s"
+            )
+        else:
+            intel_status = (
+                f"NEXT INTEL IN "
+                f"{max(0.0, RIFT_INTEL_INTERVAL - rift_state['intel_timer']):.1f}s"
+            )
+    elif rift_state["owner"] == "red":
+        intel_status = "RED HAS INTEL ADVANTAGE"
+    else:
+        intel_status = "CAPTURE FOR ENEMY INTEL"
+
     lines = [
         f"BLUE  {scores['blue']}  -  {scores['red']}  RED",
         f"ROUND {round_number}    FIRST TO {ROUNDS_TO_WIN}",
         f"Up {blue_state[0]}-{red_state[0]}   "
         f"Down {blue_state[1]}-{red_state[1]}   "
         f"Out {blue_state[2]}-{red_state[2]}",
+        f"RIFT {rift_state['site_name']}: {rift_status}",
+        intel_status,
     ]
 
-    panel = pygame.Surface((460, 92), pygame.SRCALPHA)
+    panel = pygame.Surface((500, 142), pygame.SRCALPHA)
     panel.fill((10, 13, 18, 220))
     panel_x = screen.get_width() - panel.get_width() - 18
     screen.blit(panel, (panel_x, 18))
@@ -1935,9 +2931,92 @@ def draw_match_panel(screen, font, scores, round_number, actors):
         )
 
 
+def draw_buy_phase(screen, regular_font, large_font, match_state, player, status_message):
+    """Show the 30-second weapon shop before combat begins."""
+    if match_state["phase"] != "buying":
+        return
+
+    panel_width = 760
+    panel_height = 360
+    panel = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+    panel.fill((8, 10, 15, 238))
+    panel_rect = panel.get_rect(center=screen.get_rect().center)
+    screen.blit(panel, panel_rect)
+
+    title = large_font.render("BUY PHASE", True, TEXT_COLOR)
+    screen.blit(
+        title,
+        title.get_rect(center=(screen.get_width() // 2, panel_rect.top + 48)),
+    )
+
+    timer_text = large_font.render(
+        f"{max(0.0, match_state['timer']):.1f}s",
+        True,
+        BULLET_COLOR,
+    )
+    screen.blit(
+        timer_text,
+        timer_text.get_rect(center=(screen.get_width() // 2, panel_rect.top + 92)),
+    )
+
+    credits = regular_font.render(
+        f"Credits: {player['credits']} / {MAX_CREDITS}",
+        True,
+        BULLET_COLOR,
+    )
+    screen.blit(credits, (panel_rect.left + 34, panel_rect.top + 130))
+
+    owned_names = ", ".join(
+        WEAPONS[index]["name"] for index in player["owned_weapon_indices"]
+    )
+    inventory = regular_font.render(
+        f"Inventory ({len(player['owned_weapon_indices'])}/{MAX_OWNED_WEAPONS}): {owned_names}",
+        True,
+        TEXT_COLOR,
+    )
+    screen.blit(inventory, (panel_rect.left + 34, panel_rect.top + 160))
+
+    purchase_y = panel_rect.top + 205
+    for weapon_index in (2, 3):
+        weapon = WEAPONS[weapon_index]
+        if actor_owns_weapon(player, weapon_index):
+            availability = "OWNED"
+        elif len(player["owned_weapon_indices"]) >= MAX_OWNED_WEAPONS:
+            availability = "INVENTORY FULL"
+        elif player["credits"] < weapon["price"]:
+            availability = "NOT ENOUGH CREDITS"
+        else:
+            availability = "AVAILABLE"
+
+        option = regular_font.render(
+            f"Press {weapon['slot']} - {weapon['name']} - {weapon['price']} credits - {availability}",
+            True,
+            TEXT_COLOR,
+        )
+        screen.blit(option, (panel_rect.left + 54, purchase_y))
+        purchase_y += 36
+
+    if status_message:
+        status = regular_font.render(status_message, True, BULLET_COLOR)
+        screen.blit(
+            status,
+            status.get_rect(center=(screen.get_width() // 2, panel_rect.bottom - 55)),
+        )
+
+    instruction = regular_font.render(
+        "Combat begins automatically when the timer reaches 0.",
+        True,
+        (182, 198, 218),
+    )
+    screen.blit(
+        instruction,
+        instruction.get_rect(center=(screen.get_width() // 2, panel_rect.bottom - 25)),
+    )
+
+
 def draw_round_banner(screen, regular_font, large_font, match_state):
     """Display round and match results during the transition pause."""
-    if match_state["phase"] == "playing":
+    if match_state["phase"] in ("playing", "buying"):
         return
 
     panel = pygame.Surface((720, 180), pygame.SRCALPHA)
@@ -1964,43 +3043,120 @@ def draw_round_banner(screen, regular_font, large_font, match_state):
     )
 
 
-def reset_round(actors, weapon_states, bullets, bullet_marks):
-    """Reset actors, ammunition, projectiles, and marks for a clean round."""
+def reset_round(
+    actors,
+    weapon_states,
+    bullets,
+    bullet_marks,
+    destructible_objects,
+    rift_state,
+):
+    """Reset combat state and select the next round's active Rift."""
     for actor in actors:
         reset_actor_for_round(actor)
     for index, weapon in enumerate(WEAPONS):
         weapon_states[index] = make_weapon_state(weapon)
     bullets.clear()
     clear_bullet_marks(bullet_marks)
+    reset_destructible_objects(destructible_objects)
+    reset_rift_state(rift_state)
 
 
-def begin_new_match(match_state, scores, actors, weapon_states, bullets, bullet_marks):
+def begin_new_match(
+    match_state,
+    scores,
+    actors,
+    weapon_states,
+    bullets,
+    bullet_marks,
+    destructible_objects,
+    rift_state,
+):
     """Restore the score and begin round one."""
     scores["blue"] = 0
     scores["red"] = 0
-    match_state["phase"] = "playing"
-    match_state["timer"] = 0.0
+    for actor in actors:
+        actor["credits"] = STARTING_CREDITS
+        reset_actor_loadout(actor)
+    match_state["phase"] = "buying"
+    match_state["timer"] = BUY_PHASE_DURATION
     match_state["message"] = ""
     match_state["round_number"] = 1
-    reset_round(actors, weapon_states, bullets, bullet_marks)
+    reset_round(
+        actors,
+        weapon_states,
+        bullets,
+        bullet_marks,
+        destructible_objects,
+        rift_state,
+    )
+
+
+def finish_round(match_state, scores, actors, winner, round_message):
+    """Award the round score and each actor's personal credit reward."""
+    if winner is not None:
+        scores[winner] += 1
+
+    for actor in actors:
+        if winner is None:
+            reward = ROUND_DRAW_CREDITS
+        elif actor["team"] == winner:
+            reward = ROUND_WIN_CREDITS
+        else:
+            reward = ROUND_LOSS_CREDITS
+
+        actor["credits"] = min(MAX_CREDITS, actor["credits"] + reward)
+
+        # A purchased weapon survives only if the actor is alive when the
+        # round ends. Being downed and never revived therefore loses it too.
+        if not actor["alive"]:
+            reset_actor_loadout(actor)
+
+    if winner is not None and scores[winner] >= ROUNDS_TO_WIN:
+        match_state["phase"] = "match_over"
+        match_state["message"] = f"{winner.upper()} WINS THE MATCH"
+    else:
+        match_state["phase"] = "round_over"
+        match_state["timer"] = ROUND_END_DELAY
+        match_state["message"] = round_message
 
 
 def main():
     pygame.init()
 
     screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-    pygame.display.set_caption("Riftbound - First Match Laboratory")
+    pygame.display.set_caption("Riftbound - Economy 0.7")
     pygame.mouse.set_visible(False)
 
     clock = pygame.time.Clock()
     debug_font = pygame.font.Font(None, 26)
     ammunition_font = pygame.font.Font(None, 48)
     walls = make_walls()
-    vision_buffers = make_vision_render_buffers(screen.get_size(), walls)
-    wall_segments = get_wall_segments(walls)
-    wall_corners = get_wall_corners(walls)
+    destructible_objects = make_destructible_objects()
+    all_obstacle_rects = walls + [
+        destructible["rect"] for destructible in destructible_objects
+    ]
+    all_obstacle_indices = {
+        id(obstacle): index
+        for index, obstacle in enumerate(all_obstacle_rects)
+    }
+    active_obstacles = get_active_obstacle_rects(
+        walls,
+        destructible_objects,
+    )
+    active_obstacle_signature = tuple(
+        not destructible["destroyed"]
+        for destructible in destructible_objects
+    )
+    vision_buffers = make_vision_render_buffers(
+        screen.get_size(),
+        all_obstacle_rects,
+    )
+    wall_segments = get_wall_segments(active_obstacles)
+    wall_corners = get_wall_corners(active_obstacles)
     actors = make_match_actors()
     player = actors[0]
+    rift_state = make_rift_state()
 
     aim_angle = 0.0
     bullets = []
@@ -2016,14 +3172,15 @@ def main():
     sprint_exhausted = False
     scores = {"blue": 0, "red": 0}
     match_state = {
-        "phase": "playing",
-        "timer": 0.0,
+        "phase": "buying",
+        "timer": BUY_PHASE_DURATION,
         "message": "",
         "round_number": 1,
     }
     vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
     cached_world_polygon = []
     cached_vision_camera = pygame.Vector2()
+    buy_status_message = ""
     game_running = True
 
     while game_running:
@@ -2031,6 +3188,7 @@ def main():
         delta_time = min(clock.tick(FPS) / 1000.0, 0.05)
         reload_requested = False
         weapon_switch_requested = None
+        purchase_weapon_requested = None
         trigger_just_pressed = False
         restart_requested = False
 
@@ -2047,7 +3205,15 @@ def main():
                 elif event.key == pygame.K_2:
                     weapon_switch_requested = 1
                 elif event.key == pygame.K_3:
-                    weapon_switch_requested = 2
+                    if match_state["phase"] == "buying":
+                        purchase_weapon_requested = 2
+                    else:
+                        weapon_switch_requested = 2
+                elif event.key == pygame.K_4:
+                    if match_state["phase"] == "buying":
+                        purchase_weapon_requested = 3
+                    else:
+                        weapon_switch_requested = 3
                 elif event.key == pygame.K_RETURN:
                     restart_requested = True
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -2061,8 +3227,11 @@ def main():
                 weapon_states,
                 bullets,
                 bullet_marks,
+                destructible_objects,
+                rift_state,
             )
             active_weapon_index = 0
+            buy_status_message = ""
             stamina = MAX_STAMINA
             sprint_exhausted = False
             camera_recoil_offset.update(0, 0)
@@ -2074,9 +3243,20 @@ def main():
             match_state["timer"] -= delta_time
             if match_state["timer"] <= 0:
                 match_state["round_number"] += 1
-                reset_round(actors, weapon_states, bullets, bullet_marks)
-                match_state["phase"] = "playing"
+                reset_round(
+                    actors,
+                    weapon_states,
+                    bullets,
+                    bullet_marks,
+                    destructible_objects,
+                    rift_state,
+                )
+                match_state["phase"] = "buying"
+                match_state["timer"] = BUY_PHASE_DURATION
                 match_state["message"] = ""
+                buy_status_message = ""
+                if not actor_owns_weapon(player, active_weapon_index):
+                    active_weapon_index = 1
                 stamina = MAX_STAMINA
                 sprint_exhausted = False
                 camera_recoil_offset.update(0, 0)
@@ -2084,15 +3264,47 @@ def main():
                 camera_shake_strength = 0.0
                 vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
 
+        if purchase_weapon_requested is not None:
+            purchased, buy_status_message = try_buy_weapon(
+                player,
+                purchase_weapon_requested,
+            )
+            if actor_owns_weapon(player, purchase_weapon_requested):
+                active_weapon_index = purchase_weapon_requested
+
+        if match_state["phase"] == "buying":
+            match_state["timer"] = max(0.0, match_state["timer"] - delta_time)
+            if match_state["timer"] <= 0:
+                match_state["phase"] = "playing"
+                match_state["message"] = ""
+                buy_status_message = ""
+
+        current_obstacle_signature = tuple(
+            not destructible["destroyed"]
+            for destructible in destructible_objects
+        )
+        if current_obstacle_signature != active_obstacle_signature:
+            active_obstacles = get_active_obstacle_rects(
+                walls,
+                destructible_objects,
+            )
+            wall_segments = get_wall_segments(active_obstacles)
+            wall_corners = get_wall_corners(active_obstacles)
+            active_obstacle_signature = current_obstacle_signature
+            cached_world_polygon = []
+            vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
+
         if (
             weapon_switch_requested is not None
             and weapon_switch_requested != active_weapon_index
+            and actor_owns_weapon(player, weapon_switch_requested)
         ):
             # Switching weapons cancels, rather than completes, the current reload.
             old_weapon_state = weapon_states[active_weapon_index]
             old_weapon_state["reloading"] = False
             old_weapon_state["reload_timer"] = 0.0
             old_weapon_state["sustained_shots"] = 0
+            old_weapon_state["attack_animation_timer"] = 0.0
             active_weapon_index = weapon_switch_requested
             weapon_states[active_weapon_index]["sustained_shots"] = 0
 
@@ -2142,7 +3354,7 @@ def main():
             PLAYER_SPEED * SPRINT_MULTIPLIER if sprinting else PLAYER_SPEED
         )
         movement = movement_direction * selected_speed * delta_time
-        move_player(player["position"], movement, walls)
+        move_player(player["position"], movement, active_obstacles)
 
         if movement_direction.length_squared() == 0:
             movement_state = "Idle"
@@ -2187,8 +3399,16 @@ def main():
                 0.0,
                 weapon_state["shot_cooldown"] - delta_time,
             )
+            weapon_state["attack_animation_timer"] = max(
+                0.0,
+                weapon_state["attack_animation_timer"] - delta_time,
+            )
 
-        if reload_requested and not active_weapon_state["reloading"]:
+        if (
+            active_weapon["fire_mode"] != "melee"
+            and reload_requested
+            and not active_weapon_state["reloading"]
+        ):
             magazine_has_space = (
                 active_weapon_state["magazine_ammo"]
                 < active_weapon["magazine_size"]
@@ -2214,50 +3434,90 @@ def main():
                 active_weapon_state["reloading"] = False
                 active_weapon_state["reload_timer"] = 0.0
 
-        if active_weapon["fire_mode"] == "semi":
+        if active_weapon["fire_mode"] in ("semi", "melee"):
             firing = trigger_just_pressed
         else:
             firing = trigger_held or trigger_just_pressed
+
+        weapon_has_attack = (
+            active_weapon["fire_mode"] == "melee"
+            or active_weapon_state["magazine_ammo"] > 0
+        )
 
         can_fire = (
             player_can_act
             and match_state["phase"] == "playing"
             and firing
             and not active_weapon_state["reloading"]
-            and active_weapon_state["magazine_ammo"] > 0
+            and weapon_has_attack
             and active_weapon_state["shot_cooldown"] <= 0
         )
         if can_fire:
-            sustained_shot = (
-                active_weapon["fire_mode"] == "automatic"
-                and active_weapon_state["sustained_shots"] > 0
-                and not trigger_just_pressed
-            )
-            for _ in range(active_weapon["projectiles_per_shot"]):
-                bullets.append(
-                    create_bullet(
-                        player,
-                        aim_angle,
-                        current_spread,
-                        active_weapon,
-                    )
+            if active_weapon["fire_mode"] == "melee":
+                _, knife_geometry_changed = perform_knife_attack(
+                    player,
+                    aim_angle,
+                    active_weapon,
+                    actors,
+                    active_obstacles,
+                    destructible_objects,
+                    bullet_marks,
                 )
-            active_weapon_state["magazine_ammo"] -= 1
-            active_weapon_state["shot_cooldown"] = active_weapon["seconds_per_shot"]
-            camera_shake_strength, recoil_sway_direction = add_shot_recoil(
-                active_weapon,
-                aim_angle,
-                sustained_shot,
-                camera_recoil_velocity,
-                camera_shake_strength,
-                recoil_sway_direction,
-            )
-            if active_weapon["fire_mode"] == "automatic":
-                active_weapon_state["sustained_shots"] += 1
+                if knife_geometry_changed:
+                    active_obstacles = get_active_obstacle_rects(
+                        walls,
+                        destructible_objects,
+                    )
+                    active_obstacle_signature = tuple(
+                        not destructible["destroyed"]
+                        for destructible in destructible_objects
+                    )
+                    wall_segments = get_wall_segments(active_obstacles)
+                    wall_corners = get_wall_corners(active_obstacles)
+                    cached_world_polygon = []
+                    vision_frames_since_update = (
+                        VISION_RENDER_FRAMES_PER_UPDATE
+                    )
+                active_weapon_state["shot_cooldown"] = (
+                    active_weapon["seconds_per_shot"]
+                )
+                active_weapon_state["attack_animation_timer"] = (
+                    active_weapon["attack_animation_time"]
+                )
+            else:
+                sustained_shot = (
+                    active_weapon["fire_mode"] == "automatic"
+                    and active_weapon_state["sustained_shots"] > 0
+                    and not trigger_just_pressed
+                )
+                for _ in range(active_weapon["projectiles_per_shot"]):
+                    bullets.append(
+                        create_bullet(
+                            player,
+                            aim_angle,
+                            current_spread,
+                            active_weapon,
+                        )
+                    )
+                active_weapon_state["magazine_ammo"] -= 1
+                active_weapon_state["shot_cooldown"] = (
+                    active_weapon["seconds_per_shot"]
+                )
+                camera_shake_strength, recoil_sway_direction = add_shot_recoil(
+                    active_weapon,
+                    aim_angle,
+                    sustained_shot,
+                    camera_recoil_velocity,
+                    camera_shake_strength,
+                    recoil_sway_direction,
+                )
+                if active_weapon["fire_mode"] == "automatic":
+                    active_weapon_state["sustained_shots"] += 1
 
         # Reaching zero starts the same reload used by the R key.
         if (
-            not active_weapon_state["reloading"]
+            active_weapon["fire_mode"] != "melee"
+            and not active_weapon_state["reloading"]
             and active_weapon_state["magazine_ammo"] == 0
             and active_weapon_state["reserve_ammo"] > 0
         ):
@@ -2276,25 +3536,68 @@ def main():
                     team="blue",
                     downed_only=True,
                 )
-                try_revive(player, downed_ally, delta_time, walls)
+                try_revive(
+                    player,
+                    downed_ally,
+                    delta_time,
+                    active_obstacles,
+                )
 
             for actor in actors:
                 if not actor["is_player"]:
-                    update_bot(actor, actors, walls, bullets, delta_time)
+                    update_bot(
+                        actor,
+                        actors,
+                        active_obstacles,
+                        bullets,
+                        delta_time,
+                        rift_state,
+                    )
 
-            separate_standing_actors(actors, walls)
+            separate_standing_actors(actors, active_obstacles)
             finish_unattended_revives(actors)
-            bullets = update_bullets(
+            bullets, obstacle_geometry_changed = update_bullets(
                 bullets,
                 delta_time,
                 walls,
+                destructible_objects,
                 actors,
                 bullet_marks,
             )
 
+            if obstacle_geometry_changed:
+                active_obstacles = get_active_obstacle_rects(
+                    walls,
+                    destructible_objects,
+                )
+                active_obstacle_signature = tuple(
+                    not destructible["destroyed"]
+                    for destructible in destructible_objects
+                )
+                wall_segments = get_wall_segments(active_obstacles)
+                wall_corners = get_wall_corners(active_obstacles)
+                cached_world_polygon = []
+                vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
+
+            rift_winner = update_rift_state(
+                rift_state,
+                actors,
+                delta_time,
+            )
             blue_standing = team_has_standing_actor(actors, "blue")
             red_standing = team_has_standing_actor(actors, "red")
-            if not blue_standing or not red_standing:
+
+            if rift_winner is not None:
+                bullets.clear()
+                clear_bullet_marks(bullet_marks)
+                finish_round(
+                    match_state,
+                    scores,
+                    actors,
+                    rift_winner,
+                    f"{rift_winner.upper()} WINS BY RIFT CONTROL",
+                )
+            elif not blue_standing or not red_standing:
                 bullets.clear()
                 clear_bullet_marks(bullet_marks)
 
@@ -2308,16 +3611,13 @@ def main():
                     winner = None
                     round_message = "ROUND DRAW"
 
-                if winner is not None:
-                    scores[winner] += 1
-
-                if winner is not None and scores[winner] >= ROUNDS_TO_WIN:
-                    match_state["phase"] = "match_over"
-                    match_state["message"] = f"{winner.upper()} WINS THE MATCH"
-                else:
-                    match_state["phase"] = "round_over"
-                    match_state["timer"] = ROUND_END_DELAY
-                    match_state["message"] = round_message
+                finish_round(
+                    match_state,
+                    scores,
+                    actors,
+                    winner,
+                    round_message,
+                )
 
         update_bullet_marks(bullet_marks, delta_time)
         # Only the local player's line of sight controls the world. Teammates
@@ -2334,7 +3634,7 @@ def main():
             world_camera = pygame.Vector2()
             cached_world_polygon = calculate_vision_polygon(
                 player["position"],
-                walls,
+                active_obstacles,
                 world_camera,
                 wall_segments,
                 wall_corners,
@@ -2350,7 +3650,8 @@ def main():
         update_visibility_masks(
             visible_polygon,
             player["position"],
-            walls,
+            active_obstacles,
+            all_obstacle_indices,
             camera,
             vision_buffers,
             refresh_visibility=refresh_visibility,
@@ -2376,6 +3677,11 @@ def main():
         # First redraw every complete wall section dark gray. Nothing in the
         # vision mask is allowed to remove or cut away the wall's shape.
         draw_hidden_walls(screen, walls, camera)
+        draw_hidden_destructibles(
+            screen,
+            destructible_objects,
+            camera,
+        )
 
         # Restore normal wall color through wall-sized masks. Avoiding a full
         # 1920x1080 temporary surface here saves several million pixel
@@ -2387,6 +3693,25 @@ def main():
             camera,
             vision_buffers["wall_mask"],
             vision_buffers["wall_detail_layers"],
+        )
+        draw_visible_destructible_details(
+            screen,
+            destructible_objects,
+            bullet_marks,
+            camera,
+            vision_buffers["wall_mask"],
+            vision_buffers["wall_detail_layers"],
+            len(walls),
+        )
+
+        # The active objective marker remains readable through the terrain
+        # shading, while an edge arrow points toward off-screen Rift sites.
+        draw_rift(
+            screen,
+            debug_font,
+            rift_state,
+            player["position"],
+            camera,
         )
 
         # Bots and bullets retain exact partial visibility, but only their
@@ -2418,13 +3743,31 @@ def main():
             camera,
             include_player=True,
         )
+        if (
+            active_weapon["fire_mode"] == "melee"
+            and actor_can_fight(player)
+        ):
+            draw_knife(
+                screen,
+                player,
+                camera,
+                aim_angle,
+                active_weapon_state["attack_animation_timer"],
+            )
+        draw_rift_intel(
+            screen,
+            debug_font,
+            actors,
+            camera,
+            rift_state,
+        )
         if match_state["phase"] == "playing":
             draw_revive_prompt(
                 screen,
                 debug_font,
                 player,
                 actors,
-                walls,
+                active_obstacles,
                 camera,
             )
         draw_debug_panel(
@@ -2460,8 +3803,17 @@ def main():
             scores,
             match_state["round_number"],
             actors,
+            rift_state,
         )
         draw_crosshair(screen, pygame.mouse.get_pos(), current_spread)
+        draw_buy_phase(
+            screen,
+            debug_font,
+            ammunition_font,
+            match_state,
+            player,
+            buy_status_message,
+        )
         draw_round_banner(
             screen,
             debug_font,
