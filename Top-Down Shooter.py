@@ -211,6 +211,60 @@ WEAPON_SHARE_DRAW_DISTANCE = 520
 DROPPED_WEAPON_RADIUS = 18
 SHARE_STATUS_DURATION = 2.5
 
+# Bots make one shop decision per Buy Phase. They sometimes save instead of
+# automatically filling the third slot, which keeps the economy less predictable
+# and leaves occasional opportunities for the player to share a weapon with them.
+BOT_BUY_CHANCE = 0.70
+BOT_RIFLE_BUY_CHANCE = 0.60
+
+# Team Rift Energy is shared by each team, persists between rounds, and resets
+# only when a completely new match begins. Environmental purchases will spend it
+# in the next economy update.
+STARTING_TEAM_RIFT_ENERGY = 0
+MAX_TEAM_RIFT_ENERGY = 100
+RIFT_ENERGY_REVIVE_REWARD = 5
+RIFT_ENERGY_ANCHOR_BREAK_REWARD = 10
+RIFT_ENERGY_CAPTURE_REWARD = 10
+RIFT_ENERGY_CONTROL_INTERVAL = 5.0
+RIFT_ENERGY_CONTROL_REWARD = 3
+RIFT_ENERGY_ROUND_WIN_REWARD = 10
+
+# -----------------------------------------------------------------------------
+# CHARACTERS 0.8 SETTINGS - MALPHAS
+# Malphas is the first playable character. Keeping his balance values together
+# makes it possible to tune the character without rewriting ability logic.
+# -----------------------------------------------------------------------------
+MALPHAS = {
+    "id": "malphas",
+    "name": "Malphas",
+    "class": "Phantom",
+    "max_health": 110,
+    "move_speed": 260,
+    "sprint_multiplier": 1.32,
+    "max_stamina": 105,
+}
+
+MALPHAS_HELLSTEP_RANGE = 650
+MALPHAS_HELLSTEP_DELAY = 0.65
+MALPHAS_HELLSTEP_COOLDOWN = 8.0
+
+MALPHAS_SILENCE_DURATION = 4.5
+MALPHAS_SILENCE_COOLDOWN = 12.0
+MALPHAS_WALK_SOUND_RADIUS = 180
+MALPHAS_RUN_SOUND_RADIUS = 430
+MALPHAS_SOUND_MEMORY = 1.5
+
+MALPHAS_BLOODLUST_DURATION = 8.0
+MALPHAS_BLOODLUST_RADIUS = 340
+MALPHAS_BLOODLUST_DRAIN_PER_SECOND = 6.0
+MALPHAS_BLOODLUST_HEAL_FRACTION = 0.30
+MALPHAS_BLOODLUST_ELIMINATION_HEALTH_FRACTION = 0.80
+
+MALPHAS_BODY_COLOR = (77, 34, 60)
+MALPHAS_GLOW_COLOR = (210, 62, 115)
+MALPHAS_HORN_COLOR = (235, 207, 224)
+MALPHAS_EFFECT_COLOR = (227, 67, 92)
+
 BACKGROUND_COLOR = (31, 37, 46)
 GRID_COLOR = (42, 49, 60)
 WALL_COLOR = (104, 114, 128)
@@ -404,6 +458,8 @@ def reset_rift_state(rift_state):
             "occupants": {"blue": 0, "red": 0},
             "intel_timer": 0.0,
             "intel_remaining": 0.0,
+            "rift_energy_control_timer": 0.0,
+            "rift_energy_capture_pending": None,
         }
     )
 
@@ -462,6 +518,8 @@ def update_rift_state(rift_state, actors, delta_time):
             rift_state["hold_progress"] = {"blue": 0.0, "red": 0.0}
             rift_state["intel_timer"] = 0.0
             rift_state["intel_remaining"] = RIFT_INTEL_DURATION
+            rift_state["rift_energy_control_timer"] = 0.0
+            rift_state["rift_energy_capture_pending"] = occupying_team
             captured_this_frame = True
 
     owner = rift_state["owner"]
@@ -493,15 +551,47 @@ def update_rift_state(rift_state, actors, delta_time):
     return None
 
 
-def make_actor(name, team, spawn_position, is_player=False, route=None):
-    """Create one player or bot with round, combat, and revival state."""
+def make_character_ability_state(character_id):
+    """Create per-round ability timers for the requested playable character."""
+    if character_id == MALPHAS["id"]:
+        return {
+            "hellstep_cooldown": 0.0,
+            "hellstep_windup": 0.0,
+            "hellstep_target": None,
+            "silence_cooldown": 0.0,
+            "silence_remaining": 0.0,
+            "bloodlust_remaining": 0.0,
+            "bloodlust_used": False,
+        }
+    return {}
+
+
+def make_actor(
+    name,
+    team,
+    spawn_position,
+    is_player=False,
+    route=None,
+    character=None,
+):
+    """Create one player or bot with round, combat, revival, and character state."""
+    character = character or {}
+    character_id = character.get("id")
+    max_health = character.get("max_health", ACTOR_MAX_HEALTH)
     return {
         "name": name,
         "team": team,
         "is_player": is_player,
         "spawn_position": pygame.Vector2(spawn_position),
         "position": pygame.Vector2(spawn_position),
-        "health": ACTOR_MAX_HEALTH,
+        "character_id": character_id,
+        "character_name": character.get("name", "Recruit"),
+        "character_class": character.get("class", "Soldier"),
+        "max_health": max_health,
+        "move_speed": character.get("move_speed", PLAYER_SPEED),
+        "sprint_multiplier": character.get("sprint_multiplier", SPRINT_MULTIPLIER),
+        "max_stamina": character.get("max_stamina", MAX_STAMINA),
+        "health": max_health,
         "credits": STARTING_CREDITS,
         "owned_weapon_indices": list(STARTING_WEAPON_INDICES),
         "alive": True,
@@ -510,18 +600,33 @@ def make_actor(name, team, spawn_position, is_player=False, route=None):
         "times_downed": 0,
         "revive_progress": 0.0,
         "revive_source": None,
+        "rift_energy_revive_pending": False,
+        "anchor_energy_awarded": False,
         "aim_angle": 0.0,
         "shot_cooldown": random.uniform(0.0, BOT_FIRE_INTERVAL),
+        "last_buy_round": 0,
         "strafe_direction": random.choice((-1, 1)),
         "strafe_timer": random.uniform(0.7, 1.5),
         "route": [pygame.Vector2(point) for point in (route or [])],
         "route_index": 0,
+        "ability_state": make_character_ability_state(character_id),
+        "movement_sound_radius": 0.0,
+        "heard_position": None,
+        "heard_timer": 0.0,
     }
 
 
 def make_match_actors():
     """Create the human player, two blue bots, and three red bots."""
-    actors = [make_actor("YOU", "blue", BLUE_SPAWNS[0], is_player=True)]
+    actors = [
+        make_actor(
+            "YOU",
+            "blue",
+            BLUE_SPAWNS[0],
+            is_player=True,
+            character=MALPHAS,
+        )
+    ]
 
     for index in range(1, TEAM_SIZE):
         actors.append(
@@ -549,16 +654,22 @@ def make_match_actors():
 def reset_actor_for_round(actor):
     """Restore one actor to its original spawn and first-life state."""
     actor["position"].update(actor["spawn_position"])
-    actor["health"] = ACTOR_MAX_HEALTH
+    actor["health"] = actor["max_health"]
     actor["alive"] = True
     actor["downed"] = False
     actor["eliminated"] = False
     actor["times_downed"] = 0
     actor["revive_progress"] = 0.0
     actor["revive_source"] = None
+    actor["rift_energy_revive_pending"] = False
+    actor["anchor_energy_awarded"] = False
     actor["aim_angle"] = 0.0
     actor["shot_cooldown"] = random.uniform(0.0, BOT_FIRE_INTERVAL)
     actor["route_index"] = 0
+    actor["ability_state"] = make_character_ability_state(actor["character_id"])
+    actor["movement_sound_radius"] = 0.0
+    actor["heard_position"] = None
+    actor["heard_timer"] = 0.0
 
 
 def make_weapon_state(weapon):
@@ -607,6 +718,54 @@ def try_buy_weapon(actor, weapon_index):
     actor["owned_weapon_indices"].append(weapon_index)
     actor["owned_weapon_indices"].sort()
     return True, f"BOUGHT {weapon['name'].upper()} FOR {price}"
+
+
+def choose_bot_purchase(bot):
+    """Choose one affordable third-slot weapon for a bot, or save this round."""
+    if len(bot["owned_weapon_indices"]) >= MAX_OWNED_WEAPONS:
+        return None
+
+    affordable_weapons = [
+        weapon_index
+        for weapon_index in (2, 3)
+        if not actor_owns_weapon(bot, weapon_index)
+        and bot["credits"] >= WEAPONS[weapon_index]["price"]
+    ]
+    if not affordable_weapons:
+        return None
+
+    # Saving is intentional. It keeps some bots available for shared weapons
+    # and creates different team economies from round to round.
+    if random.random() > BOT_BUY_CHANCE:
+        return None
+
+    if 2 in affordable_weapons and 3 in affordable_weapons:
+        if random.random() < BOT_RIFLE_BUY_CHANCE:
+            return 2
+        return 3
+
+    return affordable_weapons[0]
+
+
+def update_bot_buying(actors, round_number):
+    """Let every bot make exactly one purchase decision during this Buy Phase."""
+    purchase_events = []
+    for actor in actors:
+        if actor["is_player"]:
+            continue
+        if actor["last_buy_round"] == round_number:
+            continue
+
+        actor["last_buy_round"] = round_number
+        weapon_index = choose_bot_purchase(actor)
+        if weapon_index is None:
+            continue
+
+        purchased, _ = try_buy_weapon(actor, weapon_index)
+        if purchased:
+            purchase_events.append((actor, weapon_index))
+
+    return purchase_events
 
 
 def make_dropped_weapon(owner, weapon_index, weapon_state):
@@ -720,6 +879,93 @@ def get_bot_weapon_index(bot, target_distance):
     if 3 in owned:
         return 3
     return 1
+
+
+def add_team_rift_energy(team_rift_energy, team, amount):
+    """Add shared Rift Energy to one team without exceeding the team cap."""
+    before = team_rift_energy[team]
+    team_rift_energy[team] = min(
+        MAX_TEAM_RIFT_ENERGY,
+        before + amount,
+    )
+    return team_rift_energy[team] - before
+
+
+def update_team_rift_energy(rift_state, actors, team_rift_energy, delta_time):
+    """Award Rift Energy for revives, Anchor breaks, captures, and Rift control."""
+    events = []
+
+    # A completed revive benefits the revived actor's team.
+    for actor in actors:
+        if actor["rift_energy_revive_pending"]:
+            gained = add_team_rift_energy(
+                team_rift_energy,
+                actor["team"],
+                RIFT_ENERGY_REVIVE_REWARD,
+            )
+            actor["rift_energy_revive_pending"] = False
+            if gained > 0:
+                events.append((actor["team"], gained, "REVIVE"))
+
+    # A second lethal defeat breaks that actor's Rift Anchor. Combat currently
+    # has no friendly fire, so the opposing team receives the shared reward.
+    for actor in actors:
+        if actor["eliminated"] and not actor["anchor_energy_awarded"]:
+            scoring_team = "red" if actor["team"] == "blue" else "blue"
+            gained = add_team_rift_energy(
+                team_rift_energy,
+                scoring_team,
+                RIFT_ENERGY_ANCHOR_BREAK_REWARD,
+            )
+            actor["anchor_energy_awarded"] = True
+            if gained > 0:
+                events.append((scoring_team, gained, "ANCHOR BREAK"))
+
+    # Capturing the active Rift provides an immediate shared reward.
+    capture_team = rift_state["rift_energy_capture_pending"]
+    if capture_team is not None:
+        gained = add_team_rift_energy(
+            team_rift_energy,
+            capture_team,
+            RIFT_ENERGY_CAPTURE_REWARD,
+        )
+        rift_state["rift_energy_capture_pending"] = None
+        if gained > 0:
+            events.append((capture_team, gained, "RIFT CAPTURE"))
+
+    owner = rift_state["owner"]
+    if owner is None:
+        rift_state["rift_energy_control_timer"] = 0.0
+        return events
+
+    enemy_team = "red" if owner == "blue" else "blue"
+    owner_challenged = (
+        rift_state["contested"]
+        or rift_state["occupants"][enemy_team] > 0
+    )
+    if owner_challenged:
+        return events
+
+    # Continuous control pays in small pulses rather than every frame, keeping
+    # the shared resource readable and easy to balance.
+    rift_state["rift_energy_control_timer"] += delta_time
+    while (
+        rift_state["rift_energy_control_timer"]
+        >= RIFT_ENERGY_CONTROL_INTERVAL
+    ):
+        rift_state["rift_energy_control_timer"] -= RIFT_ENERGY_CONTROL_INTERVAL
+        gained = add_team_rift_energy(
+            team_rift_energy,
+            owner,
+            RIFT_ENERGY_CONTROL_REWARD,
+        )
+        if gained > 0:
+            events.append((owner, gained, "RIFT CONTROL"))
+        if team_rift_energy[owner] >= MAX_TEAM_RIFT_ENERGY:
+            rift_state["rift_energy_control_timer"] = 0.0
+            break
+
+    return events
 
 
 def get_movement_input():
@@ -931,6 +1177,16 @@ def down_or_eliminate_actor(actor):
     actor["alive"] = False
     actor["revive_progress"] = 0.0
     actor["revive_source"] = None
+    actor["movement_sound_radius"] = 0.0
+
+    # Active character powers stop when the character is downed. Cooldowns and
+    # the once-per-round ultimate flag remain, so being downed is not a free reset.
+    ability_state = actor.get("ability_state", {})
+    if ability_state:
+        ability_state["hellstep_windup"] = 0.0
+        ability_state["hellstep_target"] = None
+        ability_state["silence_remaining"] = 0.0
+        ability_state["bloodlust_remaining"] = 0.0
 
     if actor["times_downed"] >= 2:
         actor["downed"] = False
@@ -942,11 +1198,203 @@ def down_or_eliminate_actor(actor):
 
 def revive_actor(actor):
     """Return a first-time downed actor with partial health."""
-    actor["health"] = REVIVE_HEALTH
+    actor["health"] = min(REVIVE_HEALTH, actor["max_health"])
     actor["alive"] = True
     actor["downed"] = False
     actor["revive_progress"] = 0.0
     actor["revive_source"] = None
+    actor["rift_energy_revive_pending"] = True
+
+
+def malphas_bloodlust_active(actor):
+    """Return whether this actor is Malphas with Bloodlust currently active."""
+    return (
+        actor.get("character_id") == MALPHAS["id"]
+        and actor.get("ability_state", {}).get("bloodlust_remaining", 0.0) > 0
+    )
+
+
+def damage_actor(target, damage, attacker=None):
+    """Damage an actor and apply Malphas Bloodlust healing when appropriate."""
+    if not target["alive"] or target["downed"] or target["eliminated"]:
+        return 0.0, False
+
+    damage = max(0.0, float(damage))
+    damage_done = min(float(target["health"]), damage)
+    target["health"] = max(0.0, float(target["health"]) - damage_done)
+    eliminated_before = target["eliminated"]
+
+    if target["health"] <= 0:
+        down_or_eliminate_actor(target)
+
+    eliminated_now = target["eliminated"] and not eliminated_before
+
+    if (
+        attacker is not None
+        and attacker is not target
+        and attacker.get("alive", False)
+        and malphas_bloodlust_active(attacker)
+        and damage_done > 0
+    ):
+        attacker["health"] = min(
+            attacker["max_health"],
+            attacker["health"]
+            + damage_done * MALPHAS_BLOODLUST_HEAL_FRACTION,
+        )
+
+        if eliminated_now:
+            minimum_health = (
+                attacker["max_health"]
+                * MALPHAS_BLOODLUST_ELIMINATION_HEALTH_FRACTION
+            )
+            attacker["health"] = max(attacker["health"], minimum_health)
+
+    return damage_done, eliminated_now
+
+
+def actor_position_is_clear(position, obstacles):
+    """Return whether a character-sized body can safely occupy this world point."""
+    radius = PLAYER_SIZE / 2
+    if not (
+        radius <= position.x <= WORLD_WIDTH - radius
+        and radius <= position.y <= WORLD_HEIGHT - radius
+    ):
+        return False
+
+    body = pygame.Rect(0, 0, PLAYER_SIZE, PLAYER_SIZE)
+    body.center = (round(position.x), round(position.y))
+    return not any(body.colliderect(obstacle) for obstacle in obstacles)
+
+
+def try_activate_hellstep(player, target_position, obstacles):
+    """Mark a visible, clear point and begin Malphas's delayed teleport."""
+    if player.get("character_id") != MALPHAS["id"]:
+        return False, "HELLSTEP UNAVAILABLE"
+
+    state = player["ability_state"]
+    if state["hellstep_windup"] > 0:
+        return False, "HELLSTEP ALREADY CHARGING"
+    if state["hellstep_cooldown"] > 0:
+        return False, f"HELLSTEP COOLDOWN {state['hellstep_cooldown']:.1f}s"
+
+    target = pygame.Vector2(target_position)
+    distance = player["position"].distance_to(target)
+    if distance > MALPHAS_HELLSTEP_RANGE:
+        return False, "HELLSTEP TARGET TOO FAR"
+    if not has_line_of_sight(player["position"], target, obstacles):
+        return False, "HELLSTEP NEEDS LINE OF SIGHT"
+    if not actor_position_is_clear(target, obstacles):
+        return False, "HELLSTEP TARGET BLOCKED"
+
+    state["hellstep_target"] = target
+    state["hellstep_windup"] = MALPHAS_HELLSTEP_DELAY
+    state["hellstep_cooldown"] = MALPHAS_HELLSTEP_COOLDOWN
+    return True, "HELLSTEP MARKED"
+
+
+def try_activate_silence(player):
+    """Suppress Malphas's movement sound for a short duration."""
+    if player.get("character_id") != MALPHAS["id"]:
+        return False, "SILENCE UNAVAILABLE"
+
+    state = player["ability_state"]
+    if state["silence_remaining"] > 0:
+        return False, "SILENCE ALREADY ACTIVE"
+    if state["silence_cooldown"] > 0:
+        return False, f"SILENCE COOLDOWN {state['silence_cooldown']:.1f}s"
+
+    state["silence_remaining"] = MALPHAS_SILENCE_DURATION
+    state["silence_cooldown"] = MALPHAS_SILENCE_COOLDOWN
+    return True, "SILENCE ACTIVE"
+
+
+def try_activate_bloodlust(player):
+    """Activate Malphas's once-per-round Bloodlust ultimate."""
+    if player.get("character_id") != MALPHAS["id"]:
+        return False, "BLOODLUST UNAVAILABLE"
+
+    state = player["ability_state"]
+    if state["bloodlust_remaining"] > 0:
+        return False, "BLOODLUST ALREADY ACTIVE"
+    if state["bloodlust_used"]:
+        return False, "BLOODLUST USED THIS ROUND"
+
+    state["bloodlust_remaining"] = MALPHAS_BLOODLUST_DURATION
+    state["bloodlust_used"] = True
+    return True, "BLOODLUST ACTIVE"
+
+
+def update_malphas_abilities(player, actors, obstacles, delta_time):
+    """Advance Malphas cooldowns, teleport windup, Silence, and Bloodlust drain."""
+    if player.get("character_id") != MALPHAS["id"]:
+        return False
+
+    state = player["ability_state"]
+    state["hellstep_cooldown"] = max(
+        0.0, state["hellstep_cooldown"] - delta_time
+    )
+    state["silence_cooldown"] = max(
+        0.0, state["silence_cooldown"] - delta_time
+    )
+    state["silence_remaining"] = max(
+        0.0, state["silence_remaining"] - delta_time
+    )
+    state["bloodlust_remaining"] = max(
+        0.0, state["bloodlust_remaining"] - delta_time
+    )
+
+    teleported = False
+    if state["hellstep_windup"] > 0:
+        state["hellstep_windup"] = max(
+            0.0, state["hellstep_windup"] - delta_time
+        )
+        if state["hellstep_windup"] == 0 and state["hellstep_target"] is not None:
+            target = pygame.Vector2(state["hellstep_target"])
+            if actor_position_is_clear(target, obstacles):
+                player["position"].update(target)
+                teleported = True
+            state["hellstep_target"] = None
+
+    if state["bloodlust_remaining"] > 0 and actor_can_fight(player):
+        for actor in actors:
+            if actor is player or actor["team"] == player["team"]:
+                continue
+            if not actor_can_fight(actor):
+                continue
+            if (
+                player["position"].distance_to(actor["position"])
+                > MALPHAS_BLOODLUST_RADIUS
+            ):
+                continue
+            if not has_line_of_sight(
+                player["position"], actor["position"], obstacles
+            ):
+                continue
+
+            damage_actor(
+                actor,
+                MALPHAS_BLOODLUST_DRAIN_PER_SECOND * delta_time,
+                player,
+            )
+
+    return teleported
+
+
+def update_player_movement_sound(player, movement_state):
+    """Expose Malphas movement noise to bot hearing unless Silence is active."""
+    if player.get("character_id") != MALPHAS["id"]:
+        player["movement_sound_radius"] = 0.0
+        return
+
+    state = player["ability_state"]
+    if state["silence_remaining"] > 0:
+        player["movement_sound_radius"] = 0.0
+    elif movement_state == "Running":
+        player["movement_sound_radius"] = MALPHAS_RUN_SOUND_RADIUS
+    elif movement_state == "Walking":
+        player["movement_sound_radius"] = MALPHAS_WALK_SOUND_RADIUS
+    else:
+        player["movement_sound_radius"] = 0.0
 
 
 def perform_knife_attack(
@@ -1029,13 +1477,11 @@ def perform_knife_attack(
         valid_targets,
         key=lambda candidate: candidate[0],
     )
-    target["health"] = max(0, target["health"] - knife["damage"])
-
     if target_type == "actor":
-        if target["health"] == 0:
-            down_or_eliminate_actor(target)
+        damage_actor(target, knife["damage"], attacker)
         return target, False
 
+    target["health"] = max(0, target["health"] - knife["damage"])
     if target["health"] == 0:
         target["destroyed"] = True
         target_rect = target["rect"]
@@ -1133,10 +1579,7 @@ def update_bullets(
                 )
                 if distance_to_target <= bullet["radius"] + ACTOR_RADIUS:
                     hit_damage = calculate_bullet_damage(bullet)
-                    actor["health"] = max(0, actor["health"] - hit_damage)
-
-                    if actor["health"] == 0:
-                        down_or_eliminate_actor(actor)
+                    damage_actor(actor, hit_damage, bullet["shooter"])
 
                     bullet_removed = True
                     break
@@ -1437,6 +1880,9 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
         return
 
     bot["shot_cooldown"] = max(0.0, bot["shot_cooldown"] - delta_time)
+    bot["heard_timer"] = max(0.0, bot["heard_timer"] - delta_time)
+    if bot["heard_timer"] == 0:
+        bot["heard_position"] = None
     bot["strafe_timer"] -= delta_time
     if bot["strafe_timer"] <= 0:
         bot["strafe_direction"] *= -1
@@ -1506,6 +1952,41 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
     ]
 
     if not visible_enemies:
+        # Movement sound gives bots only a rough location to investigate. They
+        # still require real line of sight before they are allowed to fire.
+        heard_enemies = [
+            actor
+            for actor in actors
+            if actor["team"] == enemy_team
+            and actor_can_fight(actor)
+            and actor.get("movement_sound_radius", 0.0) > 0
+            and bot["position"].distance_to(actor["position"])
+            <= actor["movement_sound_radius"]
+        ]
+        if heard_enemies:
+            heard_actor = min(
+                heard_enemies,
+                key=lambda actor: bot["position"].distance_squared_to(
+                    actor["position"]
+                ),
+            )
+            bot["heard_position"] = pygame.Vector2(heard_actor["position"])
+            bot["heard_timer"] = MALPHAS_SOUND_MEMORY
+
+        if bot["heard_position"] is not None and bot["heard_timer"] > 0:
+            sound_vector = bot["heard_position"] - bot["position"]
+            if sound_vector.length_squared() > 0:
+                bot["aim_angle"] = math.atan2(sound_vector.y, sound_vector.x)
+            if sound_vector.length() > 55:
+                move_actor_toward(
+                    bot,
+                    bot["heard_position"],
+                    BOT_SPEED,
+                    delta_time,
+                    walls,
+                )
+            return
+
         rift_distance = bot["position"].distance_to(rift_state["position"])
         if rift_distance > RIFT_RADIUS * 0.60:
             move_actor_toward(
@@ -1965,6 +2446,13 @@ def draw_actor(screen, font, actor, camera):
         fill_color = ENEMY_COLOR
         edge_color = ENEMY_EDGE_COLOR
 
+    is_malphas = actor.get("character_id") == MALPHAS["id"]
+    if is_malphas and not actor["downed"] and not actor["eliminated"]:
+        fill_color = MALPHAS_BODY_COLOR
+        # Keep the blue outer edge so the playable character still reads as
+        # a blue-team actor even though his body has unique placeholder art.
+        edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
+
     if actor["eliminated"]:
         pygame.draw.circle(screen, ELIMINATED_COLOR, center_tuple, radius, width=4)
         pygame.draw.line(
@@ -2016,16 +2504,59 @@ def draw_actor(screen, font, actor, camera):
         math.sin(actor["aim_angle"]),
     )
     side = pygame.Vector2(-facing.y, facing.x)
-    arrow_tip = center + facing * 34
-    arrow_left = center - facing * 5 + side * 10
-    arrow_right = center - facing * 5 - side * 10
-    pygame.draw.polygon(screen, edge_color, (arrow_tip, arrow_left, arrow_right))
+
+    if is_malphas:
+        # Simple top-down demon placeholder: two swept horns, a Rift-lit core,
+        # and a pointed face. This will be replaced by final character artwork.
+        horn_left_base = center + facing * 3 + side * 13
+        horn_right_base = center + facing * 3 - side * 13
+        pygame.draw.polygon(
+            screen,
+            MALPHAS_HORN_COLOR,
+            (
+                horn_left_base - facing * 5 - side * 5,
+                horn_left_base + facing * 4 + side * 4,
+                center + facing * 25 + side * 22,
+            ),
+        )
+        pygame.draw.polygon(
+            screen,
+            MALPHAS_HORN_COLOR,
+            (
+                horn_right_base - facing * 5 + side * 5,
+                horn_right_base + facing * 4 - side * 4,
+                center + facing * 25 - side * 22,
+            ),
+        )
+        pygame.draw.circle(screen, MALPHAS_GLOW_COLOR, center_tuple, 10)
+        face_tip = center + facing * 30
+        face_left = center + facing * 4 + side * 9
+        face_right = center + facing * 4 - side * 9
+        pygame.draw.polygon(
+            screen,
+            MALPHAS_GLOW_COLOR,
+            (face_tip, face_left, face_right),
+        )
+        if malphas_bloodlust_active(actor):
+            pulse = 4 + round(3 * math.sin(pygame.time.get_ticks() * 0.012))
+            pygame.draw.circle(
+                screen,
+                MALPHAS_EFFECT_COLOR,
+                center_tuple,
+                radius + 7 + pulse,
+                width=3,
+            )
+    else:
+        arrow_tip = center + facing * 34
+        arrow_left = center - facing * 5 + side * 10
+        arrow_right = center - facing * 5 - side * 10
+        pygame.draw.polygon(screen, edge_color, (arrow_tip, arrow_left, arrow_right))
 
     bar_width = 70
     bar_height = 8
     bar_x = round(center.x - bar_width / 2)
     bar_y = round(center.y - ACTOR_RADIUS - 20)
-    health_fraction = actor["health"] / ACTOR_MAX_HEALTH
+    health_fraction = actor["health"] / actor["max_health"]
     pygame.draw.rect(screen, (26, 29, 36), (bar_x, bar_y, bar_width, bar_height))
     pygame.draw.rect(
         screen,
@@ -2038,6 +2569,117 @@ def draw_actor(screen, font, actor, camera):
         (bar_x, bar_y, bar_width, bar_height),
         width=1,
     )
+
+
+def draw_malphas_world_effects(screen, player, camera):
+    """Draw temporary visual telegraphs for Malphas's active abilities."""
+    if player.get("character_id") != MALPHAS["id"]:
+        return
+
+    state = player["ability_state"]
+    if state["hellstep_target"] is not None:
+        target = pygame.Vector2(state["hellstep_target"]) - camera
+        center = (round(target.x), round(target.y))
+        progress = 1.0 - min(
+            1.0,
+            state["hellstep_windup"] / MALPHAS_HELLSTEP_DELAY,
+        )
+        radius = 24 + round(18 * progress)
+        pygame.draw.circle(screen, (48, 16, 28), center, radius + 8)
+        pygame.draw.circle(
+            screen, MALPHAS_EFFECT_COLOR, center, radius, width=4
+        )
+        pygame.draw.line(
+            screen,
+            MALPHAS_HORN_COLOR,
+            (center[0] - 14, center[1]),
+            (center[0] + 14, center[1]),
+            width=3,
+        )
+        pygame.draw.line(
+            screen,
+            MALPHAS_HORN_COLOR,
+            (center[0], center[1] - 14),
+            (center[0], center[1] + 14),
+            width=3,
+        )
+
+    if state["bloodlust_remaining"] > 0:
+        center_world = player["position"] - camera
+        center = (round(center_world.x), round(center_world.y))
+        pygame.draw.circle(
+            screen,
+            MALPHAS_EFFECT_COLOR,
+            center,
+            MALPHAS_BLOODLUST_RADIUS,
+            width=2,
+        )
+
+
+def format_ability_timer(seconds):
+    """Return a short HUD label for a cooldown timer."""
+    return "READY" if seconds <= 0 else f"{seconds:.1f}s"
+
+
+def draw_character_panel(screen, font, player, status_message):
+    """Show the active character, unique stats, abilities, and cooldowns."""
+    if player.get("character_id") != MALPHAS["id"]:
+        return
+
+    state = player["ability_state"]
+    panel_width = 530
+    panel_height = 158
+    panel_x = 18
+    panel_y = screen.get_height() - panel_height - 112
+
+    panel = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+    panel.fill((10, 13, 18, 220))
+    screen.blit(panel, (panel_x, panel_y))
+
+    title = font.render(
+        f"MALPHAS - {player['character_class'].upper()}",
+        True,
+        MALPHAS_HORN_COLOR,
+    )
+    screen.blit(title, (panel_x + 16, panel_y + 10))
+
+    stats = font.render(
+        f"{player['max_health']} HP | {player['move_speed']:.0f} MOVE | "
+        f"{player['sprint_multiplier']:.2f}x SPRINT",
+        True,
+        (182, 198, 218),
+    )
+    screen.blit(stats, (panel_x + 16, panel_y + 34))
+
+    if state["hellstep_windup"] > 0:
+        hellstep_status = f"MARKED {state['hellstep_windup']:.1f}s"
+    else:
+        hellstep_status = format_ability_timer(state["hellstep_cooldown"])
+
+    if state["silence_remaining"] > 0:
+        silence_status = f"ACTIVE {state['silence_remaining']:.1f}s"
+    else:
+        silence_status = format_ability_timer(state["silence_cooldown"])
+
+    if state["bloodlust_remaining"] > 0:
+        bloodlust_status = f"ACTIVE {state['bloodlust_remaining']:.1f}s"
+    elif state["bloodlust_used"]:
+        bloodlust_status = "USED THIS ROUND"
+    else:
+        bloodlust_status = "READY"
+
+    lines = [
+        f"Q  HELLSTEP  - {hellstep_status}",
+        f"C  SILENCE   - {silence_status}",
+        f"X  BLOODLUST - {bloodlust_status}",
+    ]
+    for index, line in enumerate(lines):
+        rendered = font.render(line, True, TEXT_COLOR)
+        screen.blit(rendered, (panel_x + 16, panel_y + 62 + index * 23))
+
+    if status_message:
+        status = font.render(status_message, True, MALPHAS_GLOW_COLOR)
+        screen.blit(status, (panel_x + 16, panel_y + 132))
 
 
 def draw_knife(screen, player, camera, aim_angle, animation_timer):
@@ -2842,7 +3484,9 @@ def draw_crosshair(screen, mouse_position, spread_percent):
     pygame.draw.line(screen, color, (x, y + gap), (x, y + line_end), width=2)
 
 
-def draw_stamina_panel(screen, font, stamina, sprinting, sprint_exhausted):
+def draw_stamina_panel(
+    screen, font, stamina, sprinting, sprint_exhausted, max_stamina
+):
     """Draw the player's current stamina and sprint condition."""
     panel_width = 355
     panel_height = 78
@@ -2870,7 +3514,7 @@ def draw_stamina_panel(screen, font, stamina, sprinting, sprint_exhausted):
     bar_y = panel_y + 40
     bar_width = panel_width - 32
     bar_height = 20
-    stamina_fraction = stamina / MAX_STAMINA
+    stamina_fraction = stamina / max_stamina
 
     pygame.draw.rect(screen, (29, 34, 43), (bar_x, bar_y, bar_width, bar_height))
     pygame.draw.rect(
@@ -2897,6 +3541,7 @@ def draw_debug_panel(
     stamina,
     active_weapon,
     current_fps,
+    max_stamina,
 ):
     """Show the values that matter while testing movement."""
     if active_weapon["fire_mode"] == "melee":
@@ -2910,14 +3555,14 @@ def draw_debug_panel(
         )
 
     lines = [
-        "RIFT HUNT 0.7 - ECONOMY",
-        "WASD Move | SHIFT Run | LMB Attack | E Revive | R Reload | Number keys swap owned weapons",
+        "RIFT HUNT 0.8 - MALPHAS",
+        "WASD Move | SHIFT Run | LMB Attack | Q Hellstep | C Silence | X Bloodlust | E Revive",
         f"Position: ({player_position.x:.1f}, {player_position.y:.1f})",
         f"Facing: {math.degrees(aim_angle):.1f} degrees",
         f"Movement: {movement_state}",
         f"Current speed: {actual_speed:.0f} pixels/second",
         weapon_detail,
-        f"Stamina: {stamina:.0f} / {MAX_STAMINA}",
+        f"Stamina: {stamina:.0f} / {max_stamina:.0f}",
         f"FPS: {current_fps:.0f} / target {FPS}",
     ]
 
@@ -3054,7 +3699,9 @@ def draw_weapon_panel(
     elif player["downed"]:
         player_status = "YOU: DOWNED - WAIT FOR AN ALLY"
     else:
-        player_status = f"Health: {player['health']} / {ACTOR_MAX_HEALTH}"
+        player_status = (
+            f"Health: {round(player['health'])} / {player['max_health']}"
+        )
 
     player_text = regular_font.render(player_status, True, TEXT_COLOR)
     life_text = regular_font.render(
@@ -3087,8 +3734,16 @@ def count_team_states(actors, team):
     return standing, downed, eliminated
 
 
-def draw_match_panel(screen, font, scores, round_number, actors, rift_state):
-    """Show the score, team conditions, and active Rift objective state."""
+def draw_match_panel(
+    screen,
+    font,
+    scores,
+    round_number,
+    actors,
+    rift_state,
+    team_rift_energy,
+):
+    """Show the score, team conditions, active Rift, and shared team resource."""
     blue_state = count_team_states(actors, "blue")
     red_state = count_team_states(actors, "red")
     if rift_state["contested"]:
@@ -3133,9 +3788,10 @@ def draw_match_panel(screen, font, scores, round_number, actors, rift_state):
         f"Out {blue_state[2]}-{red_state[2]}",
         f"RIFT {rift_state['site_name']}: {rift_status}",
         intel_status,
+        f"TEAM RIFT ENERGY: {team_rift_energy['blue']} / {MAX_TEAM_RIFT_ENERGY}",
     ]
 
-    panel = pygame.Surface((500, 142), pygame.SRCALPHA)
+    panel = pygame.Surface((500, 167), pygame.SRCALPHA)
     panel.fill((10, 13, 18, 220))
     panel_x = screen.get_width() - panel.get_width() - 18
     screen.blit(panel, (panel_x, 18))
@@ -3149,19 +3805,30 @@ def draw_match_panel(screen, font, scores, round_number, actors, rift_state):
         )
 
 
-def draw_buy_phase(screen, regular_font, large_font, match_state, player, status_message):
-    """Show the 30-second weapon shop before combat begins."""
+def draw_buy_phase(
+    screen,
+    regular_font,
+    large_font,
+    match_state,
+    player,
+    actors,
+    team_rift_energy,
+    status_message,
+):
+    """Show the 30-second weapon shop and the blue team's current economy."""
     if match_state["phase"] != "buying":
         return
 
     panel_width = 760
-    panel_height = 360
+    panel_height = 455
     panel = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
     panel.fill((8, 10, 15, 238))
     panel_rect = panel.get_rect(center=screen.get_rect().center)
     screen.blit(panel, panel_rect)
 
-    title = large_font.render("BUY PHASE", True, TEXT_COLOR)
+    title = large_font.render(
+        f"BUY PHASE - {player['character_name'].upper()}", True, TEXT_COLOR
+    )
     screen.blit(
         title,
         title.get_rect(center=(screen.get_width() // 2, panel_rect.top + 48)),
@@ -3178,7 +3845,8 @@ def draw_buy_phase(screen, regular_font, large_font, match_state, player, status
     )
 
     credits = regular_font.render(
-        f"Credits: {player['credits']} / {MAX_CREDITS}",
+        f"Credits: {player['credits']} / {MAX_CREDITS}    "
+        f"Team Rift Energy: {team_rift_energy[player['team']]} / {MAX_TEAM_RIFT_ENERGY}",
         True,
         BULLET_COLOR,
     )
@@ -3213,6 +3881,27 @@ def draw_buy_phase(screen, regular_font, large_font, match_state, player, status
         )
         screen.blit(option, (panel_rect.left + 54, purchase_y))
         purchase_y += 36
+
+    team_heading = regular_font.render("TEAM ECONOMY", True, BULLET_COLOR)
+    screen.blit(team_heading, (panel_rect.left + 34, panel_rect.top + 290))
+
+    allies = [
+        actor
+        for actor in actors
+        if actor["team"] == player["team"] and not actor["is_player"]
+    ]
+    ally_y = panel_rect.top + 320
+    for ally in allies:
+        loadout_names = " + ".join(
+            WEAPONS[index]["name"] for index in ally["owned_weapon_indices"]
+        )
+        ally_line = regular_font.render(
+            f"{ally['name']}: {ally['credits']} credits | {loadout_names}",
+            True,
+            TEXT_COLOR,
+        )
+        screen.blit(ally_line, (panel_rect.left + 54, ally_y))
+        ally_y += 28
 
     if status_message:
         status = regular_font.render(status_message, True, BULLET_COLOR)
@@ -3292,12 +3981,16 @@ def begin_new_match(
     destructible_objects,
     rift_state,
     dropped_weapons,
+    team_rift_energy,
 ):
-    """Restore the score and begin round one."""
+    """Restore the score, team economy, and begin round one."""
     scores["blue"] = 0
     scores["red"] = 0
+    team_rift_energy["blue"] = STARTING_TEAM_RIFT_ENERGY
+    team_rift_energy["red"] = STARTING_TEAM_RIFT_ENERGY
     for actor in actors:
         actor["credits"] = STARTING_CREDITS
+        actor["last_buy_round"] = 0
         reset_actor_loadout(actor)
     match_state["phase"] = "buying"
     match_state["timer"] = BUY_PHASE_DURATION
@@ -3314,10 +4007,22 @@ def begin_new_match(
     )
 
 
-def finish_round(match_state, scores, actors, winner, round_message):
-    """Award the round score and each actor's personal credit reward."""
+def finish_round(
+    match_state,
+    scores,
+    actors,
+    team_rift_energy,
+    winner,
+    round_message,
+):
+    """Award round score, personal credits, and the winning team's Rift Energy."""
     if winner is not None:
         scores[winner] += 1
+        add_team_rift_energy(
+            team_rift_energy,
+            winner,
+            RIFT_ENERGY_ROUND_WIN_REWARD,
+        )
 
     for actor in actors:
         if winner is None:
@@ -3347,7 +4052,7 @@ def main():
     pygame.init()
 
     screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-    pygame.display.set_caption("Riftbound - Economy 0.7")
+    pygame.display.set_caption("Riftbound - Characters 0.8 - Malphas")
     pygame.mouse.set_visible(False)
 
     clock = pygame.time.Clock()
@@ -3391,9 +4096,13 @@ def main():
     camera_recoil_velocity = pygame.Vector2()
     camera_shake_strength = 0.0
     recoil_sway_direction = 1
-    stamina = MAX_STAMINA
+    stamina = player["max_stamina"]
     sprint_exhausted = False
     scores = {"blue": 0, "red": 0}
+    team_rift_energy = {
+        "blue": STARTING_TEAM_RIFT_ENERGY,
+        "red": STARTING_TEAM_RIFT_ENERGY,
+    }
     match_state = {
         "phase": "buying",
         "timer": BUY_PHASE_DURATION,
@@ -3407,6 +4116,8 @@ def main():
     cached_vision_player_position = pygame.Vector2(player["position"])
     buy_status_message = ""
     share_status_timer = 0.0
+    ability_status_message = ""
+    ability_status_timer = 0.0
     game_running = True
 
     while game_running:
@@ -3417,6 +4128,9 @@ def main():
         purchase_weapon_requested = None
         drop_weapon_requested = False
         pickup_weapon_requested = False
+        hellstep_requested = False
+        silence_requested = False
+        bloodlust_requested = False
         trigger_just_pressed = False
         restart_requested = False
 
@@ -3432,6 +4146,12 @@ def main():
                     drop_weapon_requested = True
                 elif event.key == pygame.K_f:
                     pickup_weapon_requested = True
+                elif event.key == pygame.K_q:
+                    hellstep_requested = True
+                elif event.key == pygame.K_c:
+                    silence_requested = True
+                elif event.key == pygame.K_x:
+                    bloodlust_requested = True
                 elif event.key == pygame.K_1:
                     weapon_switch_requested = 0
                 elif event.key == pygame.K_2:
@@ -3462,14 +4182,17 @@ def main():
                 destructible_objects,
                 rift_state,
                 dropped_weapons,
+                team_rift_energy,
             )
             active_weapon_index = 0
             buy_status_message = ""
             share_status_timer = 0.0
+            ability_status_message = ""
+            ability_status_timer = 0.0
             cached_world_polygon = []
             active_vision_mask_camera.update(-999999, -999999)
             cached_vision_player_position.update(player["position"])
-            stamina = MAX_STAMINA
+            stamina = player["max_stamina"]
             sprint_exhausted = False
             camera_recoil_offset.update(0, 0)
             camera_recoil_velocity.update(0, 0)
@@ -3494,12 +4217,14 @@ def main():
                 match_state["message"] = ""
                 buy_status_message = ""
                 share_status_timer = 0.0
+                ability_status_message = ""
+                ability_status_timer = 0.0
                 cached_world_polygon = []
                 active_vision_mask_camera.update(-999999, -999999)
                 cached_vision_player_position.update(player["position"])
                 if not actor_owns_weapon(player, active_weapon_index):
                     active_weapon_index = 1
-                stamina = MAX_STAMINA
+                stamina = player["max_stamina"]
                 sprint_exhausted = False
                 camera_recoil_offset.update(0, 0)
                 camera_recoil_velocity.update(0, 0)
@@ -3536,6 +4261,10 @@ def main():
                 share_status_timer = SHARE_STATUS_DURATION
 
         if match_state["phase"] == "buying":
+            # Bots decide once per Buy Phase. Surviving bots with a purchased
+            # third weapon naturally keep it and therefore skip another purchase.
+            update_bot_buying(actors, match_state["round_number"])
+
             match_state["timer"] = max(0.0, match_state["timer"] - delta_time)
             if match_state["timer"] <= 0:
                 match_state["phase"] = "playing"
@@ -3547,6 +4276,11 @@ def main():
             share_status_timer = max(0.0, share_status_timer - delta_time)
             if share_status_timer == 0:
                 buy_status_message = ""
+
+        if match_state["phase"] == "playing" and ability_status_timer > 0:
+            ability_status_timer = max(0.0, ability_status_timer - delta_time)
+            if ability_status_timer == 0:
+                ability_status_message = ""
 
         current_obstacle_signature = tuple(
             not destructible["destroyed"]
@@ -3590,6 +4324,25 @@ def main():
         if not player_can_act:
             movement_direction.update(0, 0)
 
+        if match_state["phase"] == "playing":
+            teleported = update_malphas_abilities(
+                player,
+                actors,
+                active_obstacles,
+                delta_time,
+            )
+            if teleported:
+                cached_world_polygon = []
+                vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
+
+        if player_can_act and silence_requested:
+            _, ability_status_message = try_activate_silence(player)
+            ability_status_timer = 2.0
+
+        if player_can_act and bloodlust_requested:
+            _, ability_status_message = try_activate_bloodlust(player)
+            ability_status_timer = 2.0
+
         moving = movement_direction.length_squared() > 0
         sprinting = (
             moving
@@ -3607,7 +4360,7 @@ def main():
                 sprint_exhausted = True
         else:
             stamina = min(
-                MAX_STAMINA,
+                player["max_stamina"],
                 stamina + SPRINT_STAMINA_REGEN_PER_SECOND * delta_time,
             )
 
@@ -3620,7 +4373,9 @@ def main():
                 sprint_exhausted = False
 
         selected_speed = (
-            PLAYER_SPEED * SPRINT_MULTIPLIER if sprinting else PLAYER_SPEED
+            player["move_speed"] * player["sprint_multiplier"]
+            if sprinting
+            else player["move_speed"]
         )
         movement = movement_direction * selected_speed * delta_time
         move_player(player["position"], movement, active_obstacles)
@@ -3634,6 +4389,8 @@ def main():
         else:
             movement_state = "Walking"
             actual_speed = selected_speed
+
+        update_player_movement_sound(player, movement_state)
 
         base_spread = get_weapon_spread(active_weapon, movement_state)
         sustained_spread = min(
@@ -3662,6 +4419,14 @@ def main():
         if aim_vector.length_squared() > 0:
             aim_angle = math.atan2(aim_vector.y, aim_vector.x)
         player["aim_angle"] = aim_angle
+
+        if player_can_act and hellstep_requested:
+            _, ability_status_message = try_activate_hellstep(
+                player,
+                mouse_world_position,
+                active_obstacles,
+            )
+            ability_status_timer = 2.0
 
         for weapon_state in weapon_states:
             weapon_state["shot_cooldown"] = max(
@@ -3862,6 +4627,12 @@ def main():
                 actors,
                 delta_time,
             )
+            update_team_rift_energy(
+                rift_state,
+                actors,
+                team_rift_energy,
+                delta_time,
+            )
             blue_standing = team_has_standing_actor(actors, "blue")
             red_standing = team_has_standing_actor(actors, "red")
 
@@ -3872,6 +4643,7 @@ def main():
                     match_state,
                     scores,
                     actors,
+                    team_rift_energy,
                     rift_winner,
                     f"{rift_winner.upper()} WINS BY RIFT CONTROL",
                 )
@@ -3893,6 +4665,7 @@ def main():
                     match_state,
                     scores,
                     actors,
+                    team_rift_energy,
                     winner,
                     round_message,
                 )
@@ -4017,6 +4790,7 @@ def main():
             active_obstacles,
             camera,
         )
+        draw_malphas_world_effects(screen, player, camera)
 
         # Bots and bullets retain exact partial visibility, but only their
         # small bounding surfaces are multiplied by the visibility mask.
@@ -4085,6 +4859,7 @@ def main():
             stamina,
             active_weapon,
             clock.get_fps(),
+            player["max_stamina"],
         )
         draw_weapon_panel(
             screen,
@@ -4100,6 +4875,13 @@ def main():
             stamina,
             sprinting,
             sprint_exhausted,
+            player["max_stamina"],
+        )
+        draw_character_panel(
+            screen,
+            debug_font,
+            player,
+            ability_status_message,
         )
         draw_match_panel(
             screen,
@@ -4108,6 +4890,7 @@ def main():
             match_state["round_number"],
             actors,
             rift_state,
+            team_rift_energy,
         )
         if match_state["phase"] == "playing" and buy_status_message:
             share_status = debug_font.render(
@@ -4130,6 +4913,8 @@ def main():
             ammunition_font,
             match_state,
             player,
+            actors,
+            team_rift_energy,
             buy_status_message,
         )
         draw_round_banner(
