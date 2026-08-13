@@ -113,6 +113,25 @@ BULLET_MARK_MIN_LIFETIME = 4.0
 BULLET_MARK_NEAR_DISTANCE = 200
 BULLET_MARK_FAR_DISTANCE = 1400
 
+# -----------------------------------------------------------------------------
+# VISION LABORATORY SETTINGS
+# The player has 360-degree vision, but solid walls stop every vision ray.
+# Extra rays are aimed beside wall corners so shadows do not have large gaps.
+# -----------------------------------------------------------------------------
+VISION_BASE_RAY_COUNT = 96
+VISION_CORNER_ANGLE_OFFSET = 0.0001
+VISION_MAX_DISTANCE = math.hypot(WORLD_WIDTH, WORLD_HEIGHT)
+# The alpha value keeps concealed terrain readable instead of covering it.
+# Visible terrain keeps its normal color; concealed terrain is darkened.
+VISION_SHADOW_COLOR = (10, 12, 18, 175)
+# Partially visible walls receive color only this far past the sight boundary.
+# A completely unobstructed wall is colored in full regardless of this value.
+VISIBLE_WALL_COLOR_DEPTH = 36
+# Visibility masks are calculated at one quarter of the screen resolution and
+# enlarged afterward. This preserves partial visibility without processing
+# millions of extra transparent pixels several times per frame.
+VISION_MASK_SCALE = 0.25
+
 TARGET_MAX_HEALTH = 100
 TARGET_RADIUS = 32
 TARGET_RESPAWN_TIME = 1.25
@@ -121,6 +140,8 @@ BACKGROUND_COLOR = (31, 37, 46)
 GRID_COLOR = (42, 49, 60)
 WALL_COLOR = (104, 114, 128)
 WALL_EDGE_COLOR = (180, 192, 208)
+HIDDEN_WALL_COLOR = (55, 61, 71)
+HIDDEN_WALL_EDGE_COLOR = (82, 90, 103)
 PLAYER_COLOR = (48, 150, 220)
 PLAYER_EDGE_COLOR = (193, 232, 255)
 TEXT_COLOR = (235, 241, 248)
@@ -334,6 +355,7 @@ def create_bullet_mark(bullet, wall):
 
     return {
         "position": pygame.Vector2(mark_x, mark_y),
+        "wall": wall,
         "radius": mark_radius,
         "rotation": random.uniform(0, math.tau),
         "time_remaining": mark_lifetime,
@@ -437,6 +459,137 @@ def calculate_camera(player_position, screen_size):
     )
 
 
+def cross_product(vector_a, vector_b):
+    """Return the two-dimensional cross product of two vectors."""
+    return vector_a.x * vector_b.y - vector_a.y * vector_b.x
+
+
+def get_wall_segments(walls):
+    """Return the four blocking line segments around every rectangular wall."""
+    segments = []
+
+    for wall in walls:
+        top_left = pygame.Vector2(wall.topleft)
+        top_right = pygame.Vector2(wall.topright)
+        bottom_right = pygame.Vector2(wall.bottomright)
+        bottom_left = pygame.Vector2(wall.bottomleft)
+        segments.extend(
+            [
+                (top_left, top_right),
+                (top_right, bottom_right),
+                (bottom_right, bottom_left),
+                (bottom_left, top_left),
+            ]
+        )
+
+    return segments
+
+
+def get_ray_segment_distance(origin, direction, segment_start, segment_end):
+    """Return how far a ray travels before hitting a segment, or None."""
+    segment_direction = segment_end - segment_start
+    denominator = cross_product(direction, segment_direction)
+
+    if abs(denominator) < 0.000001:
+        return None
+
+    origin_to_segment = segment_start - origin
+    ray_distance = (
+        cross_product(origin_to_segment, segment_direction) / denominator
+    )
+    segment_progress = cross_product(origin_to_segment, direction) / denominator
+
+    if ray_distance >= 0 and 0 <= segment_progress <= 1:
+        return ray_distance
+    return None
+
+
+def calculate_vision_polygon(
+    player_position,
+    walls,
+    camera,
+    wall_segments=None,
+):
+    """Build the visible polygon created by rays stopping at nearby walls."""
+    if wall_segments is None:
+        wall_segments = get_wall_segments(walls)
+    ray_angles = [
+        math.tau * ray_index / VISION_BASE_RAY_COUNT
+        for ray_index in range(VISION_BASE_RAY_COUNT)
+    ]
+
+    # Corner rays make the visible area hug both sides of each obstruction.
+    for wall in walls:
+        for corner in (wall.topleft, wall.topright, wall.bottomright, wall.bottomleft):
+            corner_vector = pygame.Vector2(corner) - player_position
+            corner_angle = math.atan2(corner_vector.y, corner_vector.x)
+            ray_angles.extend(
+                [
+                    corner_angle - VISION_CORNER_ANGLE_OFFSET,
+                    corner_angle,
+                    corner_angle + VISION_CORNER_ANGLE_OFFSET,
+                ]
+            )
+
+    vision_points = []
+    for angle in ray_angles:
+        direction = pygame.Vector2(math.cos(angle), math.sin(angle))
+        nearest_distance = VISION_MAX_DISTANCE
+
+        for segment_start, segment_end in wall_segments:
+            hit_distance = get_ray_segment_distance(
+                player_position,
+                direction,
+                segment_start,
+                segment_end,
+            )
+            if hit_distance is not None:
+                nearest_distance = min(nearest_distance, hit_distance)
+
+        world_point = player_position + direction * nearest_distance
+        screen_point = world_point - camera
+        vision_points.append((angle % math.tau, screen_point))
+
+    vision_points.sort(key=lambda item: item[0])
+    return [point for _, point in vision_points]
+
+
+def has_line_of_sight(
+    start_position,
+    end_position,
+    walls,
+    ignored_wall=None,
+):
+    """Return False when any wall crosses the line between two world points."""
+    line_start = (round(start_position.x), round(start_position.y))
+    line_end = (round(end_position.x), round(end_position.y))
+
+    for wall in walls:
+        if wall is ignored_wall:
+            continue
+        if wall.clipline(line_start, line_end):
+            return False
+    return True
+
+
+def is_target_visible(player_position, target, walls):
+    """Check the target's center and edges so it can peek around cover."""
+    target_position = target["position"]
+    sample_distance = TARGET_RADIUS * 0.80
+    sample_points = [
+        target_position,
+        target_position + pygame.Vector2(sample_distance, 0),
+        target_position + pygame.Vector2(-sample_distance, 0),
+        target_position + pygame.Vector2(0, sample_distance),
+        target_position + pygame.Vector2(0, -sample_distance),
+    ]
+
+    return any(
+        has_line_of_sight(player_position, sample_point, walls)
+        for sample_point in sample_points
+    )
+
+
 def update_camera_recoil(recoil_offset, recoil_velocity, shake_strength, delta_time):
     """Return the camera toward center with a damped spring after each shot."""
     recoil_velocity += -recoil_offset * CAMERA_RECOIL_SPRING * delta_time
@@ -525,22 +678,67 @@ def draw_grid(screen, camera):
         pygame.draw.line(screen, GRID_COLOR, (0, screen_y), (screen_width, screen_y))
 
 
-def draw_world(screen, walls, camera):
-    """Draw the laboratory obstacles at their camera-adjusted positions."""
-    draw_grid(screen, camera)
+def draw_wall(
+    screen,
+    wall,
+    camera,
+    fill_color=WALL_COLOR,
+    edge_color=WALL_EDGE_COLOR,
+):
+    """Draw one complete wall using the supplied visibility colors."""
+    screen_rect = wall.move(-round(camera.x), -round(camera.y))
+    pygame.draw.rect(screen, fill_color, screen_rect, border_radius=5)
+    pygame.draw.rect(
+        screen,
+        edge_color,
+        screen_rect,
+        width=3,
+        border_radius=5,
+    )
 
+
+def draw_hidden_walls(screen, walls, camera):
+    """Keep every complete wall section visible using dark-gray colors."""
     for wall in walls:
-        screen_rect = wall.move(-round(camera.x), -round(camera.y))
-        pygame.draw.rect(screen, WALL_COLOR, screen_rect, border_radius=5)
-        pygame.draw.rect(screen, WALL_EDGE_COLOR, screen_rect, width=3, border_radius=5)
+        draw_wall(
+            screen,
+            wall,
+            camera,
+            HIDDEN_WALL_COLOR,
+            HIDDEN_WALL_EDGE_COLOR,
+        )
 
 
-def draw_bullet_marks(screen, bullet_marks, camera):
+def draw_normal_walls(layer, walls, camera):
+    """Draw normal wall colors before clipping them to visible portions."""
+    for wall in walls:
+        draw_wall(layer, wall, camera)
+
+
+def draw_bullet_marks(
+    screen,
+    bullet_marks,
+    camera,
+    player_position=None,
+    walls=None,
+    visible_only=False,
+):
     """Draw world-space impact holes and fade them near the end of their life."""
-    mark_layer = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+    # This function now draws directly onto a reusable transparent layer.
+    mark_layer = screen
     screen_rect = screen.get_rect().inflate(40, 40)
 
     for mark in bullet_marks:
+        if visible_only:
+            mark_wall = mark.get("wall")
+            if not has_line_of_sight(
+                player_position,
+                mark["position"],
+                walls,
+                ignored_wall=mark_wall,
+            ):
+                continue
+
         center = mark["position"] - camera
         center_tuple = (round(center.x), round(center.y))
         radius = mark["radius"]
@@ -597,9 +795,6 @@ def draw_bullet_marks(screen, bullet_marks, camera):
             width=1,
         )
 
-    screen.blit(mark_layer, (0, 0))
-
-
 def draw_player(screen, player_position, aim_angle, camera):
     """Draw a readable placeholder character facing toward the mouse."""
     center = pygame.Vector2(player_position - camera)
@@ -619,7 +814,7 @@ def draw_player(screen, player_position, aim_angle, camera):
 
 
 def draw_bullets(screen, bullets, camera):
-    """Draw every active bullet at its camera-adjusted position."""
+    """Draw every bullet; the shared visibility mask clips hidden portions."""
     for bullet in bullets:
         screen_position = bullet["position"] - camera
         pygame.draw.circle(
@@ -628,6 +823,167 @@ def draw_bullets(screen, bullets, camera):
             (round(screen_position.x), round(screen_position.y)),
             bullet["radius"],
         )
+
+
+def make_vision_render_buffers(screen_size):
+    """Allocate vision surfaces once instead of rebuilding them every frame."""
+    mask_size = (
+        max(1, round(screen_size[0] * VISION_MASK_SCALE)),
+        max(1, round(screen_size[1] * VISION_MASK_SCALE)),
+    )
+
+    return {
+        "mask_size": mask_size,
+        "small_actor_mask": pygame.Surface(mask_size, pygame.SRCALPHA),
+        "small_wall_mask": pygame.Surface(mask_size, pygame.SRCALPHA),
+        "actor_mask": pygame.Surface(screen_size, pygame.SRCALPHA),
+        "wall_mask": pygame.Surface(screen_size, pygame.SRCALPHA),
+        "shadow_layer": pygame.Surface(screen_size, pygame.SRCALPHA),
+        "visible_world_layer": pygame.Surface(screen_size, pygame.SRCALPHA),
+        "actor_layer": pygame.Surface(screen_size, pygame.SRCALPHA),
+    }
+
+
+def is_wall_fully_visible(player_position, target_wall, walls):
+    """Return True only when no different wall blocks the target wall."""
+    sample_fractions = (0.08, 0.50, 0.92)
+    sample_points = [
+        pygame.Vector2(
+            target_wall.left + target_wall.width * x_fraction,
+            target_wall.top + target_wall.height * y_fraction,
+        )
+        for x_fraction in sample_fractions
+        for y_fraction in sample_fractions
+    ]
+
+    return all(
+        has_line_of_sight(
+            player_position,
+            sample_point,
+            walls,
+            ignored_wall=target_wall,
+        )
+        for sample_point in sample_points
+    )
+
+
+def update_wall_visibility_mask(
+    player_position,
+    walls,
+    camera,
+    scale_x,
+    scale_y,
+    buffers,
+):
+    """Fully color clear walls and partially color walls behind cover."""
+    small_actor_mask = buffers["small_actor_mask"]
+    small_wall_mask = buffers["small_wall_mask"]
+
+    # Begin with the exact sight shape, then add a small amount of depth so an
+    # exposed corner of a farther wall is readable rather than a one-pixel line.
+    small_wall_mask.fill((255, 255, 255, 0))
+    small_wall_mask.blit(small_actor_mask, (0, 0))
+    expansion_x = max(1, round(VISIBLE_WALL_COLOR_DEPTH * scale_x))
+    expansion_y = max(1, round(VISIBLE_WALL_COLOR_DEPTH * scale_y))
+    for direction_index in range(8):
+        angle = math.tau * direction_index / 8
+        small_wall_mask.blit(
+            small_actor_mask,
+            (
+                round(math.cos(angle) * expansion_x),
+                round(math.sin(angle) * expansion_y),
+            ),
+        )
+
+    # A wall with no other cover in front of it is the near purple wall in the
+    # reference image: color that entire wall section. A wall behind cover does
+    # not enter this branch, so only its exposed tip keeps normal color.
+    for target_wall in walls:
+        if not is_wall_fully_visible(player_position, target_wall, walls):
+            continue
+
+        pygame.draw.rect(
+            small_wall_mask,
+            (255, 255, 255, 255),
+            pygame.Rect(
+                round((target_wall.left - camera.x) * scale_x),
+                round((target_wall.top - camera.y) * scale_y),
+                max(1, round(target_wall.width * scale_x)),
+                max(1, round(target_wall.height * scale_y)),
+            ),
+        )
+
+
+def update_visibility_masks(
+    visible_polygon,
+    player_position,
+    walls,
+    camera,
+    screen_size,
+    buffers,
+):
+    """Update partial-visibility masks for actors, bullets, and wall color."""
+    mask_width, mask_height = buffers["mask_size"]
+    scale_x = mask_width / screen_size[0]
+    scale_y = mask_height / screen_size[1]
+    small_actor_mask = buffers["small_actor_mask"]
+    small_wall_mask = buffers["small_wall_mask"]
+
+    small_actor_mask.fill((255, 255, 255, 0))
+    if len(visible_polygon) >= 3:
+        small_polygon = [
+            (round(point.x * scale_x), round(point.y * scale_y))
+            for point in visible_polygon
+        ]
+        pygame.draw.polygon(
+            small_actor_mask,
+            (255, 255, 255, 255),
+            small_polygon,
+        )
+
+    update_wall_visibility_mask(
+        player_position,
+        walls,
+        camera,
+        scale_x,
+        scale_y,
+        buffers,
+    )
+
+    # Fast nearest-neighbor enlargement keeps this laboratory responsive.
+    pygame.transform.scale(
+        small_actor_mask,
+        screen_size,
+        buffers["actor_mask"],
+    )
+    pygame.transform.scale(
+        small_wall_mask,
+        screen_size,
+        buffers["wall_mask"],
+    )
+
+
+def clip_layer_to_visibility(layer, visibility_mask):
+    """Erase every pixel of a transparent layer outside the supplied mask."""
+    layer.blit(
+        visibility_mask,
+        (0, 0),
+        special_flags=pygame.BLEND_RGBA_MULT,
+    )
+
+
+def draw_vision_shadow(screen, visible_polygon, shadow_layer):
+    """Darken concealed terrain while leaving its shapes and textures visible."""
+    shadow_layer.fill(VISION_SHADOW_COLOR)
+
+    if len(visible_polygon) >= 3:
+        pygame.draw.polygon(
+            shadow_layer,
+            (0, 0, 0, 0),
+            visible_polygon,
+        )
+
+    screen.blit(shadow_layer, (0, 0))
 
 
 def draw_target(screen, font, target, camera):
@@ -748,7 +1104,7 @@ def draw_debug_panel(
 ):
     """Show the values that matter while testing movement."""
     lines = [
-        "SHOOTING LABORATORY 0.2",
+        "VISION LABORATORY 0.3",
         "WASD: Move  SHIFT: Run  LMB: Fire  R: Reload  1/2/3: Weapons  ESC: Quit",
         f"Position: ({player_position.x:.1f}, {player_position.y:.1f})",
         f"Facing: {math.degrees(aim_angle):.1f} degrees",
@@ -775,6 +1131,7 @@ def draw_weapon_panel(
     active_weapon,
     weapon_state,
     target,
+    target_visible,
 ):
     """Display ammunition, reload status, target health, and target defeats."""
     panel_width = 355
@@ -820,7 +1177,9 @@ def draw_weapon_panel(
     )
     screen.blit(slots_text, (panel_x + 18, panel_y + 113))
 
-    if target["alive"]:
+    if not target_visible:
+        target_status = "Target: CONCEALED"
+    elif target["alive"]:
         target_status = f"Target health: {target['health']} / {TARGET_MAX_HEALTH}"
     else:
         target_status = "Target defeated"
@@ -839,13 +1198,15 @@ def main():
     pygame.init()
 
     screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-    pygame.display.set_caption("Riftbound - Shooting Laboratory")
+    pygame.display.set_caption("Riftbound - Vision Laboratory")
     pygame.mouse.set_visible(False)
+    vision_buffers = make_vision_render_buffers(screen.get_size())
 
     clock = pygame.time.Clock()
     debug_font = pygame.font.Font(None, 26)
     ammunition_font = pygame.font.Font(None, 48)
     walls = make_walls()
+    wall_segments = get_wall_segments(walls)
     target = make_practice_target()
 
     player_position = pygame.Vector2(260, 240)
@@ -1068,12 +1429,61 @@ def main():
         )
         update_bullet_marks(bullet_marks, delta_time)
         update_target(target, delta_time)
+        target_visible = is_target_visible(player_position, target, walls)
+        visible_polygon = calculate_vision_polygon(
+            player_position,
+            walls,
+            camera,
+            wall_segments,
+        )
+        update_visibility_masks(
+            visible_polygon,
+            player_position,
+            walls,
+            camera,
+            screen.get_size(),
+            vision_buffers,
+        )
 
         screen.fill(BACKGROUND_COLOR)
-        draw_world(screen, walls, camera)
-        draw_bullet_marks(screen, bullet_marks, camera)
-        draw_target(screen, debug_font, target, camera)
-        draw_bullets(screen, bullets, camera)
+        draw_grid(screen, camera)
+        draw_vision_shadow(
+            screen,
+            visible_polygon,
+            vision_buffers["shadow_layer"],
+        )
+
+        # First redraw every complete wall section dark gray. Nothing in the
+        # vision mask is allowed to remove or cut away the wall's shape.
+        draw_hidden_walls(screen, walls, camera)
+
+        # Then restore normal color only to the portions inside the wall mask.
+        visible_world_layer = vision_buffers["visible_world_layer"]
+        visible_world_layer.fill((0, 0, 0, 0))
+        draw_normal_walls(visible_world_layer, walls, camera)
+        draw_bullet_marks(
+            visible_world_layer,
+            bullet_marks,
+            camera,
+        )
+        clip_layer_to_visibility(
+            visible_world_layer,
+            vision_buffers["wall_mask"],
+        )
+        screen.blit(visible_world_layer, (0, 0))
+
+        # Characters, their health display, and bullets use the exact mask.
+        # If only a sliver is exposed, only that sliver is rendered.
+        actor_layer = vision_buffers["actor_layer"]
+        actor_layer.fill((0, 0, 0, 0))
+        draw_target(actor_layer, debug_font, target, camera)
+        draw_bullets(actor_layer, bullets, camera)
+        clip_layer_to_visibility(
+            actor_layer,
+            vision_buffers["actor_mask"],
+        )
+        screen.blit(actor_layer, (0, 0))
+
         draw_player(screen, player_position, aim_angle, camera)
         draw_debug_panel(
             screen,
@@ -1094,6 +1504,7 @@ def main():
             active_weapon,
             active_weapon_state,
             target,
+            target_visible,
         )
         draw_stamina_panel(
             screen,
