@@ -9,8 +9,9 @@ import pygame
 # -----------------------------------------------------------------------------
 FPS = 60
 PLAYER_SPEED = 250
+SPRINT_MULTIPLIER = 1.3
 PLAYER_SIZE = 55
-WORLD_WIDTH = 2300
+WORLD_WIDTH = 2400
 WORLD_HEIGHT = 1600
 
 BACKGROUND_COLOR = (31, 37, 46)
@@ -50,18 +51,19 @@ def make_walls():
 
 
 def get_movement_input():
-    """Turn WASD keyboard input into a direction with a maximum length of 1."""
+    """Read WASD movement and whether either Shift key is being held."""
     keys = pygame.key.get_pressed()
     direction = pygame.Vector2(
         int(keys[pygame.K_d]) - int(keys[pygame.K_a]),
         int(keys[pygame.K_s]) - int(keys[pygame.K_w]),
     )
+    sprinting = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
 
     # Normalizing prevents diagonal movement from being faster than straight movement.
     if direction.length_squared() > 0:
         direction = direction.normalize()
 
-    return direction
+    return direction, sprinting
 
 
 def move_player(position, movement, walls):
@@ -161,18 +163,27 @@ def draw_crosshair(screen, mouse_position):
     pygame.draw.line(screen, color, (x, y + 5), (x, y + 15), width=2)
 
 
-def draw_debug_panel(screen, font, player_position, aim_angle, current_fps):
+def draw_debug_panel(
+    screen,
+    font,
+    player_position,
+    aim_angle,
+    current_speed,
+    movement_state,
+    current_fps,
+):
     """Show the values that matter while testing movement."""
     lines = [
         "MOVEMENT LABORATORY 0.1",
-        "WASD: Move    Mouse: Aim    ESC: Quit",
+        "WASD: Move    SHIFT: Run    Mouse: Aim    ESC: Quit",
         f"Position: ({player_position.x:.1f}, {player_position.y:.1f})",
         f"Facing: {math.degrees(aim_angle):.1f} degrees",
-        f"Speed setting: {PLAYER_SPEED} pixels/second",
+        f"Movement: {movement_state}",
+        f"Current speed: {current_speed:.0f} pixels/second",
         f"FPS: {current_fps:.0f}",
     ]
 
-    panel = pygame.Surface((470, 178), pygame.SRCALPHA)
+    panel = pygame.Surface((560, 203), pygame.SRCALPHA)
     panel.fill((10, 13, 18, 205))
     screen.blit(panel, (18, 18))
 
@@ -206,9 +217,17 @@ def main():
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 game_running = False
 
-        movement_direction = get_movement_input()
-        movement = movement_direction * PLAYER_SPEED * delta_time
+        movement_direction, sprinting = get_movement_input()
+        current_speed = PLAYER_SPEED * SPRINT_MULTIPLIER if sprinting else PLAYER_SPEED
+        movement = movement_direction * current_speed * delta_time
         move_player(player_position, movement, walls)
+
+        if movement_direction.length_squared() == 0:
+            movement_state = "Idle"
+        elif sprinting:
+            movement_state = "Running"
+        else:
+            movement_state = "Walking"
 
         camera = calculate_camera(player_position, screen.get_size())
         mouse_screen_position = pygame.Vector2(pygame.mouse.get_pos())
@@ -220,7 +239,15 @@ def main():
         screen.fill(BACKGROUND_COLOR)
         draw_world(screen, walls, camera)
         draw_player(screen, player_position, aim_angle, camera)
-        draw_debug_panel(screen, debug_font, player_position, aim_angle, clock.get_fps())
+        draw_debug_panel(
+            screen,
+            debug_font,
+            player_position,
+            aim_angle,
+            current_speed,
+            movement_state,
+            clock.get_fps(),
+        )
         draw_crosshair(screen, pygame.mouse.get_pos())
 
         pygame.display.flip()
