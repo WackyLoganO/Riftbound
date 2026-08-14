@@ -265,10 +265,32 @@ VAREK = {
     "max_stamina": 110,
 }
 
+MIRI = {
+    "id": "miri",
+    "name": "Miri",
+    "class": "Guardian",
+    "max_health": 80,
+    "move_speed": 250,
+    "sprint_multiplier": 1.35,
+    "max_stamina": 115,
+}
+
+RELAY = {
+    "id": "relay",
+    "name": "Relay",
+    "class": "Conduit",
+    "max_health": 100,
+    "move_speed": 250,
+    "sprint_multiplier": 1.30,
+    "max_stamina": 100,
+}
+
 CHARACTER_ROSTER = [
     {**MALPHAS, "implemented": True},
     {**LONGSHOT, "implemented": True},
     {**VAREK, "implemented": True},
+    {**MIRI, "implemented": True},
+    {**RELAY, "implemented": True},
 ]
 
 # Malphas - Phantom
@@ -361,6 +383,52 @@ VAREK_MASK_COLOR = (222, 203, 173)
 VAREK_BLADE_COLOR = (116, 215, 255)
 VAREK_EFFECT_COLOR = (83, 174, 232)
 VAREK_FURY_COLOR = (217, 91, 67)
+
+# Miri - Guardian
+MIRI_FELINE_LUNGE_DURATION = 6.0
+MIRI_FELINE_LUNGE_COOLDOWN = 8.0
+MIRI_CLAW_DAMAGE = 35
+MIRI_CLAW_RANGE = 100
+MIRI_CLAW_ARC_DEGREES = 90
+MIRI_CLAW_SECONDS_PER_ATTACK = 0.35
+MIRI_CLAW_ANIMATION_TIME = 0.16
+
+MIRI_FIELD_TREATMENT_RADIUS = 180
+MIRI_FIELD_TREATMENT_CAST_TIME = 1.0
+MIRI_FIELD_TREATMENT_COOLDOWN = 12.0
+MIRI_FIELD_TREATMENT_MISSING_HEALTH_FRACTION = 0.50
+MIRI_FIELD_TREATMENT_MOVE_MULTIPLIER = 0.60
+
+MIRI_NINE_LIVES_RANGE = 100
+MIRI_NINE_LIVES_CHANNEL_TIME = 4.0
+MIRI_NINE_LIVES_REVIVE_HEALTH = 50
+MIRI_NINE_LIVES_MOVE_CANCEL_DISTANCE = 3.0
+
+MIRI_BODY_COLOR = (237, 143, 185)
+MIRI_COAT_COLOR = (242, 244, 247)
+MIRI_EAR_COLOR = (245, 169, 203)
+MIRI_EAR_INNER_COLOR = (255, 208, 226)
+MIRI_HEAL_COLOR = (91, 225, 136)
+MIRI_EFFECT_COLOR = (118, 255, 168)
+
+# Relay - Conduit
+RELAY_RIFT_BOOST_CHARGE_TIME = 3.0
+RELAY_RIFT_BOOST_PROJECTILES = 20
+RELAY_RIFT_BOOST_DAMAGE_MULTIPLIER = 1.20
+RELAY_RIFT_BOOST_COOLDOWN = 10.0
+
+RELAY_RIFT_TELEPORT_CHANNEL = 3.0
+RELAY_RIFT_TELEPORT_COOLDOWN = 15.0
+RELAY_RIFT_TELEPORT_SAFE_MARGIN = 110
+RELAY_RIFT_TELEPORT_ATTEMPTS = 160
+
+RELAY_RIFT_OVERCLOCK_HOLD_MULTIPLIER = 1.50
+
+RELAY_BODY_COLOR = (173, 185, 195)
+RELAY_JOINT_COLOR = (75, 91, 104)
+RELAY_RIFT_COLOR = (168, 92, 235)
+RELAY_CORE_COLOR = (104, 188, 255)
+RELAY_BOOST_BULLET_COLOR = (190, 112, 255)
 
 BACKGROUND_COLOR = (31, 37, 46)
 GRID_COLOR = (42, 49, 60)
@@ -590,6 +658,9 @@ def reset_rift_state(rift_state):
             "intel_remaining": 0.0,
             "rift_energy_control_timer": 0.0,
             "rift_energy_capture_pending": None,
+            "overclock_team": None,
+            "overclock_alert_team": None,
+            "overclock_alert_remaining": 0.0,
         }
     )
 
@@ -652,9 +723,17 @@ def update_rift_state(rift_state, actors, delta_time):
             rift_state["rift_energy_capture_pending"] = occupying_team
             captured_this_frame = True
 
+    rift_state["overclock_alert_remaining"] = max(
+        0.0, rift_state.get("overclock_alert_remaining", 0.0) - delta_time
+    )
+
     owner = rift_state["owner"]
     if owner is None:
         rift_state["intel_remaining"] = 0.0
+        rift_state["overclock_team"] = None
+        for actor in actors:
+            if actor.get("character_id") == RELAY["id"]:
+                actor.get("ability_state", {})["rift_overclock_active"] = False
         return None
 
     if not captured_this_frame:
@@ -664,8 +743,32 @@ def update_rift_state(rift_state, actors, delta_time):
             rift_state["contested"]
             or (occupying_team is not None and occupying_team != owner)
         )
+
+        # Relay does not accelerate the five-second capture. His ultimate
+        # accelerates the sixty-second HOLD timer after his team owns the Rift.
+        # Multiple Conduits never stack; the timer is either normal or 1.5x.
+        hold_multiplier = 1.0
+        rift_state["overclock_team"] = None
+        for actor in actors:
+            if actor.get("character_id") != RELAY["id"]:
+                continue
+            state = actor.get("ability_state", {})
+            if not state.get("rift_overclock_active", False):
+                continue
+            valid_overclock = (
+                actor_can_fight(actor)
+                and actor["team"] == owner
+                and not owner_challenged
+                and actor["position"].distance_to(rift_state["position"]) <= RIFT_RADIUS
+            )
+            if valid_overclock:
+                hold_multiplier = RELAY_RIFT_OVERCLOCK_HOLD_MULTIPLIER
+                rift_state["overclock_team"] = owner
+            else:
+                state["rift_overclock_active"] = False
+
         if not owner_challenged:
-            rift_state["hold_progress"][owner] += delta_time
+            rift_state["hold_progress"][owner] += delta_time * hold_multiplier
 
         rift_state["intel_remaining"] = max(
             0.0,
@@ -721,6 +824,33 @@ def make_character_ability_state(character_id):
             "fury_remaining": 0.0,
             "fury_used": False,
         }
+    if character_id == MIRI["id"]:
+        return {
+            "feline_lunge_cooldown": 0.0,
+            "feline_lunge_remaining": 0.0,
+            "claw_attack_cooldown": 0.0,
+            "claw_animation_timer": 0.0,
+            "field_treatment_cooldown": 0.0,
+            "field_treatment_remaining": 0.0,
+            "field_treatment_pending": False,
+            "nine_lives_remaining": 0.0,
+            "nine_lives_target": None,
+            "nine_lives_start_position": None,
+            "nine_lives_used": False,
+        }
+    if character_id == RELAY["id"]:
+        return {
+            "rift_boost_charge_progress": 0.0,
+            "rift_boost_charged": False,
+            "rift_boost_bullets_remaining": 0,
+            "rift_boost_cooldown": 0.0,
+            "rift_teleport_selecting": False,
+            "rift_teleport_quadrant": None,
+            "rift_teleport_remaining": 0.0,
+            "rift_teleport_cooldown": 0.0,
+            "rift_overclock_active": False,
+            "rift_overclock_used": False,
+        }
     return {}
 
 
@@ -732,6 +862,10 @@ def get_playable_character(character_id):
         return LONGSHOT
     if character_id == VAREK["id"]:
         return VAREK
+    if character_id == MIRI["id"]:
+        return MIRI
+    if character_id == RELAY["id"]:
+        return RELAY
     return None
 
 
@@ -796,6 +930,7 @@ def make_actor(
         "revive_source": None,
         "rift_energy_revive_pending": False,
         "anchor_energy_awarded": False,
+        "resurrected_this_round": False,
         "aim_angle": 0.0,
         "shot_cooldown": random.uniform(0.0, BOT_FIRE_INTERVAL),
         "last_buy_round": 0,
@@ -864,6 +999,7 @@ def reset_actor_for_round(actor):
     actor["revive_source"] = None
     actor["rift_energy_revive_pending"] = False
     actor["anchor_energy_awarded"] = False
+    actor["resurrected_this_round"] = False
     actor["aim_angle"] = 0.0
     actor["shot_cooldown"] = random.uniform(0.0, BOT_FIRE_INTERVAL)
     actor["route_index"] = 0
@@ -1252,10 +1388,23 @@ def create_bullet(
     )
     record_track_event(shooter, "fire")
 
+    bullet_damage = weapon["damage"] if damage_override is None else damage_override
+    rift_boosted = False
+    if shooter.get("character_id") == RELAY["id"]:
+        relay_state = shooter.get("ability_state", {})
+        boosted_remaining = relay_state.get("rift_boost_bullets_remaining", 0)
+        if boosted_remaining > 0:
+            bullet_damage *= RELAY_RIFT_BOOST_DAMAGE_MULTIPLIER
+            relay_state["rift_boost_bullets_remaining"] = boosted_remaining - 1
+            if relay_state["rift_boost_bullets_remaining"] <= 0:
+                relay_state["rift_boost_cooldown"] = RELAY_RIFT_BOOST_COOLDOWN
+            rift_boosted = True
+
     return {
         "position": pygame.Vector2(shooter["position"]) + direction * muzzle_distance,
         "velocity": direction * weapon["bullet_speed"],
-        "damage": weapon["damage"] if damage_override is None else damage_override,
+        "damage": bullet_damage,
+        "rift_boosted": rift_boosted,
         "radius": weapon["bullet_radius"],
         "team": shooter["team"],
         "shooter": shooter,
@@ -1417,6 +1566,21 @@ def down_or_eliminate_actor(actor):
         ability_state["blade_animation_timer"] = 0.0
         ability_state["breach_effect_remaining"] = 0.0
         ability_state["fury_remaining"] = 0.0
+    if "feline_lunge_remaining" in ability_state:
+        ability_state["feline_lunge_remaining"] = 0.0
+        ability_state["claw_attack_cooldown"] = 0.0
+        ability_state["claw_animation_timer"] = 0.0
+        ability_state["field_treatment_remaining"] = 0.0
+        ability_state["field_treatment_pending"] = False
+        ability_state["nine_lives_remaining"] = 0.0
+        ability_state["nine_lives_target"] = None
+        ability_state["nine_lives_start_position"] = None
+    if "rift_boost_charge_progress" in ability_state:
+        ability_state["rift_boost_charge_progress"] = 0.0
+        ability_state["rift_teleport_selecting"] = False
+        ability_state["rift_teleport_quadrant"] = None
+        ability_state["rift_teleport_remaining"] = 0.0
+        ability_state["rift_overclock_active"] = False
 
     if actor["times_downed"] >= 2:
         actor["downed"] = False
@@ -2132,15 +2296,20 @@ def update_varek_abilities(player, delta_time):
     state["fury_remaining"] = max(0.0, state["fury_remaining"] - delta_time)
 
 
-def get_varek_movement_obstacles(player, walls, destructible_objects, normal_obstacles):
-    """During Unbound Fury, let Varek vault crates but never walls or doors."""
-    if not varek_unbound_fury_active(player):
-        return normal_obstacles
-    return walls + [
-        destructible["rect"]
-        for destructible in destructible_objects
-        if not destructible["destroyed"] and destructible["type"] != "crate"
-    ]
+def get_character_movement_obstacles(player, walls, destructible_objects, normal_obstacles):
+    """Apply character-specific low-cover vaulting while preserving hard walls."""
+    if varek_unbound_fury_active(player):
+        return walls + [
+            destructible["rect"]
+            for destructible in destructible_objects
+            if not destructible["destroyed"] and destructible["type"] != "crate"
+        ]
+    return get_miri_movement_obstacles(
+        player,
+        walls,
+        destructible_objects,
+        normal_obstacles,
+    )
 
 
 def perform_varek_blade_attack(
@@ -2171,6 +2340,448 @@ def perform_varek_blade_attack(
     state["blade_attack_cooldown"] = VAREK_ONI_BLADE_SECONDS_PER_SWING
     state["blade_animation_timer"] = VAREK_ONI_BLADE_ANIMATION_TIME
     return geometry_changed
+
+
+
+def miri_feline_lunge_active(actor):
+    """Return whether Miri currently has her claws drawn for Feline Lunge."""
+    return (
+        actor.get("character_id") == MIRI["id"]
+        and actor.get("ability_state", {}).get("feline_lunge_remaining", 0.0) > 0
+    )
+
+
+def miri_field_treatment_active(actor):
+    """Return whether Miri is currently casting her one-second heal."""
+    return (
+        actor.get("character_id") == MIRI["id"]
+        and actor.get("ability_state", {}).get("field_treatment_remaining", 0.0) > 0
+    )
+
+
+def miri_nine_lives_active(actor):
+    """Return whether Miri is currently channeling Nine Lives."""
+    return (
+        actor.get("character_id") == MIRI["id"]
+        and actor.get("ability_state", {}).get("nine_lives_remaining", 0.0) > 0
+    )
+
+
+def try_activate_feline_lunge(player):
+    """Draw Miri's claws and allow her to vault low crate cover temporarily."""
+    if player.get("character_id") != MIRI["id"]:
+        return False, "FELINE LUNGE UNAVAILABLE"
+
+    state = player["ability_state"]
+    if state["nine_lives_remaining"] > 0:
+        return False, "NINE LIVES CHANNEL IN PROGRESS"
+    if state["feline_lunge_remaining"] > 0:
+        return False, "FELINE LUNGE ALREADY ACTIVE"
+    if state["feline_lunge_cooldown"] > 0:
+        return False, f"FELINE LUNGE COOLDOWN {state['feline_lunge_cooldown']:.1f}s"
+
+    state["feline_lunge_remaining"] = MIRI_FELINE_LUNGE_DURATION
+    state["feline_lunge_cooldown"] = MIRI_FELINE_LUNGE_COOLDOWN
+    state["claw_attack_cooldown"] = 0.0
+    return True, "FELINE LUNGE ACTIVE"
+
+
+def try_activate_field_treatment(player):
+    """Begin Miri's one-second nearby-ally healing cast."""
+    if player.get("character_id") != MIRI["id"]:
+        return False, "FIELD TREATMENT UNAVAILABLE"
+
+    state = player["ability_state"]
+    if state["nine_lives_remaining"] > 0:
+        return False, "NINE LIVES CHANNEL IN PROGRESS"
+    if state["field_treatment_remaining"] > 0:
+        return False, "FIELD TREATMENT ALREADY CASTING"
+    if state["field_treatment_cooldown"] > 0:
+        return False, f"FIELD TREATMENT COOLDOWN {state['field_treatment_cooldown']:.1f}s"
+
+    state["field_treatment_remaining"] = MIRI_FIELD_TREATMENT_CAST_TIME
+    state["field_treatment_pending"] = True
+    state["field_treatment_cooldown"] = MIRI_FIELD_TREATMENT_COOLDOWN
+    return True, "FIELD TREATMENT CASTING"
+
+
+def find_miri_nine_lives_target(player, actors, obstacles):
+    """Return the nearest eligible eliminated teammate inside resurrection range."""
+    candidates = []
+    for actor in actors:
+        if actor is player or actor["team"] != player["team"]:
+            continue
+        if not actor["eliminated"] or actor.get("resurrected_this_round", False):
+            continue
+        distance = player["position"].distance_to(actor["position"])
+        if distance > MIRI_NINE_LIVES_RANGE:
+            continue
+        if not has_line_of_sight(player["position"], actor["position"], obstacles):
+            continue
+        candidates.append((distance, actor))
+
+    if not candidates:
+        return None
+    return min(candidates, key=lambda item: item[0])[1]
+
+
+def try_activate_nine_lives(player, actors, obstacles):
+    """Start Miri's four-second channel beside a fully eliminated teammate."""
+    if player.get("character_id") != MIRI["id"]:
+        return False, "NINE LIVES UNAVAILABLE"
+
+    state = player["ability_state"]
+    if state["nine_lives_remaining"] > 0:
+        return False, "NINE LIVES ALREADY CHANNELING"
+    if state["nine_lives_used"]:
+        return False, "NINE LIVES USED THIS ROUND"
+
+    target = find_miri_nine_lives_target(player, actors, obstacles)
+    if target is None:
+        return False, "NO ELIMINATED ALLY IN RANGE"
+
+    state["feline_lunge_remaining"] = 0.0
+    state["field_treatment_remaining"] = 0.0
+    state["field_treatment_pending"] = False
+    state["nine_lives_remaining"] = MIRI_NINE_LIVES_CHANNEL_TIME
+    state["nine_lives_target"] = target
+    state["nine_lives_start_position"] = pygame.Vector2(player["position"])
+    return True, f"NINE LIVES - REVIVING {target['name']}"
+
+
+def cancel_nine_lives(player):
+    """Stop an interrupted Nine Lives channel without consuming the ultimate."""
+    if player.get("character_id") != MIRI["id"]:
+        return
+    state = player["ability_state"]
+    state["nine_lives_remaining"] = 0.0
+    state["nine_lives_target"] = None
+    state["nine_lives_start_position"] = None
+
+
+def resurrect_actor_with_nine_lives(target):
+    """Return a fully eliminated ally for one final life this round."""
+    target["health"] = min(MIRI_NINE_LIVES_REVIVE_HEALTH, target["max_health"])
+    target["alive"] = True
+    target["downed"] = False
+    target["eliminated"] = False
+    target["revive_progress"] = 0.0
+    target["revive_source"] = None
+    target["movement_sound_radius"] = 0.0
+    target["resurrected_this_round"] = True
+    # Keep times_downed at 2+. If this resurrected actor is defeated again,
+    # they are eliminated immediately instead of receiving another normal down.
+
+
+def update_miri_abilities(player, actors, obstacles, delta_time):
+    """Advance Miri's mobility, healing cast, and resurrection channel."""
+    if player.get("character_id") != MIRI["id"]:
+        return None
+
+    state = player["ability_state"]
+    state["feline_lunge_cooldown"] = max(
+        0.0, state["feline_lunge_cooldown"] - delta_time
+    )
+    state["feline_lunge_remaining"] = max(
+        0.0, state["feline_lunge_remaining"] - delta_time
+    )
+    state["claw_attack_cooldown"] = max(
+        0.0, state["claw_attack_cooldown"] - delta_time
+    )
+    state["claw_animation_timer"] = max(
+        0.0, state["claw_animation_timer"] - delta_time
+    )
+    state["field_treatment_cooldown"] = max(
+        0.0, state["field_treatment_cooldown"] - delta_time
+    )
+
+    healed_count = None
+    if state["field_treatment_remaining"] > 0:
+        previous = state["field_treatment_remaining"]
+        state["field_treatment_remaining"] = max(0.0, previous - delta_time)
+        if state["field_treatment_remaining"] <= 0 and state["field_treatment_pending"]:
+            state["field_treatment_pending"] = False
+            healed_count = 0
+            for actor in actors:
+                if actor is player or actor["team"] != player["team"]:
+                    continue
+                if not actor_can_fight(actor):
+                    continue
+                if player["position"].distance_to(actor["position"]) > MIRI_FIELD_TREATMENT_RADIUS:
+                    continue
+                missing_health = max(0.0, actor["max_health"] - actor["health"])
+                heal_amount = missing_health * MIRI_FIELD_TREATMENT_MISSING_HEALTH_FRACTION
+                if heal_amount <= 0:
+                    continue
+                actor["health"] = min(actor["max_health"], actor["health"] + heal_amount)
+                healed_count += 1
+
+    if state["nine_lives_remaining"] > 0:
+        target = state["nine_lives_target"]
+        start_position = state["nine_lives_start_position"]
+        valid_target = (
+            target is not None
+            and target.get("eliminated", False)
+            and not target.get("resurrected_this_round", False)
+            and player["position"].distance_to(target["position"]) <= MIRI_NINE_LIVES_RANGE
+            and has_line_of_sight(player["position"], target["position"], obstacles)
+        )
+        moved_too_far = (
+            start_position is None
+            or player["position"].distance_to(start_position) > MIRI_NINE_LIVES_MOVE_CANCEL_DISTANCE
+        )
+        if not valid_target or moved_too_far:
+            cancel_nine_lives(player)
+            return "NINE LIVES INTERRUPTED"
+
+        state["nine_lives_remaining"] = max(
+            0.0, state["nine_lives_remaining"] - delta_time
+        )
+        if state["nine_lives_remaining"] <= 0:
+            resurrect_actor_with_nine_lives(target)
+            state["nine_lives_used"] = True
+            state["nine_lives_target"] = None
+            state["nine_lives_start_position"] = None
+            return f"{target['name']} RETURNED TO THE FIGHT"
+
+    if healed_count is not None:
+        return f"FIELD TREATMENT HEALED {healed_count} ALLY" if healed_count == 1 else f"FIELD TREATMENT HEALED {healed_count} ALLIES"
+    return None
+
+
+def get_miri_movement_obstacles(player, walls, destructible_objects, normal_obstacles):
+    """During Feline Lunge, Miri can vault crates but not walls or doors."""
+    if not miri_feline_lunge_active(player):
+        return normal_obstacles
+    return walls + [
+        destructible["rect"]
+        for destructible in destructible_objects
+        if not destructible["destroyed"] and destructible["type"] != "crate"
+    ]
+
+
+def perform_miri_claw_attack(player, aim_angle, actors, obstacles):
+    """Strike the nearest visible enemy in Miri's claw arc; cover is not damaged."""
+    if not miri_feline_lunge_active(player):
+        return False
+    state = player["ability_state"]
+    if state["claw_attack_cooldown"] > 0:
+        return False
+
+    forward = pygame.Vector2(math.cos(aim_angle), math.sin(aim_angle))
+    minimum_dot = get_cone_dot_threshold(MIRI_CLAW_ARC_DEGREES)
+    valid_targets = []
+    for actor in actors:
+        if actor is player or actor["team"] == player["team"] or not actor_can_fight(actor):
+            continue
+        offset = actor["position"] - player["position"]
+        distance = offset.length()
+        if distance <= 0 or distance > MIRI_CLAW_RANGE:
+            continue
+        direction = offset / distance
+        if forward.dot(direction) < minimum_dot:
+            continue
+        if not has_line_of_sight(player["position"], actor["position"], obstacles):
+            continue
+        valid_targets.append((distance, actor))
+
+    if valid_targets:
+        _, target = min(valid_targets, key=lambda item: item[0])
+        damage_actor(target, MIRI_CLAW_DAMAGE, player)
+
+    state["claw_attack_cooldown"] = MIRI_CLAW_SECONDS_PER_ATTACK
+    state["claw_animation_timer"] = MIRI_CLAW_ANIMATION_TIME
+    return True
+
+
+def relay_inside_rift(player, rift_state):
+    """Return whether Relay is close enough to interface with the active Rift."""
+    return (
+        actor_can_fight(player)
+        and player["position"].distance_to(rift_state["position"]) <= RIFT_RADIUS
+    )
+
+
+def relay_teleport_selecting(player):
+    """Return whether Relay is waiting for the player to choose a map quadrant."""
+    return (
+        player.get("character_id") == RELAY["id"]
+        and player.get("ability_state", {}).get("rift_teleport_selecting", False)
+    )
+
+
+def relay_teleport_channel_active(player):
+    """Return whether Relay is in the three-second teleport channel."""
+    return (
+        player.get("character_id") == RELAY["id"]
+        and player.get("ability_state", {}).get("rift_teleport_remaining", 0.0) > 0
+    )
+
+
+def try_activate_rift_boost(player):
+    """Consume Relay's stored Rift charge and empower the next 20 projectiles."""
+    if player.get("character_id") != RELAY["id"]:
+        return False, "RIFT BOOST UNAVAILABLE"
+    state = player["ability_state"]
+    if state["rift_boost_bullets_remaining"] > 0:
+        return False, f"RIFT BOOST {state['rift_boost_bullets_remaining']} PROJECTILES LEFT"
+    if state["rift_boost_cooldown"] > 0:
+        return False, f"RIFT BOOST COOLDOWN {state['rift_boost_cooldown']:.1f}s"
+    if not state["rift_boost_charged"]:
+        return False, "RIFT BOOST NEEDS 3s OF RIFT CHARGE"
+
+    state["rift_boost_charged"] = False
+    state["rift_boost_charge_progress"] = 0.0
+    state["rift_boost_bullets_remaining"] = RELAY_RIFT_BOOST_PROJECTILES
+    return True, f"RIFT BOOST ACTIVE - {RELAY_RIFT_BOOST_PROJECTILES} PROJECTILES"
+
+
+def try_activate_rift_teleport(player, rift_state):
+    """Open Relay's four-quadrant Rift Teleport selector while at the Rift."""
+    if player.get("character_id") != RELAY["id"]:
+        return False, "RIFT TELEPORT UNAVAILABLE"
+    state = player["ability_state"]
+    if state["rift_teleport_remaining"] > 0:
+        return False, "RIFT TELEPORT ALREADY CHANNELING"
+    if state["rift_teleport_cooldown"] > 0:
+        return False, f"RIFT TELEPORT COOLDOWN {state['rift_teleport_cooldown']:.1f}s"
+    if not relay_inside_rift(player, rift_state):
+        return False, "RIFT TELEPORT REQUIRES THE ACTIVE RIFT"
+
+    state["rift_teleport_selecting"] = True
+    state["rift_teleport_quadrant"] = None
+    return True, "RIFT TELEPORT - CHOOSE A QUADRANT (1-4)"
+
+
+def begin_relay_rift_teleport(player, quadrant, rift_state):
+    """Begin the three-second teleport channel toward a chosen map quadrant."""
+    if player.get("character_id") != RELAY["id"]:
+        return False, "RIFT TELEPORT UNAVAILABLE"
+    state = player["ability_state"]
+    if not state.get("rift_teleport_selecting", False):
+        return False, "RIFT TELEPORT NOT SELECTING"
+    if not relay_inside_rift(player, rift_state):
+        state["rift_teleport_selecting"] = False
+        return False, "RIFT TELEPORT CANCELLED - LEFT THE RIFT"
+    if quadrant not in ("top_left", "top_right", "bottom_left", "bottom_right"):
+        return False, "INVALID RIFT TELEPORT QUADRANT"
+
+    state["rift_teleport_selecting"] = False
+    state["rift_teleport_quadrant"] = quadrant
+    state["rift_teleport_remaining"] = RELAY_RIFT_TELEPORT_CHANNEL
+    return True, f"RIFT TELEPORT CHANNELING - {quadrant.replace('_', ' ').upper()}"
+
+
+def get_relay_quadrant_bounds(quadrant):
+    """Return safe random-landing bounds for one of the four map quadrants."""
+    margin = RELAY_RIFT_TELEPORT_SAFE_MARGIN
+    mid_x = WORLD_WIDTH / 2
+    mid_y = WORLD_HEIGHT / 2
+    if quadrant == "top_left":
+        return margin, mid_x - margin / 2, margin, mid_y - margin / 2
+    if quadrant == "top_right":
+        return mid_x + margin / 2, WORLD_WIDTH - margin, margin, mid_y - margin / 2
+    if quadrant == "bottom_left":
+        return margin, mid_x - margin / 2, mid_y + margin / 2, WORLD_HEIGHT - margin
+    return mid_x + margin / 2, WORLD_WIDTH - margin, mid_y + margin / 2, WORLD_HEIGHT - margin
+
+
+def choose_relay_teleport_destination(quadrant, obstacles):
+    """Choose a random clear point inside Relay's selected map quadrant."""
+    min_x, max_x, min_y, max_y = get_relay_quadrant_bounds(quadrant)
+    for _ in range(RELAY_RIFT_TELEPORT_ATTEMPTS):
+        candidate = pygame.Vector2(
+            random.uniform(min_x, max_x),
+            random.uniform(min_y, max_y),
+        )
+        if actor_position_is_clear(candidate, obstacles):
+            return candidate
+    return None
+
+
+def try_activate_rift_overclock(player, rift_state):
+    """Overclock a friendly-owned Rift so its 60-second hold timer runs 1.5x."""
+    if player.get("character_id") != RELAY["id"]:
+        return False, "RIFT OVERCLOCK UNAVAILABLE"
+    state = player["ability_state"]
+    if state["rift_overclock_active"]:
+        return False, "RIFT OVERCLOCK ALREADY ACTIVE"
+    if state["rift_overclock_used"]:
+        return False, "RIFT OVERCLOCK USED THIS ROUND"
+    if rift_state["owner"] != player["team"]:
+        return False, "YOUR TEAM MUST CONTROL THE RIFT"
+    if rift_state["contested"]:
+        return False, "RIFT OVERCLOCK CANNOT START WHILE CONTESTED"
+    if not relay_inside_rift(player, rift_state):
+        return False, "RIFT OVERCLOCK REQUIRES THE ACTIVE RIFT"
+
+    state["rift_overclock_active"] = True
+    state["rift_overclock_used"] = True
+    enemy_team = "red" if player["team"] == "blue" else "blue"
+    rift_state["overclock_alert_team"] = enemy_team
+    rift_state["overclock_alert_remaining"] = 4.0
+    return True, "RIFT OVERCLOCK ACTIVE - ENEMY TEAM ALERTED"
+
+
+def update_relay_abilities(player, rift_state, obstacles, delta_time):
+    """Advance Relay charging, teleport channel, and cooldown state."""
+    if player.get("character_id") != RELAY["id"]:
+        return None, False
+
+    state = player["ability_state"]
+    state["rift_boost_cooldown"] = max(0.0, state["rift_boost_cooldown"] - delta_time)
+    state["rift_teleport_cooldown"] = max(0.0, state["rift_teleport_cooldown"] - delta_time)
+
+    message = None
+    teleported = False
+
+    # A stored charge is personal to Relay; it does not spend the team's shared
+    # Rift Energy resource. Leaving the Rift before three seconds resets progress.
+    can_charge = (
+        relay_inside_rift(player, rift_state)
+        and state["rift_boost_cooldown"] <= 0
+        and not state["rift_boost_charged"]
+        and state["rift_boost_bullets_remaining"] <= 0
+    )
+    if can_charge:
+        old_progress = state["rift_boost_charge_progress"]
+        state["rift_boost_charge_progress"] = min(
+            RELAY_RIFT_BOOST_CHARGE_TIME, old_progress + delta_time
+        )
+        if old_progress < RELAY_RIFT_BOOST_CHARGE_TIME <= state["rift_boost_charge_progress"]:
+            state["rift_boost_charged"] = True
+            message = "RIFT BOOST CHARGED"
+    elif not state["rift_boost_charged"] and state["rift_boost_bullets_remaining"] <= 0:
+        state["rift_boost_charge_progress"] = 0.0
+
+    if state["rift_teleport_selecting"] and not relay_inside_rift(player, rift_state):
+        state["rift_teleport_selecting"] = False
+        state["rift_teleport_quadrant"] = None
+        message = "RIFT TELEPORT CANCELLED - LEFT THE RIFT"
+
+    if state["rift_teleport_remaining"] > 0:
+        if not relay_inside_rift(player, rift_state):
+            state["rift_teleport_remaining"] = 0.0
+            state["rift_teleport_quadrant"] = None
+            message = "RIFT TELEPORT INTERRUPTED"
+        else:
+            state["rift_teleport_remaining"] = max(
+                0.0, state["rift_teleport_remaining"] - delta_time
+            )
+            if state["rift_teleport_remaining"] <= 0:
+                destination = choose_relay_teleport_destination(
+                    state["rift_teleport_quadrant"], obstacles
+                )
+                if destination is None:
+                    message = "RIFT TELEPORT FAILED - NO SAFE LANDING"
+                else:
+                    player["position"].update(destination)
+                    state["rift_teleport_cooldown"] = RELAY_RIFT_TELEPORT_COOLDOWN
+                    teleported = True
+                    message = "RIFT TELEPORT COMPLETE"
+                state["rift_teleport_quadrant"] = None
+
+    return message, teleported
 
 
 def perform_knife_attack(
@@ -3225,6 +3836,8 @@ def draw_actor(screen, font, actor, camera):
     is_malphas = actor.get("character_id") == MALPHAS["id"]
     is_longshot = actor.get("character_id") == LONGSHOT["id"]
     is_varek = actor.get("character_id") == VAREK["id"]
+    is_miri = actor.get("character_id") == MIRI["id"]
+    is_relay = actor.get("character_id") == RELAY["id"]
     if is_malphas and not actor["downed"] and not actor["eliminated"]:
         fill_color = MALPHAS_BODY_COLOR
         # Keep the blue outer edge so the playable character still reads as
@@ -3235,6 +3848,12 @@ def draw_actor(screen, font, actor, camera):
         edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
     elif is_varek and not actor["downed"] and not actor["eliminated"]:
         fill_color = VAREK_BODY_COLOR
+        edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
+    elif is_miri and not actor["downed"] and not actor["eliminated"]:
+        fill_color = MIRI_BODY_COLOR
+        edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
+    elif is_relay and not actor["downed"] and not actor["eliminated"]:
+        fill_color = RELAY_BODY_COLOR
         edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
 
     if actor["eliminated"]:
@@ -3399,6 +4018,47 @@ def draw_actor(screen, font, actor, camera):
                 radius + 8 + pulse,
                 width=3,
             )
+    elif is_miri:
+        # Top-down placeholder: white lab coat, pink body, and large cat ears.
+        ear_forward = center + facing * 16
+        left_ear = ear_forward + side * 15
+        right_ear = ear_forward - side * 15
+        pygame.draw.polygon(
+            screen,
+            MIRI_EAR_COLOR,
+            (left_ear - facing * 8 - side * 7, left_ear + side * 6, left_ear + facing * 19),
+        )
+        pygame.draw.polygon(
+            screen,
+            MIRI_EAR_COLOR,
+            (right_ear - facing * 8 + side * 7, right_ear - side * 6, right_ear + facing * 19),
+        )
+        pygame.draw.circle(screen, MIRI_EAR_INNER_COLOR, (round(left_ear.x), round(left_ear.y)), 4)
+        pygame.draw.circle(screen, MIRI_EAR_INNER_COLOR, (round(right_ear.x), round(right_ear.y)), 4)
+        coat_left = center - facing * 7 + side * 15
+        coat_right = center - facing * 7 - side * 15
+        pygame.draw.line(screen, MIRI_COAT_COLOR, coat_left, center + facing * 18 + side * 7, width=7)
+        pygame.draw.line(screen, MIRI_COAT_COLOR, coat_right, center + facing * 18 - side * 7, width=7)
+        pygame.draw.circle(screen, MIRI_HEAL_COLOR, center_tuple, 6)
+    elif is_relay:
+        # Conduit placeholder: thin silver chassis with exposed joints and
+        # purple Rift conduits glowing through hands, feet, and chest.
+        shoulder_left = center + side * 11 - facing * 5
+        shoulder_right = center - side * 11 - facing * 5
+        pygame.draw.line(screen, RELAY_JOINT_COLOR, shoulder_left, shoulder_right, width=5)
+        pygame.draw.line(screen, RELAY_BODY_COLOR, center - facing * 15, center + facing * 19, width=8)
+        hand_left = center + facing * 5 + side * 20
+        hand_right = center + facing * 5 - side * 20
+        foot_left = center - facing * 19 + side * 9
+        foot_right = center - facing * 19 - side * 9
+        pygame.draw.circle(screen, RELAY_RIFT_COLOR, (round(hand_left.x), round(hand_left.y)), 5)
+        pygame.draw.circle(screen, RELAY_RIFT_COLOR, (round(hand_right.x), round(hand_right.y)), 5)
+        pygame.draw.circle(screen, RELAY_RIFT_COLOR, (round(foot_left.x), round(foot_left.y)), 4)
+        pygame.draw.circle(screen, RELAY_RIFT_COLOR, (round(foot_right.x), round(foot_right.y)), 4)
+        pygame.draw.circle(screen, RELAY_CORE_COLOR, center_tuple, 7)
+        relay_state = actor.get("ability_state", {})
+        if relay_state.get("rift_boost_bullets_remaining", 0) > 0:
+            pygame.draw.circle(screen, RELAY_RIFT_COLOR, center_tuple, radius + 7, width=2)
     else:
         arrow_tip = center + facing * 34
         arrow_left = center - facing * 5 + side * 10
@@ -3698,6 +4358,115 @@ def draw_varek_world_effects(screen, player, camera):
         )
 
 
+
+def draw_miri_world_effects(screen, player, camera):
+    """Draw Miri's claws, healing pulse, and Nine Lives resurrection channel."""
+    if player.get("character_id") != MIRI["id"]:
+        return
+
+    state = player["ability_state"]
+    center = pygame.Vector2(player["position"] - camera)
+    center_tuple = (round(center.x), round(center.y))
+
+    if state["feline_lunge_remaining"] > 0:
+        pulse = 4 + round(2 * math.sin(pygame.time.get_ticks() * 0.016))
+        pygame.draw.circle(
+            screen,
+            MIRI_EAR_COLOR,
+            center_tuple,
+            ACTOR_RADIUS + 7 + pulse,
+            width=2,
+        )
+        direction = pygame.Vector2(math.cos(player["aim_angle"]), math.sin(player["aim_angle"]))
+        side = pygame.Vector2(-direction.y, direction.x)
+        swing = 0.0
+        if state["claw_animation_timer"] > 0:
+            swing = math.radians(30) * (1.0 - state["claw_animation_timer"] / MIRI_CLAW_ANIMATION_TIME)
+        for side_sign in (-1, 1):
+            claw_dir = direction.rotate_rad(swing * side_sign)
+            start = center + claw_dir * 20 + side * 7 * side_sign
+            end = center + claw_dir * 43 + side * 10 * side_sign
+            pygame.draw.line(screen, MIRI_COAT_COLOR, start, end, width=3)
+
+    if state["field_treatment_remaining"] > 0:
+        progress = 1.0 - min(
+            1.0,
+            state["field_treatment_remaining"] / MIRI_FIELD_TREATMENT_CAST_TIME,
+        )
+        radius = round(MIRI_FIELD_TREATMENT_RADIUS * (0.35 + 0.65 * progress))
+        pygame.draw.circle(screen, MIRI_HEAL_COLOR, center_tuple, radius, width=3)
+
+    if state["nine_lives_remaining"] > 0 and state["nine_lives_target"] is not None:
+        target = state["nine_lives_target"]
+        target_center = pygame.Vector2(target["position"] - camera)
+        target_tuple = (round(target_center.x), round(target_center.y))
+        progress = 1.0 - min(
+            1.0,
+            state["nine_lives_remaining"] / MIRI_NINE_LIVES_CHANNEL_TIME,
+        )
+        pygame.draw.line(screen, MIRI_EFFECT_COLOR, center_tuple, target_tuple, width=4)
+        pygame.draw.circle(screen, MIRI_EFFECT_COLOR, target_tuple, ACTOR_RADIUS + 14, width=4)
+        pygame.draw.arc(
+            screen,
+            MIRI_COAT_COLOR,
+            pygame.Rect(target_center.x - 42, target_center.y - 42, 84, 84),
+            -math.pi / 2,
+            -math.pi / 2 + math.tau * progress,
+            width=6,
+        )
+
+
+def draw_relay_world_effects(screen, player, rift_state, camera):
+    """Draw Relay charging, teleport-channel, and Overclock placeholder effects."""
+    if player.get("character_id") != RELAY["id"]:
+        return
+    state = player["ability_state"]
+    center = pygame.Vector2(player["position"] - camera)
+    center_tuple = (round(center.x), round(center.y))
+
+    if 0 < state.get("rift_boost_charge_progress", 0.0) < RELAY_RIFT_BOOST_CHARGE_TIME:
+        progress = state["rift_boost_charge_progress"] / RELAY_RIFT_BOOST_CHARGE_TIME
+        pygame.draw.arc(
+            screen, RELAY_RIFT_COLOR,
+            pygame.Rect(center.x - 38, center.y - 38, 76, 76),
+            -math.pi / 2, -math.pi / 2 + math.tau * progress, width=5,
+        )
+
+    if state.get("rift_teleport_remaining", 0.0) > 0:
+        progress = 1.0 - state["rift_teleport_remaining"] / RELAY_RIFT_TELEPORT_CHANNEL
+        radius = round(34 + 20 * progress)
+        pygame.draw.circle(screen, RELAY_RIFT_COLOR, center_tuple, radius, width=4)
+        pygame.draw.circle(screen, RELAY_CORE_COLOR, center_tuple, max(5, radius // 3), width=2)
+
+    if state.get("rift_overclock_active", False):
+        pulse = 7 + round(4 * math.sin(pygame.time.get_ticks() * 0.015))
+        pygame.draw.circle(screen, RELAY_RIFT_COLOR, center_tuple, ACTOR_RADIUS + 10 + pulse, width=3)
+
+
+def draw_relay_teleport_selector(screen, font, player):
+    """Overlay the four map quadrants while Relay chooses a teleport region."""
+    if not relay_teleport_selecting(player):
+        return
+    overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+    overlay.fill((8, 9, 18, 145))
+    screen.blit(overlay, (0, 0))
+    mid_x = screen.get_width() // 2
+    mid_y = screen.get_height() // 2
+    pygame.draw.line(screen, RELAY_RIFT_COLOR, (mid_x, 0), (mid_x, screen.get_height()), width=3)
+    pygame.draw.line(screen, RELAY_RIFT_COLOR, (0, mid_y), (screen.get_width(), mid_y), width=3)
+    labels = [
+        ("1  TOP LEFT", (mid_x // 2, mid_y // 2)),
+        ("2  TOP RIGHT", (mid_x + mid_x // 2, mid_y // 2)),
+        ("3  BOTTOM LEFT", (mid_x // 2, mid_y + mid_y // 2)),
+        ("4  BOTTOM RIGHT", (mid_x + mid_x // 2, mid_y + mid_y // 2)),
+    ]
+    for label, position in labels:
+        surface = font.render(label, True, TEXT_COLOR)
+        screen.blit(surface, surface.get_rect(center=position))
+    title = font.render("RIFT TELEPORT - CHOOSE REGION (1-4 OR CLICK)", True, RELAY_RIFT_COLOR)
+    screen.blit(title, title.get_rect(center=(mid_x, 42)))
+
+
 def format_ability_timer(seconds):
     """Return a short HUD label for a cooldown timer."""
     return "READY" if seconds <= 0 else f"{seconds:.1f}s"
@@ -3706,7 +4475,9 @@ def format_ability_timer(seconds):
 def draw_character_panel(screen, font, player, status_message):
     """Show the selected character's unique statistics, abilities, and timers."""
     character_id = player.get("character_id")
-    if character_id not in (MALPHAS["id"], LONGSHOT["id"], VAREK["id"]):
+    if character_id not in (
+        MALPHAS["id"], LONGSHOT["id"], VAREK["id"], MIRI["id"], RELAY["id"]
+    ):
         return
 
     state = player["ability_state"]
@@ -3723,8 +4494,12 @@ def draw_character_panel(screen, font, player, status_message):
         title_color = MALPHAS_HORN_COLOR
     elif character_id == LONGSHOT["id"]:
         title_color = LONGSHOT_VISOR_COLOR
-    else:
+    elif character_id == VAREK["id"]:
         title_color = VAREK_BLADE_COLOR
+    elif character_id == MIRI["id"]:
+        title_color = MIRI_HEAL_COLOR
+    else:
+        title_color = RELAY_RIFT_COLOR
     title = font.render(
         f"{player['character_name'].upper()} - {player['character_class'].upper()}",
         True,
@@ -3795,7 +4570,7 @@ def draw_character_panel(screen, font, player, status_message):
             f"X  DEAD LINE       - {ultimate_status}",
         ]
         status_color = LONGSHOT_VISOR_COLOR
-    else:
+    elif character_id == VAREK["id"]:
         if state["oni_blade_remaining"] > 0:
             signature_status = f"ACTIVE {state['oni_blade_remaining']:.1f}s"
         elif state["fury_remaining"] > 0:
@@ -3817,6 +4592,65 @@ def draw_character_panel(screen, font, player, status_message):
             f"X  UNBOUND FURY   - {ultimate_status}",
         ]
         status_color = VAREK_BLADE_COLOR
+    elif character_id == MIRI["id"]:
+        if state["feline_lunge_remaining"] > 0:
+            signature_status = f"ACTIVE {state['feline_lunge_remaining']:.1f}s"
+        else:
+            signature_status = format_ability_timer(state["feline_lunge_cooldown"])
+
+        if state["field_treatment_remaining"] > 0:
+            class_status = f"CASTING {state['field_treatment_remaining']:.1f}s"
+        else:
+            class_status = format_ability_timer(state["field_treatment_cooldown"])
+
+        if state["nine_lives_remaining"] > 0:
+            ultimate_status = f"CHANNEL {state['nine_lives_remaining']:.1f}s"
+        elif state["nine_lives_used"]:
+            ultimate_status = "USED THIS ROUND"
+        else:
+            ultimate_status = "READY"
+
+        lines = [
+            f"Q  FELINE LUNGE    - {signature_status}",
+            f"C  FIELD TREATMENT - {class_status}",
+            f"X  NINE LIVES      - {ultimate_status}",
+        ]
+        status_color = MIRI_HEAL_COLOR
+    else:
+        if state["rift_boost_bullets_remaining"] > 0:
+            signature_status = f"{state['rift_boost_bullets_remaining']} PROJECTILES"
+        elif state["rift_boost_cooldown"] > 0:
+            signature_status = f"COOLDOWN {state['rift_boost_cooldown']:.1f}s"
+        elif state["rift_boost_charged"]:
+            signature_status = "READY"
+        elif state["rift_boost_charge_progress"] > 0:
+            signature_status = (
+                f"CHARGING {state['rift_boost_charge_progress']:.1f}/"
+                f"{RELAY_RIFT_BOOST_CHARGE_TIME:.1f}s"
+            )
+        else:
+            signature_status = "NEEDS RIFT CHARGE"
+
+        if state["rift_teleport_selecting"]:
+            class_status = "CHOOSE 1-4"
+        elif state["rift_teleport_remaining"] > 0:
+            class_status = f"CHANNEL {state['rift_teleport_remaining']:.1f}s"
+        else:
+            class_status = format_ability_timer(state["rift_teleport_cooldown"])
+
+        if state["rift_overclock_active"]:
+            ultimate_status = "ACTIVE - HOLD 1.5x"
+        elif state["rift_overclock_used"]:
+            ultimate_status = "USED THIS ROUND"
+        else:
+            ultimate_status = "READY AT OWNED RIFT"
+
+        lines = [
+            f"Q  RIFT BOOST     - {signature_status}",
+            f"C  RIFT TELEPORT  - {class_status}",
+            f"X  RIFT OVERCLOCK - {ultimate_status}",
+        ]
+        status_color = RELAY_RIFT_COLOR
 
     for index, line in enumerate(lines):
         rendered = font.render(line, True, TEXT_COLOR)
@@ -3991,6 +4825,17 @@ def draw_rift(screen, font, rift_state, player_position, camera):
         ),
     )
 
+    if rift_state.get("overclock_team") is not None:
+        tick = pygame.time.get_ticks() * 0.014
+        for bolt_index in range(7):
+            angle = tick + bolt_index * (math.tau / 7)
+            direction = pygame.Vector2(math.cos(angle), math.sin(angle))
+            side = pygame.Vector2(-direction.y, direction.x)
+            start = pygame.Vector2(center) + direction * 48
+            middle = pygame.Vector2(center) + direction * (78 + 7 * math.sin(tick * 1.7 + bolt_index)) + side * 9
+            end = pygame.Vector2(center) + direction * (RIFT_RADIUS - 8)
+            pygame.draw.lines(screen, RELAY_RIFT_COLOR, False, (start, middle, end), width=3)
+
     label = font.render(
         f"RIFT {rift_state['site_name']}",
         True,
@@ -4035,6 +4880,9 @@ def draw_rift(screen, font, rift_state, player_position, camera):
         (bar_x, bar_y, bar_width, bar_height),
         width=2,
     )
+    if rift_state.get("overclock_team") is not None:
+        overclock_text = font.render("OVERCLOCK 1.5x", True, RELAY_RIFT_COLOR)
+        screen.blit(overclock_text, overclock_text.get_rect(center=(center[0], bar_y + 30)))
 
 
 def draw_rift_intel(screen, font, actors, camera, rift_state):
@@ -4534,9 +5382,12 @@ def draw_visible_actors_and_bullets(
             round(screen_center.y - bullet_center.y),
         )
         bullet_layer.fill((0, 0, 0, 0))
-        bullet_color = (
-            BULLET_COLOR if bullet["team"] == "blue" else (255, 105, 92)
-        )
+        if bullet.get("rift_boosted", False):
+            bullet_color = RELAY_BOOST_BULLET_COLOR
+        else:
+            bullet_color = (
+                BULLET_COLOR if bullet["team"] == "blue" else (255, 105, 92)
+            )
         pygame.draw.circle(
             bullet_layer,
             bullet_color,
@@ -4585,7 +5436,7 @@ def draw_teammate_information(screen, font, actors, camera):
 
 
 def draw_revive_prompt(screen, font, player, actors, walls, camera):
-    """Show the hold key only when a downed teammate is within reach."""
+    """Show normal revive or Miri resurrection prompts when an ally is in reach."""
     if not actor_can_fight(player):
         return
 
@@ -4596,18 +5447,34 @@ def draw_revive_prompt(screen, font, player, actors, walls, camera):
         downed_only=True,
     )
     if (
-        downed_ally is None
-        or player["position"].distance_to(downed_ally["position"]) > REVIVE_RANGE
-        or not has_line_of_sight(
+        downed_ally is not None
+        and player["position"].distance_to(downed_ally["position"]) <= REVIVE_RANGE
+        and has_line_of_sight(
             player["position"],
             downed_ally["position"],
             walls,
         )
     ):
+        center = downed_ally["position"] - camera
+        prompt = font.render("HOLD E TO REVIVE", True, TEXT_COLOR)
+        background = prompt.get_rect(center=(round(center.x), round(center.y + 55)))
+        background.inflate_ip(18, 10)
+        pygame.draw.rect(screen, (10, 13, 18), background, border_radius=5)
+        screen.blit(prompt, prompt.get_rect(center=background.center))
         return
 
-    center = downed_ally["position"] - camera
-    prompt = font.render("HOLD E TO REVIVE", True, TEXT_COLOR)
+    if player.get("character_id") != MIRI["id"]:
+        return
+    state = player.get("ability_state", {})
+    if state.get("nine_lives_used", False) or state.get("nine_lives_remaining", 0.0) > 0:
+        return
+
+    eliminated_ally = find_miri_nine_lives_target(player, actors, walls)
+    if eliminated_ally is None:
+        return
+
+    center = eliminated_ally["position"] - camera
+    prompt = font.render("PRESS X FOR NINE LIVES", True, MIRI_HEAL_COLOR)
     background = prompt.get_rect(center=(round(center.x), round(center.y + 55)))
     background.inflate_ip(18, 10)
     pygame.draw.rect(screen, (10, 13, 18), background, border_radius=5)
@@ -4997,16 +5864,18 @@ def get_pause_menu_buttons(screen):
 
 
 def get_character_card_rects(screen):
-    """Return three evenly spaced character-card rectangles."""
-    card_width = 300
+    """Return evenly spaced character cards that still fit as the roster grows."""
+    gap = 20
+    card_count = len(CHARACTER_ROSTER)
+    available_width = max(900, screen.get_width() - 70)
+    card_width = min(260, max(190, (available_width - gap * (card_count - 1)) // card_count))
     card_height = 360
-    gap = 34
-    total_width = card_width * 3 + gap * 2
+    total_width = card_width * card_count + gap * (card_count - 1)
     left = screen.get_width() // 2 - total_width // 2
     top = screen.get_height() // 2 - 155
     return [
         pygame.Rect(left + index * (card_width + gap), top, card_width, card_height)
-        for index in range(3)
+        for index in range(card_count)
     ]
 
 
@@ -5176,7 +6045,7 @@ def draw_character_select(screen, regular_font, large_font, match_state):
                 (portrait_center[0] + 58, portrait_center[1] - 48),
                 width=10,
             )
-        else:
+        elif character["id"] == "varek":
             pygame.draw.circle(screen, VAREK_BODY_COLOR, portrait_center, 52)
             pygame.draw.circle(screen, VAREK_ARMOR_COLOR, portrait_center, 52, width=8)
             pygame.draw.rect(
@@ -5192,6 +6061,50 @@ def draw_character_select(screen, regular_font, large_font, match_state):
                 (portrait_center[0] + 52, portrait_center[1] - 52),
                 width=9,
             )
+        elif character["id"] == "miri":
+            pygame.draw.circle(screen, MIRI_BODY_COLOR, portrait_center, 50)
+            pygame.draw.arc(
+                screen,
+                MIRI_COAT_COLOR,
+                (portrait_center[0] - 50, portrait_center[1] - 50, 100, 100),
+                math.radians(20),
+                math.radians(160),
+                width=10,
+            )
+            pygame.draw.polygon(
+                screen,
+                MIRI_EAR_COLOR,
+                (
+                    (portrait_center[0] - 34, portrait_center[1] - 34),
+                    (portrait_center[0] - 48, portrait_center[1] - 76),
+                    (portrait_center[0] - 12, portrait_center[1] - 48),
+                ),
+            )
+            pygame.draw.polygon(
+                screen,
+                MIRI_EAR_COLOR,
+                (
+                    (portrait_center[0] + 34, portrait_center[1] - 34),
+                    (portrait_center[0] + 48, portrait_center[1] - 76),
+                    (portrait_center[0] + 12, portrait_center[1] - 48),
+                ),
+            )
+            pygame.draw.circle(screen, MIRI_HEAL_COLOR, portrait_center, 12)
+        else:
+            # Relay: slender silver maintenance chassis with a purple Rift core.
+            pygame.draw.ellipse(
+                screen, RELAY_BODY_COLOR,
+                (portrait_center[0] - 28, portrait_center[1] - 58, 56, 116),
+            )
+            pygame.draw.line(
+                screen, RELAY_JOINT_COLOR,
+                (portrait_center[0] - 42, portrait_center[1] - 4),
+                (portrait_center[0] + 42, portrait_center[1] - 4), width=7,
+            )
+            pygame.draw.circle(screen, RELAY_RIFT_COLOR, portrait_center, 15)
+            pygame.draw.circle(screen, RELAY_CORE_COLOR, portrait_center, 7)
+            pygame.draw.circle(screen, RELAY_RIFT_COLOR, (portrait_center[0] - 43, portrait_center[1] - 4), 7)
+            pygame.draw.circle(screen, RELAY_RIFT_COLOR, (portrait_center[0] + 43, portrait_center[1] - 4), 7)
 
         name = large_font.render(
             character["name"].upper(),
@@ -5220,12 +6133,26 @@ def draw_character_select(screen, regular_font, large_font, match_state):
                 "C Track",
                 "X Dead Line",
             ]
-        else:
+        elif character["id"] == "varek":
             detail_lines = [
                 "105 HP | Close-range breaker",
                 "Q Oni Blade",
                 "C Breach Charge",
                 "X Unbound Fury",
+            ]
+        elif character["id"] == "miri":
+            detail_lines = [
+                "80 HP | Mobile combat medic",
+                "Q Feline Lunge",
+                "C Field Treatment",
+                "X Nine Lives",
+            ]
+        else:
+            detail_lines = [
+                "100 HP | Rift objective specialist",
+                "Q Rift Boost",
+                "C Rift Teleport",
+                "X Rift Overclock",
             ]
 
         for line_index, line in enumerate(detail_lines):
@@ -5257,7 +6184,7 @@ def draw_character_select(screen, regular_font, large_font, match_state):
         )
     else:
         instruction = regular_font.render(
-            "Click a character or press 1-3. If time expires, Malphas is selected automatically.",
+            "Click a character or press 1-5. If time expires, Malphas is selected automatically.",
             True,
             (176, 190, 207),
         )
@@ -5516,7 +6443,7 @@ def main():
     pygame.init()
 
     screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-    pygame.display.set_caption("Riftbound - Version 0.8 Characters")
+    pygame.display.set_caption("Riftbound - Version 0.8 Characters - Relay Conduit")
     pygame.mouse.set_visible(True)
 
     clock = pygame.time.Clock()
@@ -5601,6 +6528,7 @@ def main():
         class_ability_requested = False
         ultimate_requested = False
         character_select_requested = None
+        relay_teleport_quadrant_requested = None
         trigger_just_pressed = False
         restart_requested = False
         start_game_requested = False
@@ -5632,7 +6560,22 @@ def main():
                         character_select_requested = "longshot"
                     elif event.key == pygame.K_3:
                         character_select_requested = "varek"
+                    elif event.key == pygame.K_4:
+                        character_select_requested = "miri"
+                    elif event.key == pygame.K_5:
+                        character_select_requested = "relay"
                     continue
+
+                if match_state["phase"] == "playing" and relay_teleport_selecting(player):
+                    quadrant_keys = {
+                        pygame.K_1: "top_left",
+                        pygame.K_2: "top_right",
+                        pygame.K_3: "bottom_left",
+                        pygame.K_4: "bottom_right",
+                    }
+                    if event.key in quadrant_keys:
+                        relay_teleport_quadrant_requested = quadrant_keys[event.key]
+                        continue
 
                 if event.key == pygame.K_r:
                     reload_requested = True
@@ -5665,6 +6608,22 @@ def main():
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 ui_click_position = event.pos
                 if (
+                    ui_state == "game"
+                    and not paused
+                    and match_state["phase"] == "playing"
+                    and relay_teleport_selecting(player)
+                ):
+                    mid_x = screen.get_width() // 2
+                    mid_y = screen.get_height() // 2
+                    if event.pos[0] < mid_x and event.pos[1] < mid_y:
+                        relay_teleport_quadrant_requested = "top_left"
+                    elif event.pos[0] >= mid_x and event.pos[1] < mid_y:
+                        relay_teleport_quadrant_requested = "top_right"
+                    elif event.pos[0] < mid_x and event.pos[1] >= mid_y:
+                        relay_teleport_quadrant_requested = "bottom_left"
+                    else:
+                        relay_teleport_quadrant_requested = "bottom_right"
+                elif (
                     ui_state == "game"
                     and not paused
                     and match_state["phase"] == "playing"
@@ -5969,15 +6928,47 @@ def main():
             )
             update_longshot_abilities(player, delta_time)
             update_varek_abilities(player, delta_time)
-            if teleported:
+            miri_update_message = update_miri_abilities(
+                player,
+                actors,
+                active_obstacles,
+                delta_time,
+            )
+            if miri_update_message:
+                ability_status_message = miri_update_message
+                ability_status_timer = 2.0
+            relay_update_message, relay_teleported = update_relay_abilities(
+                player,
+                rift_state,
+                active_obstacles,
+                delta_time,
+            )
+            if relay_update_message:
+                ability_status_message = relay_update_message
+                ability_status_timer = 2.0
+            if teleported or relay_teleported:
                 cached_world_polygon = []
                 vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
+
+        if (
+            player_can_act
+            and relay_teleport_quadrant_requested is not None
+            and player.get("character_id") == RELAY["id"]
+        ):
+            _, ability_status_message = begin_relay_rift_teleport(
+                player, relay_teleport_quadrant_requested, rift_state
+            )
+            ability_status_timer = 2.0
 
         if player_can_act and class_ability_requested:
             if player.get("character_id") == MALPHAS["id"]:
                 _, ability_status_message = try_activate_silence(player)
             elif player.get("character_id") == LONGSHOT["id"]:
                 _, ability_status_message = try_activate_track(player)
+            elif player.get("character_id") == MIRI["id"]:
+                _, ability_status_message = try_activate_field_treatment(player)
+            elif player.get("character_id") == RELAY["id"]:
+                _, ability_status_message = try_activate_rift_teleport(player, rift_state)
             elif player.get("character_id") == VAREK["id"]:
                 breach_mouse_world = (
                     pygame.Vector2(pygame.mouse.get_pos())
@@ -6019,6 +7010,16 @@ def main():
                 _, ability_status_message = try_activate_dead_line(player)
             elif player.get("character_id") == VAREK["id"]:
                 _, ability_status_message = try_activate_unbound_fury(player)
+            elif player.get("character_id") == MIRI["id"]:
+                _, ability_status_message = try_activate_nine_lives(
+                    player,
+                    actors,
+                    active_obstacles,
+                )
+            elif player.get("character_id") == RELAY["id"]:
+                _, ability_status_message = try_activate_rift_overclock(
+                    player, rift_state
+                )
             ability_status_timer = 2.0
 
         moving = movement_direction.length_squared() > 0
@@ -6055,14 +7056,21 @@ def main():
             if varek_unbound_fury_active(player)
             else 1.0
         )
-        base_character_speed = player["move_speed"] * fury_speed_multiplier
+        treatment_move_multiplier = (
+            MIRI_FIELD_TREATMENT_MOVE_MULTIPLIER
+            if miri_field_treatment_active(player)
+            else 1.0
+        )
+        base_character_speed = (
+            player["move_speed"] * fury_speed_multiplier * treatment_move_multiplier
+        )
         selected_speed = (
             base_character_speed * player["sprint_multiplier"]
             if sprinting
             else base_character_speed
         )
         movement = movement_direction * selected_speed * delta_time
-        player_movement_obstacles = get_varek_movement_obstacles(
+        player_movement_obstacles = get_character_movement_obstacles(
             player,
             walls,
             destructible_objects,
@@ -6126,6 +7134,10 @@ def main():
                 )
             elif player.get("character_id") == VAREK["id"]:
                 _, ability_status_message = try_activate_oni_blade(player)
+            elif player.get("character_id") == MIRI["id"]:
+                _, ability_status_message = try_activate_feline_lunge(player)
+            elif player.get("character_id") == RELAY["id"]:
+                _, ability_status_message = try_activate_rift_boost(player)
             ability_status_timer = 2.0
 
         for weapon_state in weapon_states:
@@ -6138,10 +7150,21 @@ def main():
                 weapon_state["attack_animation_timer"] - delta_time,
             )
 
+        miri_blocks_weapon = (
+            miri_feline_lunge_active(player)
+            or miri_field_treatment_active(player)
+            or miri_nine_lives_active(player)
+        )
+        relay_blocks_weapon = (
+            relay_teleport_selecting(player)
+            or relay_teleport_channel_active(player)
+        )
         if (
             active_weapon["fire_mode"] != "melee"
             and reload_requested
             and not active_weapon_state["reloading"]
+            and not miri_blocks_weapon
+            and not relay_blocks_weapon
         ):
             magazine_has_space = (
                 active_weapon_state["magazine_ammo"]
@@ -6206,6 +7229,14 @@ def main():
             firing = trigger_held or trigger_just_pressed
 
         varek_blade_is_active = player_can_act and varek_blade_active(player)
+        miri_claws_are_active = player_can_act and miri_feline_lunge_active(player)
+        if miri_claws_are_active and trigger_held and not miri_field_treatment_active(player):
+            perform_miri_claw_attack(
+                player,
+                aim_angle,
+                actors,
+                active_obstacles,
+            )
         if varek_blade_is_active and trigger_held:
             blade_geometry_changed = perform_varek_blade_attack(
                 player,
@@ -6243,6 +7274,8 @@ def main():
             and active_weapon_state["shot_cooldown"] <= 0
             and not dead_line_blocks_weapon
             and not varek_blade_is_active
+            and not miri_blocks_weapon
+            and not relay_blocks_weapon
         )
         if can_fire:
             if active_weapon["fire_mode"] == "melee":
@@ -6312,6 +7345,8 @@ def main():
             and not active_weapon_state["reloading"]
             and active_weapon_state["magazine_ammo"] == 0
             and active_weapon_state["reserve_ammo"] > 0
+            and not miri_blocks_weapon
+            and not relay_blocks_weapon
         ):
             active_weapon_state["reloading"] = True
             active_weapon_state["reload_timer"] = active_weapon["reload_time"]
@@ -6553,6 +7588,8 @@ def main():
         draw_malphas_world_effects(screen, player, camera)
         draw_longshot_world_effects(screen, player, actors, camera)
         draw_varek_world_effects(screen, player, camera)
+        draw_miri_world_effects(screen, player, camera)
+        draw_relay_world_effects(screen, player, rift_state, camera)
 
         # Bots and bullets retain exact partial visibility, but only their
         # small bounding surfaces are multiplied by the visibility mask.
@@ -6587,6 +7624,7 @@ def main():
             active_weapon["fire_mode"] == "melee"
             and actor_can_fight(player)
             and not varek_blade_active(player)
+            and not miri_feline_lunge_active(player)
         ):
             draw_knife(
                 screen,
@@ -6668,7 +7706,12 @@ def main():
                 ),
             )
 
-        if player_can_act:
+        if (
+            player_can_act
+            and not miri_field_treatment_active(player)
+            and not miri_nine_lives_active(player)
+            and not relay_blocks_weapon
+        ):
             draw_crosshair(screen, pygame.mouse.get_pos(), current_spread)
         draw_buy_phase(
             screen,
@@ -6692,6 +7735,7 @@ def main():
             ammunition_font,
             match_state,
         )
+        draw_relay_teleport_selector(screen, ammunition_font, player)
         if paused:
             draw_pause_menu(
                 screen,
