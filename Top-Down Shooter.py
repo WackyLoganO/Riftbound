@@ -1,3 +1,4 @@
+import heapq
 import math
 import random
 
@@ -62,7 +63,7 @@ PISTOL = {
     "running_spread": 0.10,
     "sustained_spread_per_shot": 0.0,
     "maximum_sustained_spread": 0.0,
-    "tap_camera_shake": 3.0,
+    "tap_camera_shake": 5.0,
     "sustained_camera_kick": 0.0,
     "sustained_camera_sway": 0.0,
 }
@@ -83,11 +84,11 @@ RIFLE = {
     "standing_spread": 0.02,
     "walking_spread": 0.05,
     "running_spread": 0.09,
-    "sustained_spread_per_shot": 0.007,
-    "maximum_sustained_spread": 0.05,
-    "tap_camera_shake": 4.0,
-    "sustained_camera_kick": 135.0,
-    "sustained_camera_sway": 70.0,
+    "sustained_spread_per_shot": 0.009,
+    "maximum_sustained_spread": 0.07,
+    "tap_camera_shake": 6.0,
+    "sustained_camera_kick": 155.0,
+    "sustained_camera_sway": 90.0,
 }
 
 SHOTGUN = {
@@ -111,14 +112,14 @@ SHOTGUN = {
     "running_spread": 0.24,
     "sustained_spread_per_shot": 0.0,
     "maximum_sustained_spread": 0.0,
-    "tap_camera_shake": 6.0,
+    "tap_camera_shake": 8.0,
     "sustained_camera_kick": 0.0,
     "sustained_camera_sway": 0.0,
 }
 
 WEAPONS = [KNIFE, PISTOL, RIFLE, SHOTGUN]
 
-CAMERA_RECOIL_SPRING = 90.0
+CAMERA_RECOIL_SPRING = 120.0
 CAMERA_RECOIL_DAMPING = 12.0
 CAMERA_SHAKE_DECAY_PER_SECOND = 32.0
 
@@ -285,12 +286,45 @@ RELAY = {
     "max_stamina": 100,
 }
 
+HAZE = {
+    "id": "haze",
+    "name": "Haze",
+    "class": "Phantom",
+    "max_health": 95,
+    "move_speed": 275,
+    "sprint_multiplier": 1.30,
+    "max_stamina": 100,
+}
+
+SABLE = {
+    "id": "sable",
+    "name": "Sable",
+    "class": "Hunter",
+    "max_health": 100,
+    "move_speed": 250,
+    "sprint_multiplier": 1.30,
+    "max_stamina": 120,
+}
+
+AUREL = {
+    "id": "aurel",
+    "name": "Aurel",
+    "class": "Breaker",
+    "max_health": 95,
+    "move_speed": 260,
+    "sprint_multiplier": 1.30,
+    "max_stamina": 110,
+}
+
 CHARACTER_ROSTER = [
     {**MALPHAS, "implemented": True},
     {**LONGSHOT, "implemented": True},
     {**VAREK, "implemented": True},
     {**MIRI, "implemented": True},
     {**RELAY, "implemented": True},
+    {**HAZE, "implemented": True},
+    {**SABLE, "implemented": True},
+    {**AUREL, "implemented": True},
 ]
 
 # Malphas - Phantom
@@ -305,7 +339,7 @@ MALPHAS_RUN_SOUND_RADIUS = 430
 MALPHAS_SOUND_MEMORY = 1.5
 
 MALPHAS_BLOODLUST_DURATION = 8.0
-MALPHAS_BLOODLUST_RADIUS = 340
+MALPHAS_BLOODLUST_RADIUS = 400
 MALPHAS_BLOODLUST_DRAIN_PER_SECOND = 6.0
 MALPHAS_BLOODLUST_HEAL_FRACTION = 0.30
 MALPHAS_BLOODLUST_ELIMINATION_HEALTH_FRACTION = 0.80
@@ -354,13 +388,14 @@ VAREK_ONI_BLADE_ARC_DEGREES = 100
 VAREK_ONI_BLADE_SECONDS_PER_SWING = 0.42
 VAREK_ONI_BLADE_ANIMATION_TIME = 0.20
 
-VAREK_BREACH_COOLDOWN = 11.0
-VAREK_BREACH_RANGE = 280
-VAREK_BREACH_ARC_DEGREES = 70
-VAREK_BREACH_DAMAGE = 25
-VAREK_BREACH_OBJECT_DAMAGE = 90
-VAREK_BREACH_PUSH_DISTANCE = 150
-VAREK_BREACH_EFFECT_DURATION = 0.28
+# Shared Breaker class ability. Breach Charge instantly destroys destructible
+# cover in its cone, damages only enemies, and physically pushes both teams.
+BREAKER_BREACH_COOLDOWN = 11.0
+BREAKER_BREACH_RANGE = 280
+BREAKER_BREACH_ARC_DEGREES = 70
+BREAKER_BREACH_DAMAGE = 25
+BREAKER_BREACH_PUSH_DISTANCE = 150
+BREAKER_BREACH_EFFECT_DURATION = 0.28
 
 VAREK_FURY_DURATION = 8.0
 VAREK_FURY_SPEED_MULTIPLIER = 1.30
@@ -429,6 +464,92 @@ RELAY_JOINT_COLOR = (75, 91, 104)
 RELAY_RIFT_COLOR = (168, 92, 235)
 RELAY_CORE_COLOR = (104, 188, 255)
 RELAY_BOOST_BULLET_COLOR = (190, 112, 255)
+
+# Haze - Phantom
+HAZE_HALLUCINATION_DURATION = 15.0
+HAZE_HALLUCINATION_COOLDOWN = 10.0
+HAZE_HALLUCINATION_SPEED = 250.0
+HAZE_HALLUCINATION_FADE_TIME = 1.25
+HAZE_CHILDS_PLAY_DURATION = 15.0
+HAZE_CHILDS_PLAY_ILLUSIONS_PER_ENEMY = 3
+HAZE_CHILD_ILLUSION_MOVE_SPEED = 72.0
+HAZE_SPRAY_MARK_DURATION = 10.0
+
+HAZE_BODY_COLOR = (73, 72, 79)
+HAZE_CLOAK_COLOR = (91, 88, 101)
+HAZE_SHADOW_COLOR = (19, 17, 27)
+HAZE_PURPLE_COLOR = (173, 78, 235)
+HAZE_GREEN_COLOR = (126, 255, 71)
+
+# Sable - Hunter
+SABLE_SCENT_RADIUS = 850
+SABLE_SCENT_DURATION = 3.0
+SABLE_SCENT_COOLDOWN = 10.0
+SABLE_SCENT_HEALTH_THRESHOLD = 0.70
+SABLE_DAMAGE_EVIDENCE_MEMORY = 2.5
+
+SABLE_WILD_HUNT_DURATION = 12.0
+SABLE_WILD_HUNT_SPEED_MULTIPLIER = 1.10
+SABLE_WILD_HUNT_KNIFE_DAMAGE = 50
+SABLE_WILD_HUNT_REVEAL_ON_HIT = 0.75
+SABLE_WILD_HUNT_VIEW_ANGLE_DEGREES = 25.0
+
+SABLE_HUNTING_KNIFE = {
+    "name": "Hunting Knife",
+    "fire_mode": "melee",
+    "damage": SABLE_WILD_HUNT_KNIFE_DAMAGE,
+    "melee_range": KNIFE["melee_range"],
+    "melee_arc_degrees": KNIFE["melee_arc_degrees"],
+    "seconds_per_shot": KNIFE["seconds_per_shot"],
+    "attack_animation_time": KNIFE["attack_animation_time"],
+}
+
+SABLE_BODY_COLOR = (94, 84, 58)
+SABLE_LEATHER_COLOR = (121, 91, 58)
+SABLE_HAIR_COLOR = (74, 51, 34)
+SABLE_WARPAINT_COLOR = (56, 120, 64)
+SABLE_TRACK_COLOR = (111, 189, 92)
+SABLE_CAMOUFLAGE_COLOR = (128, 158, 91)
+SABLE_KNIFE_COLOR = (214, 221, 210)
+
+
+# Aurel - Breaker
+AUREL_CINDERBOLT_COOLDOWN = 10.0
+AUREL_CINDERBOLT_SPEED = 1050.0
+AUREL_CINDERBOLT_PROJECTILE_RADIUS = 12
+AUREL_CINDERBOLT_EXPLOSION_RADIUS = 130
+AUREL_CINDERBOLT_IMPACT_DAMAGE = 15
+AUREL_CINDERBOLT_BURN_DURATION = 3.0
+AUREL_CINDERBOLT_BURN_MAX_HEALTH_PER_SECOND = 0.05
+AUREL_CINDERBOLT_PUSH_DISTANCE = 120
+AUREL_CINDERBOLT_OBJECT_DAMAGE = 65
+AUREL_CINDERBOLT_MAX_RANGE = VISION_MAX_DISTANCE
+AUREL_CINDERBOLT_EXPLOSION_VISUAL_TIME = 0.45
+
+AUREL_INFERNO_CHARGE_TIME = 2.0
+AUREL_INFERNO_RADIUS = 800
+AUREL_INFERNO_INITIAL_DAMAGE = 25
+AUREL_INFERNO_PUSH_DISTANCE = 300
+AUREL_INFERNO_BURN_DURATION = 6.0
+AUREL_INFERNO_BURN_MAX_HEALTH_PER_SECOND = 0.08
+AUREL_INFERNO_AFTEREFFECT_DURATION = 15.0
+AUREL_INFERNO_WEAPON_DAMAGE_MULTIPLIER = 1.15
+AUREL_INFERNO_EXPLOSION_VISUAL_TIME = 0.75
+
+AUREL_FIRE_TRAIL_LIFETIME = 5.0
+AUREL_FIRE_TRAIL_SPAWN_INTERVAL = 0.30
+AUREL_FIRE_TRAIL_RADIUS = 42
+AUREL_TRAIL_BURN_DURATION = 3.0
+AUREL_TRAIL_BURN_MAX_HEALTH_PER_SECOND = 0.05
+
+AUREL_BODY_COLOR = (236, 232, 219)
+AUREL_SUIT_COLOR = (245, 242, 228)
+AUREL_GOLD_COLOR = (222, 177, 72)
+AUREL_HAIR_COLOR = (248, 246, 236)
+AUREL_EYE_COLOR = (255, 210, 67)
+AUREL_FIRE_COLOR = (244, 92, 34)
+AUREL_FIRE_GOLD_COLOR = (255, 188, 46)
+AUREL_INFERNO_COLOR = (156, 24, 24)
 
 BACKGROUND_COLOR = (31, 37, 46)
 GRID_COLOR = (42, 49, 60)
@@ -530,6 +651,15 @@ BOT_ROUTES = [
         (2850, 1960),
     ],
 ]
+
+# Bot navigation uses a lightweight grid only when a route must be calculated.
+# The previous "best visible waypoint" system could select the waypoint a bot
+# was already standing on forever. A 100-pixel grid is small enough to search
+# quickly while still routing a full character-sized body around the laboratory.
+BOT_NAVIGATION_GRID_SIZE = 100
+BOT_NAVIGATION_REACHED_DISTANCE = 25
+BOT_NAVIGATION_REPATH_DISTANCE = 260
+BOT_NAVIGATION_TARGET_CHANGE_DISTANCE = 80
 
 
 def make_walls():
@@ -851,6 +981,47 @@ def make_character_ability_state(character_id):
             "rift_overclock_active": False,
             "rift_overclock_used": False,
         }
+    if character_id == HAZE["id"]:
+        return {
+            "hallucination_cooldown": 0.0,
+            "hallucination": None,
+            "hallucination_fades": [],
+            "silence_cooldown": 0.0,
+            "silence_remaining": 0.0,
+            "childs_play_remaining": 0.0,
+            "childs_play_used": False,
+            "childs_play_illusions": {},
+            "spray_marks": [],
+        }
+    if character_id == SABLE["id"]:
+        return {
+            "scent_cooldown": 0.0,
+            "scent_remaining": 0.0,
+            "scent_targets": [],
+            "track_cooldown": 0.0,
+            "track_remaining": 0.0,
+            "wild_hunt_remaining": 0.0,
+            "wild_hunt_used": False,
+            "wild_hunt_flicker_remaining": 0.0,
+            "hunt_attack_cooldown": 0.0,
+            "hunt_attack_animation_timer": 0.0,
+        }
+    if character_id == AUREL["id"]:
+        return {
+            "cinderbolt_cooldown": 0.0,
+            "cinderbolts": [],
+            "cinderbolt_explosions": [],
+            "breach_cooldown": 0.0,
+            "breach_effect_remaining": 0.0,
+            "breach_angle": 0.0,
+            "inferno_charge_remaining": 0.0,
+            "inferno_after_remaining": 0.0,
+            "inferno_used": False,
+            "inferno_explosion_effect_remaining": 0.0,
+            "fire_trail": [],
+            "fire_trail_spawn_timer": 0.0,
+            "fire_trail_last_position": None,
+        }
     return {}
 
 
@@ -866,6 +1037,12 @@ def get_playable_character(character_id):
         return MIRI
     if character_id == RELAY["id"]:
         return RELAY
+    if character_id == HAZE["id"]:
+        return HAZE
+    if character_id == SABLE["id"]:
+        return SABLE
+    if character_id == AUREL["id"]:
+        return AUREL
     return None
 
 
@@ -892,6 +1069,10 @@ def apply_character_to_actor(actor, character):
     actor["track_events"] = []
     actor["resonance_echo_remaining"] = 0.0
     actor["resonance_echo_position"] = None
+    actor["damaged_recent"] = 0.0
+    actor["burn_remaining"] = 0.0
+    actor["burn_fraction_per_second"] = 0.0
+    actor["burn_source"] = None
 
 
 def make_actor(
@@ -938,6 +1119,9 @@ def make_actor(
         "strafe_timer": random.uniform(0.7, 1.5),
         "route": [pygame.Vector2(point) for point in (route or [])],
         "route_index": 0,
+        "navigation_path": [],
+        "navigation_path_index": 0,
+        "navigation_target": None,
         "ability_state": make_character_ability_state(character_id),
         "movement_sound_radius": 0.0,
         "heard_position": None,
@@ -949,6 +1133,10 @@ def make_actor(
         "track_events": [],
         "resonance_echo_remaining": 0.0,
         "resonance_echo_position": None,
+        "damaged_recent": 0.0,
+        "burn_remaining": 0.0,
+        "burn_fraction_per_second": 0.0,
+        "burn_source": None,
     }
 
 
@@ -1003,6 +1191,9 @@ def reset_actor_for_round(actor):
     actor["aim_angle"] = 0.0
     actor["shot_cooldown"] = random.uniform(0.0, BOT_FIRE_INTERVAL)
     actor["route_index"] = 0
+    actor["navigation_path"] = []
+    actor["navigation_path_index"] = 0
+    actor["navigation_target"] = None
     actor["ability_state"] = make_character_ability_state(actor["character_id"])
     actor["movement_sound_radius"] = 0.0
     actor["heard_position"] = None
@@ -1014,6 +1205,10 @@ def reset_actor_for_round(actor):
     actor["track_events"] = []
     actor["resonance_echo_remaining"] = 0.0
     actor["resonance_echo_position"] = None
+    actor["damaged_recent"] = 0.0
+    actor["burn_remaining"] = 0.0
+    actor["burn_fraction_per_second"] = 0.0
+    actor["burn_source"] = None
 
 
 def make_weapon_state(weapon):
@@ -1355,6 +1550,25 @@ def move_player(position, movement, walls):
     return player_rect
 
 
+def push_actor_safely(actor, direction, distance, obstacles):
+    """Push a standing actor in small collision-safe steps so walls cannot be tunneled."""
+    if not actor_can_fight(actor):
+        return
+    direction = pygame.Vector2(direction)
+    if direction.length_squared() <= 0 or distance <= 0:
+        return
+    direction = direction.normalize()
+    remaining = float(distance)
+    max_step = 12.0
+    while remaining > 0:
+        step = min(max_step, remaining)
+        before = pygame.Vector2(actor["position"])
+        move_player(actor["position"], direction * step, obstacles)
+        if actor["position"].distance_squared_to(before) < 0.01:
+            break
+        remaining -= step
+
+
 def get_weapon_spread(weapon, movement_state):
     """Return the active weapon's spread for the current movement state."""
     if movement_state == "Running":
@@ -1362,6 +1576,29 @@ def get_weapon_spread(weapon, movement_state):
     if movement_state == "Walking":
         return weapon["walking_spread"]
     return weapon["standing_spread"]
+
+
+def aurel_inferno_after_active(actor):
+    """Return whether Aurel is in the 15-second post-explosion Inferno state."""
+    return (
+        actor.get("character_id") == AUREL["id"]
+        and actor.get("ability_state", {}).get("inferno_after_remaining", 0.0) > 0
+    )
+
+
+def aurel_inferno_charging(actor):
+    """Return whether Aurel is protected and locked in the three-second windup."""
+    return (
+        actor.get("character_id") == AUREL["id"]
+        and actor.get("ability_state", {}).get("inferno_charge_remaining", 0.0) > 0
+    )
+
+
+def get_weapon_damage_multiplier(actor):
+    """Return character-specific multipliers that apply to ordinary weapons."""
+    if aurel_inferno_after_active(actor):
+        return AUREL_INFERNO_WEAPON_DAMAGE_MULTIPLIER
+    return 1.0
 
 
 def create_bullet(
@@ -1389,6 +1626,7 @@ def create_bullet(
     record_track_event(shooter, "fire")
 
     bullet_damage = weapon["damage"] if damage_override is None else damage_override
+    bullet_damage *= get_weapon_damage_multiplier(shooter)
     rift_boosted = False
     if shooter.get("character_id") == RELAY["id"]:
         relay_state = shooter.get("ability_state", {})
@@ -1581,6 +1819,34 @@ def down_or_eliminate_actor(actor):
         ability_state["rift_teleport_quadrant"] = None
         ability_state["rift_teleport_remaining"] = 0.0
         ability_state["rift_overclock_active"] = False
+    if "hallucination_cooldown" in ability_state:
+        ability_state["silence_remaining"] = 0.0
+        ability_state["hallucination"] = None
+        ability_state["hallucination_fades"] = []
+        ability_state["childs_play_remaining"] = 0.0
+        ability_state["childs_play_illusions"] = {}
+    if "scent_cooldown" in ability_state:
+        ability_state["scent_remaining"] = 0.0
+        ability_state["scent_targets"] = []
+        ability_state["track_remaining"] = 0.0
+        ability_state["wild_hunt_remaining"] = 0.0
+        ability_state["wild_hunt_flicker_remaining"] = 0.0
+        ability_state["hunt_attack_cooldown"] = 0.0
+        ability_state["hunt_attack_animation_timer"] = 0.0
+    if "cinderbolt_cooldown" in ability_state:
+        ability_state["cinderbolts"] = []
+        ability_state["cinderbolt_explosions"] = []
+        ability_state["breach_effect_remaining"] = 0.0
+        ability_state["inferno_charge_remaining"] = 0.0
+        ability_state["inferno_after_remaining"] = 0.0
+        ability_state["inferno_explosion_effect_remaining"] = 0.0
+        ability_state["fire_trail"] = []
+        ability_state["fire_trail_spawn_timer"] = 0.0
+        ability_state["fire_trail_last_position"] = None
+
+    actor["burn_remaining"] = 0.0
+    actor["burn_fraction_per_second"] = 0.0
+    actor["burn_source"] = None
 
     if actor["times_downed"] >= 2:
         actor["downed"] = False
@@ -1624,14 +1890,34 @@ def varek_blade_active(actor):
     return state.get("oni_blade_remaining", 0.0) > 0 or state.get("fury_remaining", 0.0) > 0
 
 
+def sable_wild_hunt_active(actor):
+    """Return whether Sable is currently camouflaged in Wild Hunt."""
+    return (
+        actor.get("character_id") == SABLE["id"]
+        and actor.get("ability_state", {}).get("wild_hunt_remaining", 0.0) > 0
+    )
+
+
 def damage_actor(target, damage, attacker=None):
     """Damage an actor and apply character-specific on-hit/elimination effects."""
     if not target["alive"] or target["downed"] or target["eliminated"]:
+        return 0.0, False
+    if aurel_inferno_charging(target):
         return 0.0, False
 
     damage = max(0.0, float(damage))
     damage_done = min(float(target["health"]), damage)
     target["health"] = max(0.0, float(target["health"]) - damage_done)
+    if damage_done > 0:
+        target["damaged_recent"] = max(
+            target.get("damaged_recent", 0.0),
+            SABLE_DAMAGE_EVIDENCE_MEMORY,
+        )
+        if sable_wild_hunt_active(target):
+            target["ability_state"]["wild_hunt_flicker_remaining"] = max(
+                target["ability_state"].get("wild_hunt_flicker_remaining", 0.0),
+                SABLE_WILD_HUNT_REVEAL_ON_HIT,
+            )
     eliminated_before = target["eliminated"]
 
     if target["health"] <= 0:
@@ -1675,6 +1961,59 @@ def damage_actor(target, damage, attacker=None):
     return damage_done, eliminated_now
 
 
+def apply_burn(target, duration, max_health_fraction_per_second, source=None):
+    """Apply one burn; equal burns refresh, stronger burns replace, burns never stack."""
+    if not actor_can_fight(target):
+        return False
+
+    duration = float(duration)
+    new_fraction = float(max_health_fraction_per_second)
+    current_fraction = target.get("burn_fraction_per_second", 0.0)
+    current_remaining = target.get("burn_remaining", 0.0)
+
+    if current_remaining <= 0 or new_fraction > current_fraction:
+        target["burn_remaining"] = duration
+        target["burn_fraction_per_second"] = new_fraction
+        target["burn_source"] = source
+    elif abs(new_fraction - current_fraction) <= 0.000001:
+        target["burn_remaining"] = max(duration, current_remaining)
+        target["burn_source"] = source
+    # A weaker fire source cannot extend a stronger active burn. If the weaker
+    # source is still present after the stronger burn expires, it can apply then.
+    return True
+
+
+def update_burn_effects(actors, delta_time):
+    """Tick active burns. Repeated fire refreshes the burn instead of stacking it."""
+    for actor in actors:
+        remaining = actor.get("burn_remaining", 0.0)
+        if remaining <= 0:
+            continue
+        if not actor_can_fight(actor):
+            actor["burn_remaining"] = 0.0
+            actor["burn_fraction_per_second"] = 0.0
+            actor["burn_source"] = None
+            continue
+
+        tick_time = min(delta_time, remaining)
+        fraction_per_second = actor.get("burn_fraction_per_second", 0.0)
+        source = actor.get("burn_source")
+        damage_actor(
+            actor,
+            actor["max_health"] * fraction_per_second * tick_time,
+            source,
+        )
+        if not actor_can_fight(actor):
+            actor["burn_remaining"] = 0.0
+            actor["burn_fraction_per_second"] = 0.0
+            actor["burn_source"] = None
+            continue
+        actor["burn_remaining"] = max(0.0, remaining - delta_time)
+        if actor["burn_remaining"] <= 0:
+            actor["burn_fraction_per_second"] = 0.0
+            actor["burn_source"] = None
+
+
 def actor_position_is_clear(position, obstacles):
     """Return whether a character-sized body can safely occupy this world point."""
     radius = PLAYER_SIZE / 2
@@ -1716,11 +2055,13 @@ def try_activate_hellstep(player, target_position, obstacles):
 
 
 def try_activate_silence(player):
-    """Suppress Malphas's movement sound for a short duration."""
-    if player.get("character_id") != MALPHAS["id"]:
+    """Activate the shared Phantom class ability that suppresses movement sound."""
+    if player.get("character_class") != "Phantom":
         return False, "SILENCE UNAVAILABLE"
 
     state = player["ability_state"]
+    if "silence_remaining" not in state:
+        return False, "SILENCE UNAVAILABLE"
     if state["silence_remaining"] > 0:
         return False, "SILENCE ALREADY ACTIVE"
     if state["silence_cooldown"] > 0:
@@ -1728,6 +2069,8 @@ def try_activate_silence(player):
 
     state["silence_remaining"] = MALPHAS_SILENCE_DURATION
     state["silence_cooldown"] = MALPHAS_SILENCE_COOLDOWN
+    if player.get("character_id") == HAZE["id"]:
+        add_haze_spray_mark(player)
     return True, "SILENCE ACTIVE"
 
 
@@ -1803,14 +2146,366 @@ def update_malphas_abilities(player, actors, obstacles, delta_time):
     return teleported
 
 
+def add_haze_spray_mark(player):
+    """Leave a temporary neon graffiti marker where Haze activated an ability."""
+    if player.get("character_id") != HAZE["id"]:
+        return
+    state = player.get("ability_state", {})
+    marks = state.setdefault("spray_marks", [])
+    marks.append(
+        {
+            "position": pygame.Vector2(player["position"]),
+            "remaining": HAZE_SPRAY_MARK_DURATION,
+            "rotation": random.uniform(0.0, math.tau),
+        }
+    )
+    if len(marks) > 10:
+        del marks[:-10]
+
+
+def haze_hallucination_active(actor):
+    """Return whether Haze currently owns a shootable Q duplicate."""
+    if actor.get("character_id") != HAZE["id"]:
+        return False
+    decoy = actor.get("ability_state", {}).get("hallucination")
+    return (
+        decoy is not None
+        and decoy.get("remaining", 0.0) > 0
+        and decoy.get("health", 0.0) > 0
+    )
+
+
+def finish_haze_hallucination(player):
+    """Turn Haze's active Q duplicate into a short visual fade."""
+    state = player.get("ability_state", {})
+    decoy = state.get("hallucination")
+    if decoy is None:
+        return
+    faded = dict(decoy)
+    faded["position"] = pygame.Vector2(decoy["position"])
+    faded["fade_remaining"] = HAZE_HALLUCINATION_FADE_TIME
+    state.setdefault("hallucination_fades", []).append(faded)
+    state["hallucination_fades"] = state["hallucination_fades"][-3:]
+    state["hallucination"] = None
+
+
+def try_activate_hallucination(player):
+    """Create Haze's forward-walking duplicate at his current position."""
+    if player.get("character_id") != HAZE["id"]:
+        return False, "HALLUCINATION UNAVAILABLE"
+
+    state = player["ability_state"]
+    if state["hallucination_cooldown"] > 0:
+        return False, f"HALLUCINATION COOLDOWN {state['hallucination_cooldown']:.1f}s"
+
+    if state.get("hallucination") is not None:
+        finish_haze_hallucination(player)
+
+    state["hallucination"] = {
+        "position": pygame.Vector2(player["position"]),
+        "health": float(player["max_health"]),
+        "max_health": float(player["max_health"]),
+        "remaining": HAZE_HALLUCINATION_DURATION,
+        "aim_angle": float(player.get("aim_angle", 0.0)),
+        "stopped": False,
+    }
+    state["hallucination_cooldown"] = HAZE_HALLUCINATION_COOLDOWN
+    add_haze_spray_mark(player)
+    return True, "HALLUCINATION DEPLOYED"
+
+
+def damage_haze_hallucination(player, damage):
+    """Damage Haze's Q duplicate without creating a down/elimination event."""
+    if not haze_hallucination_active(player):
+        return False
+    state = player["ability_state"]
+    decoy = state["hallucination"]
+    decoy["health"] = max(0.0, decoy["health"] - max(0.0, float(damage)))
+    if decoy["health"] <= 0:
+        finish_haze_hallucination(player)
+    return True
+
+
+def get_haze_hallucination_targets(team, actors):
+    """Return shootable enemy Q duplicates as lightweight actor-like targets."""
+    targets = []
+    for actor in actors:
+        if actor.get("team") == team or not haze_hallucination_active(actor):
+            continue
+        decoy = actor["ability_state"]["hallucination"]
+        targets.append(
+            {
+                "position": decoy["position"],
+                "team": actor["team"],
+                "alive": True,
+                "downed": False,
+                "eliminated": False,
+                "is_haze_hallucination": True,
+                "haze_owner": actor,
+            }
+        )
+    return targets
+
+
+def make_haze_childs_play_illusion(victim, source_actor, obstacles):
+    """Create one false living-team target near cover around an affected enemy."""
+    victim_position = victim["position"]
+    nearby_cover = []
+    for obstacle in obstacles:
+        cover_center = pygame.Vector2(obstacle.center)
+        distance = victim_position.distance_to(cover_center)
+        if 120 <= distance <= 650:
+            nearby_cover.append(obstacle)
+
+    random.shuffle(nearby_cover)
+    for obstacle in nearby_cover[:20]:
+        cover_center = pygame.Vector2(obstacle.center)
+        away = cover_center - victim_position
+        if away.length_squared() == 0:
+            continue
+        away = away.normalize()
+        side = pygame.Vector2(-away.y, away.x)
+        half_extent = max(obstacle.width, obstacle.height) * 0.55
+        for jitter in (0.0, 32.0, -32.0, 62.0, -62.0):
+            candidate = (
+                cover_center
+                + away * (half_extent + ACTOR_RADIUS + 18)
+                + side * jitter
+            )
+            if actor_position_is_clear(candidate, obstacles):
+                move_direction = side * random.choice((-1, 1))
+                return {
+                    "position": candidate,
+                    "anchor": pygame.Vector2(candidate),
+                    "move_direction": move_direction,
+                    "source_name": source_actor["name"],
+                    "source_character_id": source_actor.get("character_id"),
+                    "source_character_name": source_actor.get("character_name", source_actor["name"]),
+                    "source_character_class": source_actor.get("character_class", "Soldier"),
+                    "source_max_health": source_actor.get("max_health", ACTOR_MAX_HEALTH),
+                    "source_health": source_actor.get("health", ACTOR_MAX_HEALTH),
+                    "aim_angle": math.atan2(
+                        victim_position.y - candidate.y,
+                        victim_position.x - candidate.x,
+                    ),
+                    "motion_timer": random.uniform(0.8, 1.6),
+                }
+
+    for _ in range(80):
+        angle = random.uniform(0.0, math.tau)
+        distance = random.uniform(220.0, 520.0)
+        candidate = victim_position + pygame.Vector2(
+            math.cos(angle), math.sin(angle)
+        ) * distance
+        if not actor_position_is_clear(candidate, obstacles):
+            continue
+        move_direction = pygame.Vector2(-math.sin(angle), math.cos(angle))
+        return {
+            "position": candidate,
+            "anchor": pygame.Vector2(candidate),
+            "move_direction": move_direction * random.choice((-1, 1)),
+            "source_name": source_actor["name"],
+            "source_character_id": source_actor.get("character_id"),
+            "source_character_name": source_actor.get("character_name", source_actor["name"]),
+            "source_character_class": source_actor.get("character_class", "Soldier"),
+            "source_max_health": source_actor.get("max_health", ACTOR_MAX_HEALTH),
+            "source_health": source_actor.get("health", ACTOR_MAX_HEALTH),
+            "aim_angle": math.atan2(
+                victim_position.y - candidate.y,
+                victim_position.x - candidate.x,
+            ),
+            "motion_timer": random.uniform(0.8, 1.6),
+        }
+    return None
+
+
+def update_haze_child_illusion(illusion, victim, obstacles, delta_time):
+    """Make one Child's Play illusion strafe and peek around its nearby cover."""
+    illusion["motion_timer"] -= delta_time
+    if illusion["motion_timer"] <= 0:
+        illusion["move_direction"] *= -1
+        illusion["motion_timer"] = random.uniform(0.8, 1.6)
+
+    move_direction = illusion["move_direction"]
+    if move_direction.length_squared() > 0:
+        movement = move_direction.normalize() * HAZE_CHILD_ILLUSION_MOVE_SPEED * delta_time
+        candidate = pygame.Vector2(illusion["position"]) + movement
+        if (
+            candidate.distance_to(illusion["anchor"]) <= 80
+            and actor_position_is_clear(candidate, obstacles)
+        ):
+            illusion["position"].update(candidate)
+        else:
+            illusion["move_direction"] *= -1
+
+    aim_vector = victim["position"] - illusion["position"]
+    if aim_vector.length_squared() > 0:
+        illusion["aim_angle"] = math.atan2(aim_vector.y, aim_vector.x)
+
+
+def sync_haze_childs_play_illusions(player, actors, obstacles, delta_time):
+    """Keep three false targets per living enemy, copied only from living allies."""
+    state = player["ability_state"]
+    illusion_sets = state.setdefault("childs_play_illusions", {})
+    living_sources = [
+        actor
+        for actor in actors
+        if actor["team"] == player["team"] and actor_can_fight(actor)
+    ]
+    living_names = {actor["name"] for actor in living_sources}
+    victims = [
+        actor
+        for actor in actors
+        if actor["team"] != player["team"] and actor_can_fight(actor)
+    ]
+    victim_names = {actor["name"] for actor in victims}
+
+    for victim_name in list(illusion_sets):
+        if victim_name not in victim_names:
+            del illusion_sets[victim_name]
+
+    if not living_sources:
+        illusion_sets.clear()
+        return
+
+    source_by_name = {actor["name"]: actor for actor in living_sources}
+    for victim in victims:
+        current = [
+            illusion
+            for illusion in illusion_sets.get(victim["name"], [])
+            if illusion.get("source_name") in living_names
+        ]
+
+        while len(current) < HAZE_CHILDS_PLAY_ILLUSIONS_PER_ENEMY:
+            source = random.choice(living_sources)
+            illusion = make_haze_childs_play_illusion(victim, source, obstacles)
+            if illusion is None:
+                break
+            current.append(illusion)
+
+        current = current[:HAZE_CHILDS_PLAY_ILLUSIONS_PER_ENEMY]
+        for illusion in current:
+            source = source_by_name.get(illusion.get("source_name"))
+            if source is not None:
+                illusion["source_health"] = source.get("health", illusion["source_health"])
+                illusion["source_max_health"] = source.get("max_health", illusion["source_max_health"])
+            update_haze_child_illusion(illusion, victim, obstacles, delta_time)
+        illusion_sets[victim["name"]] = current
+
+
+def try_activate_childs_play(player, actors, obstacles):
+    """Distort every living enemy's perception with false living-team copies."""
+    if player.get("character_id") != HAZE["id"]:
+        return False, "CHILD'S PLAY UNAVAILABLE"
+
+    state = player["ability_state"]
+    if state["childs_play_remaining"] > 0:
+        return False, "CHILD'S PLAY ALREADY ACTIVE"
+    if state["childs_play_used"]:
+        return False, "CHILD'S PLAY USED THIS ROUND"
+
+    state["childs_play_remaining"] = HAZE_CHILDS_PLAY_DURATION
+    state["childs_play_used"] = True
+    state["childs_play_illusions"] = {}
+    sync_haze_childs_play_illusions(player, actors, obstacles, 0.0)
+    add_haze_spray_mark(player)
+    return True, "CHILD'S PLAY ACTIVE"
+
+
+def update_haze_abilities(player, actors, obstacles, delta_time):
+    """Advance Haze's Q, shared Silence timers, graffiti, and ultimate illusions."""
+    if player.get("character_id") != HAZE["id"]:
+        return
+
+    state = player["ability_state"]
+    state["hallucination_cooldown"] = max(
+        0.0, state["hallucination_cooldown"] - delta_time
+    )
+    state["silence_cooldown"] = max(0.0, state["silence_cooldown"] - delta_time)
+    state["silence_remaining"] = max(0.0, state["silence_remaining"] - delta_time)
+
+    for mark in state.get("spray_marks", []):
+        mark["remaining"] -= delta_time
+    state["spray_marks"] = [
+        mark for mark in state.get("spray_marks", []) if mark["remaining"] > 0
+    ]
+
+    for faded in state.get("hallucination_fades", []):
+        faded["fade_remaining"] -= delta_time
+    state["hallucination_fades"] = [
+        faded
+        for faded in state.get("hallucination_fades", [])
+        if faded["fade_remaining"] > 0
+    ]
+
+    decoy = state.get("hallucination")
+    if decoy is not None:
+        decoy["remaining"] = max(0.0, decoy["remaining"] - delta_time)
+        if decoy["remaining"] <= 0 or decoy["health"] <= 0:
+            finish_haze_hallucination(player)
+        elif not decoy["stopped"]:
+            direction = pygame.Vector2(
+                math.cos(decoy["aim_angle"]), math.sin(decoy["aim_angle"])
+            )
+            total_movement = direction * HAZE_HALLUCINATION_SPEED * delta_time
+            step_count = max(1, math.ceil(total_movement.length() / 8.0))
+            step = total_movement / step_count
+            for _ in range(step_count):
+                candidate = pygame.Vector2(decoy["position"]) + step
+                if not actor_position_is_clear(candidate, obstacles):
+                    decoy["stopped"] = True
+                    break
+                decoy["position"].update(candidate)
+
+    if state["childs_play_remaining"] > 0:
+        state["childs_play_remaining"] = max(
+            0.0, state["childs_play_remaining"] - delta_time
+        )
+        if state["childs_play_remaining"] <= 0:
+            state["childs_play_illusions"] = {}
+        else:
+            sync_haze_childs_play_illusions(player, actors, obstacles, delta_time)
+
+
+def get_haze_false_targets_for_bot(bot, actors, walls):
+    """Return Haze Q/X targets that this enemy bot currently believes are real."""
+    targets = []
+    for target in get_haze_hallucination_targets(bot["team"], actors):
+        if is_actor_visible(bot["position"], target, walls):
+            targets.append(target)
+
+    for haze_actor in actors:
+        if haze_actor.get("character_id") != HAZE["id"] or haze_actor["team"] == bot["team"]:
+            continue
+        state = haze_actor.get("ability_state", {})
+        if state.get("childs_play_remaining", 0.0) <= 0:
+            continue
+        for illusion in state.get("childs_play_illusions", {}).get(bot["name"], []):
+            proxy = {
+                "position": illusion["position"],
+                "team": haze_actor["team"],
+                "alive": True,
+                "downed": False,
+                "eliminated": False,
+                "is_haze_child_illusion": True,
+                "haze_owner": haze_actor,
+            }
+            if is_actor_visible(bot["position"], proxy, walls):
+                targets.append(proxy)
+    return targets
+
+
 def update_player_movement_sound(player, movement_state):
-    """Expose Malphas movement noise to bot hearing unless Silence is active."""
-    if player.get("character_id") != MALPHAS["id"]:
+    """Expose Phantom movement noise, while Wild Hunt remains fully silent."""
+    if sable_wild_hunt_active(player):
+        player["movement_sound_radius"] = 0.0
+        return
+    if player.get("character_class") != "Phantom":
         player["movement_sound_radius"] = 0.0
         return
 
     state = player["ability_state"]
-    if state["silence_remaining"] > 0:
+    if state.get("silence_remaining", 0.0) > 0:
         player["movement_sound_radius"] = 0.0
     elif movement_state == "Running":
         player["movement_sound_radius"] = MALPHAS_RUN_SOUND_RADIUS
@@ -1852,6 +2547,9 @@ def update_actor_activity_tracking(actors, delta_time):
         )
         actor["fired_recent"] = max(
             0.0, actor.get("fired_recent", 0.0) - delta_time
+        )
+        actor["damaged_recent"] = max(
+            0.0, actor.get("damaged_recent", 0.0) - delta_time
         )
         actor["resonance_echo_remaining"] = max(
             0.0, actor.get("resonance_echo_remaining", 0.0) - delta_time
@@ -1907,11 +2605,13 @@ def try_activate_resonance_sweep(player, actors):
 
 
 def try_activate_track(player):
-    """Temporarily expose recent enemy movement and interaction markers."""
-    if player.get("character_id") != LONGSHOT["id"]:
+    """Activate the shared Hunter class ability that exposes recent enemy trails."""
+    if player.get("character_class") != "Hunter":
         return False, "TRACK UNAVAILABLE"
 
     state = player["ability_state"]
+    if "track_remaining" not in state:
+        return False, "TRACK UNAVAILABLE"
     if state["track_remaining"] > 0:
         return False, "TRACK ALREADY ACTIVE"
     if state["track_cooldown"] > 0:
@@ -2137,6 +2837,540 @@ def update_dead_line_weapon(
     return geometry_changed
 
 
+def sable_scent_evidence_exists(player, actor, obstacles):
+    """Require a visible or recently disturbed trail before Scent can find prey."""
+    if is_actor_visible(player["position"], actor, obstacles):
+        return True
+    if actor.get("fired_recent", 0.0) > 0 or actor.get("damaged_recent", 0.0) > 0:
+        return True
+    return any(event.get("remaining", 0.0) > 0 for event in actor.get("track_events", []))
+
+
+def sable_injury_label(actor):
+    """Return Sable's deliberately approximate wound description."""
+    fraction = actor["health"] / max(1.0, actor["max_health"])
+    if fraction <= 0.20:
+        return "CRITICAL"
+    if fraction <= 0.40:
+        return "WOUNDED"
+    return "INJURED"
+
+
+def sable_distance_label(distance):
+    """Convert exact world distance into a rough hunting-distance band."""
+    if distance <= SABLE_SCENT_RADIUS * 0.34:
+        return "NEAR"
+    if distance <= SABLE_SCENT_RADIUS * 0.67:
+        return "MID"
+    return "FAR"
+
+
+def sable_compass_label(vector):
+    """Reduce a direction vector to one of eight readable compass directions."""
+    if vector.length_squared() <= 0:
+        return "HERE"
+    angle = (math.degrees(math.atan2(-vector.y, vector.x)) + 360.0) % 360.0
+    names = ("E", "NE", "N", "NW", "W", "SW", "S", "SE")
+    return names[int((angle + 22.5) // 45.0) % 8]
+
+
+def try_activate_scent_of_blood(player, actors, obstacles):
+    """Sense wounded enemies only when Sable has recent evidence of their passage."""
+    if player.get("character_id") != SABLE["id"]:
+        return False, "SCENT OF BLOOD UNAVAILABLE"
+
+    state = player["ability_state"]
+    if state["scent_remaining"] > 0:
+        return False, "SCENT OF BLOOD ALREADY ACTIVE"
+    if state["scent_cooldown"] > 0:
+        return False, f"SCENT COOLDOWN {state['scent_cooldown']:.1f}s"
+
+    targets = []
+    for actor in actors:
+        if actor is player or actor["team"] == player["team"] or not actor_can_fight(actor):
+            continue
+        health_fraction = actor["health"] / max(1.0, actor["max_health"])
+        if health_fraction > SABLE_SCENT_HEALTH_THRESHOLD:
+            continue
+        if player["position"].distance_to(actor["position"]) > SABLE_SCENT_RADIUS:
+            continue
+        if not sable_scent_evidence_exists(player, actor, obstacles):
+            continue
+        targets.append(actor)
+
+    state["scent_targets"] = targets
+    state["scent_remaining"] = SABLE_SCENT_DURATION
+    state["scent_cooldown"] = SABLE_SCENT_COOLDOWN
+    return True, f"SCENT OF BLOOD - {len(targets)} PREY FOUND"
+
+
+def try_activate_wild_hunt(player):
+    """Begin Sable's once-per-round camouflage and hunting-knife ultimate."""
+    if player.get("character_id") != SABLE["id"]:
+        return False, "WILD HUNT UNAVAILABLE"
+
+    state = player["ability_state"]
+    if state["wild_hunt_remaining"] > 0:
+        return False, "WILD HUNT ALREADY ACTIVE"
+    if state["wild_hunt_used"]:
+        return False, "WILD HUNT USED THIS ROUND"
+
+    state["wild_hunt_remaining"] = SABLE_WILD_HUNT_DURATION
+    state["wild_hunt_used"] = True
+    state["wild_hunt_flicker_remaining"] = 0.0
+    state["hunt_attack_cooldown"] = 0.0
+    state["hunt_attack_animation_timer"] = 0.0
+    return True, "WILD HUNT ACTIVE"
+
+
+def update_sable_abilities(player, delta_time):
+    """Advance Sable's Scent, shared Track, camouflage, and knife timers."""
+    if player.get("character_id") != SABLE["id"]:
+        return
+
+    state = player["ability_state"]
+    state["scent_cooldown"] = max(0.0, state["scent_cooldown"] - delta_time)
+    state["scent_remaining"] = max(0.0, state["scent_remaining"] - delta_time)
+    if state["scent_remaining"] <= 0:
+        state["scent_targets"] = []
+    state["track_cooldown"] = max(0.0, state["track_cooldown"] - delta_time)
+    state["track_remaining"] = max(0.0, state["track_remaining"] - delta_time)
+    state["wild_hunt_remaining"] = max(0.0, state["wild_hunt_remaining"] - delta_time)
+    state["wild_hunt_flicker_remaining"] = max(
+        0.0, state["wild_hunt_flicker_remaining"] - delta_time
+    )
+    state["hunt_attack_cooldown"] = max(0.0, state["hunt_attack_cooldown"] - delta_time)
+    state["hunt_attack_animation_timer"] = max(
+        0.0, state["hunt_attack_animation_timer"] - delta_time
+    )
+
+
+def perform_sable_hunting_knife_attack(
+    player,
+    aim_angle,
+    actors,
+    obstacles,
+    destructible_objects,
+    bullet_marks,
+):
+    """Use the normal melee collision rules while Wild Hunt forces Sable's knife."""
+    if not sable_wild_hunt_active(player):
+        return False
+    state = player["ability_state"]
+    if state["hunt_attack_cooldown"] > 0:
+        return False
+
+    _, geometry_changed = perform_knife_attack(
+        player,
+        aim_angle,
+        SABLE_HUNTING_KNIFE,
+        actors,
+        obstacles,
+        destructible_objects,
+        bullet_marks,
+    )
+    state["hunt_attack_cooldown"] = SABLE_HUNTING_KNIFE["seconds_per_shot"]
+    state["hunt_attack_animation_timer"] = SABLE_HUNTING_KNIFE["attack_animation_time"]
+    return geometry_changed
+
+
+def sable_visible_to_bot(bot, actor, walls):
+    """Model Wild Hunt camouflage using each bot's current facing direction."""
+    if not sable_wild_hunt_active(actor):
+        return is_actor_visible(bot["position"], actor, walls)
+    if not is_actor_visible(bot["position"], actor, walls):
+        return False
+
+    state = actor.get("ability_state", {})
+    if state.get("wild_hunt_flicker_remaining", 0.0) > 0:
+        return True
+
+    offset = actor["position"] - bot["position"]
+    if offset.length_squared() <= 0:
+        return True
+    direction_to_sable = offset.normalize()
+    bot_forward = pygame.Vector2(math.cos(bot["aim_angle"]), math.sin(bot["aim_angle"]))
+    minimum_dot = math.cos(math.radians(SABLE_WILD_HUNT_VIEW_ANGLE_DEGREES))
+    return bot_forward.dot(direction_to_sable) >= minimum_dot
+
+
+def aurel_apply_cinderbolt_explosion(
+    player,
+    position,
+    actors,
+    walls,
+    destructible_objects,
+    bullet_marks,
+):
+    """Explode Cinderbolt: enemies burn, everyone is pushed, cover takes fire damage."""
+    center = pygame.Vector2(position)
+    obstacles_before = get_active_obstacle_rects(walls, destructible_objects)
+    geometry_changed = False
+
+    # Damage destructible cover first. Cinderbolt weakens cover but does not share
+    # Breach Charge's guaranteed-destruction rule.
+    for destructible in destructible_objects:
+        if destructible["destroyed"]:
+            continue
+        rectangle = destructible["rect"]
+        contact = pygame.Vector2(
+            max(rectangle.left, min(center.x, rectangle.right)),
+            max(rectangle.top, min(center.y, rectangle.bottom)),
+        )
+        if center.distance_to(contact) > AUREL_CINDERBOLT_EXPLOSION_RADIUS:
+            continue
+        if not has_line_of_sight(
+            center,
+            contact,
+            obstacles_before,
+            ignored_wall=rectangle,
+        ):
+            continue
+        destructible["health"] = max(
+            0.0,
+            destructible["health"] - AUREL_CINDERBOLT_OBJECT_DAMAGE,
+        )
+        if destructible["health"] <= 0:
+            destructible["destroyed"] = True
+            geometry_changed = True
+            bullet_marks[:] = [
+                mark for mark in bullet_marks if mark.get("wall") is not rectangle
+            ]
+
+    push_obstacles = get_active_obstacle_rects(walls, destructible_objects)
+    for actor in actors:
+        if not actor_can_fight(actor):
+            continue
+        offset = actor["position"] - center
+        distance = offset.length()
+        if distance > AUREL_CINDERBOLT_EXPLOSION_RADIUS:
+            continue
+        if not has_line_of_sight(center, actor["position"], obstacles_before):
+            continue
+
+        # Aurel's fire never damages his team or himself. The physical blast does.
+        if actor["team"] != player["team"]:
+            damage_actor(actor, AUREL_CINDERBOLT_IMPACT_DAMAGE, player)
+            apply_burn(
+                actor,
+                AUREL_CINDERBOLT_BURN_DURATION,
+                AUREL_CINDERBOLT_BURN_MAX_HEALTH_PER_SECOND,
+                player,
+            )
+
+        if offset.length_squared() > 0:
+            push_actor_safely(
+                actor,
+                offset.normalize(),
+                AUREL_CINDERBOLT_PUSH_DISTANCE,
+                push_obstacles,
+            )
+
+    return geometry_changed
+
+
+def try_activate_cinderbolt(player, aim_angle):
+    """Launch Aurel's visible ranged fireball."""
+    if player.get("character_id") != AUREL["id"]:
+        return False, "CINDERBOLT UNAVAILABLE"
+    if aurel_inferno_charging(player):
+        return False, "INFERNO CHARGING"
+
+    state = player["ability_state"]
+    if state["cinderbolt_cooldown"] > 0:
+        return False, f"CINDERBOLT COOLDOWN {state['cinderbolt_cooldown']:.1f}s"
+
+    direction = pygame.Vector2(math.cos(aim_angle), math.sin(aim_angle))
+    muzzle_distance = ACTOR_RADIUS + AUREL_CINDERBOLT_PROJECTILE_RADIUS + 10
+    state["cinderbolts"].append(
+        {
+            "position": pygame.Vector2(player["position"]) + direction * muzzle_distance,
+            "velocity": direction * AUREL_CINDERBOLT_SPEED,
+            "distance_traveled": 0.0,
+        }
+    )
+    state["cinderbolt_cooldown"] = AUREL_CINDERBOLT_COOLDOWN
+    return True, "CINDERBOLT LAUNCHED"
+
+
+def update_aurel_cinderbolts(
+    player,
+    actors,
+    walls,
+    destructible_objects,
+    bullet_marks,
+    delta_time,
+):
+    """Move Cinderbolts in small steps and detonate on the first solid contact."""
+    state = player["ability_state"]
+    surviving = []
+    geometry_changed = False
+
+    for bolt in state["cinderbolts"]:
+        total_movement = bolt["velocity"] * delta_time
+        step_length = max(4.0, AUREL_CINDERBOLT_PROJECTILE_RADIUS * 0.75)
+        step_count = max(1, math.ceil(total_movement.length() / step_length))
+        movement_step = total_movement / step_count
+        exploded = False
+
+        for _ in range(step_count):
+            previous_position = pygame.Vector2(bolt["position"])
+            bolt["position"] += movement_step
+            bolt["distance_traveled"] += movement_step.length()
+            center = bolt["position"]
+            projectile_rect = pygame.Rect(
+                round(center.x - AUREL_CINDERBOLT_PROJECTILE_RADIUS),
+                round(center.y - AUREL_CINDERBOLT_PROJECTILE_RADIUS),
+                AUREL_CINDERBOLT_PROJECTILE_RADIUS * 2,
+                AUREL_CINDERBOLT_PROJECTILE_RADIUS * 2,
+            )
+
+            hit_solid = any(projectile_rect.colliderect(wall) for wall in walls)
+            if not hit_solid:
+                hit_solid = any(
+                    not destructible["destroyed"]
+                    and projectile_rect.colliderect(destructible["rect"])
+                    for destructible in destructible_objects
+                )
+
+            hit_actor = False
+            if not hit_solid:
+                for actor in actors:
+                    if actor is player or not actor_can_fight(actor):
+                        continue
+                    if center.distance_to(actor["position"]) <= (
+                        ACTOR_RADIUS + AUREL_CINDERBOLT_PROJECTILE_RADIUS
+                    ):
+                        hit_actor = True
+                        break
+
+            reached_limit = bolt["distance_traveled"] >= AUREL_CINDERBOLT_MAX_RANGE
+            if hit_solid or hit_actor or reached_limit:
+                explosion_position = previous_position if hit_solid else center
+                geometry_changed = (
+                    aurel_apply_cinderbolt_explosion(
+                        player,
+                        explosion_position,
+                        actors,
+                        walls,
+                        destructible_objects,
+                        bullet_marks,
+                    )
+                    or geometry_changed
+                )
+                state["cinderbolt_explosions"].append(
+                    {
+                        "position": pygame.Vector2(explosion_position),
+                        "remaining": AUREL_CINDERBOLT_EXPLOSION_VISUAL_TIME,
+                    }
+                )
+                exploded = True
+                break
+
+        if not exploded:
+            surviving.append(bolt)
+
+    state["cinderbolts"] = surviving
+    return geometry_changed
+
+
+def try_activate_explosive_inferno(player):
+    """Begin Aurel's once-per-round invulnerable three-second ultimate windup."""
+    if player.get("character_id") != AUREL["id"]:
+        return False, "EXPLOSIVE INFERNO UNAVAILABLE"
+
+    state = player["ability_state"]
+    if state["inferno_charge_remaining"] > 0 or state["inferno_after_remaining"] > 0:
+        return False, "EXPLOSIVE INFERNO ALREADY ACTIVE"
+    if state["inferno_used"]:
+        return False, "EXPLOSIVE INFERNO USED THIS ROUND"
+
+    state["inferno_charge_remaining"] = AUREL_INFERNO_CHARGE_TIME
+    state["inferno_used"] = True
+    state["fire_trail_last_position"] = pygame.Vector2(player["position"])
+    return True, "EXPLOSIVE INFERNO CHARGING"
+
+
+def aurel_detonate_inferno(
+    player,
+    actors,
+    walls,
+    destructible_objects,
+    bullet_marks,
+):
+    """Release the wall-penetrating Inferno blast and start its 15-second aftermath."""
+    state = player["ability_state"]
+    center = pygame.Vector2(player["position"])
+    geometry_changed = False
+
+    # Inferno passes through permanent walls and annihilates every destructible
+    # piece of cover whose rectangle reaches the blast radius.
+    for destructible in destructible_objects:
+        if destructible["destroyed"]:
+            continue
+        rectangle = destructible["rect"]
+        contact = pygame.Vector2(
+            max(rectangle.left, min(center.x, rectangle.right)),
+            max(rectangle.top, min(center.y, rectangle.bottom)),
+        )
+        if center.distance_to(contact) > AUREL_INFERNO_RADIUS:
+            continue
+        destructible["health"] = 0
+        destructible["destroyed"] = True
+        geometry_changed = True
+        bullet_marks[:] = [
+            mark for mark in bullet_marks if mark.get("wall") is not rectangle
+        ]
+
+    # Destroyed cover no longer blocks the physical displacement, while permanent
+    # walls still stop bodies from being shoved through solid architecture.
+    push_obstacles = get_active_obstacle_rects(walls, destructible_objects)
+    for actor in actors:
+        if actor is player or not actor_can_fight(actor):
+            continue
+        offset = actor["position"] - center
+        distance = offset.length()
+        if distance > AUREL_INFERNO_RADIUS:
+            continue
+
+        # Allies receive only the force. Enemies receive damage + burn + force.
+        if actor["team"] != player["team"]:
+            damage_actor(actor, AUREL_INFERNO_INITIAL_DAMAGE, player)
+            apply_burn(
+                actor,
+                AUREL_INFERNO_BURN_DURATION,
+                AUREL_INFERNO_BURN_MAX_HEALTH_PER_SECOND,
+                player,
+            )
+
+        if offset.length_squared() > 0:
+            push_actor_safely(
+                actor,
+                offset.normalize(),
+                AUREL_INFERNO_PUSH_DISTANCE,
+                push_obstacles,
+            )
+
+    # Aurel remains precisely at the center: no self-damage, burn, or knockback.
+    state["inferno_after_remaining"] = AUREL_INFERNO_AFTEREFFECT_DURATION
+    state["inferno_explosion_effect_remaining"] = AUREL_INFERNO_EXPLOSION_VISUAL_TIME
+    state["fire_trail_spawn_timer"] = 0.0
+    state["fire_trail_last_position"] = pygame.Vector2(player["position"])
+    return geometry_changed
+
+
+def update_aurel_abilities(
+    player,
+    actors,
+    walls,
+    destructible_objects,
+    bullet_marks,
+    delta_time,
+):
+    """Advance Aurel's fireball, shared Breach timer, Inferno, burns, and fire trail."""
+    if player.get("character_id") != AUREL["id"]:
+        return None, False
+
+    state = player["ability_state"]
+    state["cinderbolt_cooldown"] = max(
+        0.0, state["cinderbolt_cooldown"] - delta_time
+    )
+    state["breach_cooldown"] = max(0.0, state["breach_cooldown"] - delta_time)
+    state["breach_effect_remaining"] = max(
+        0.0, state["breach_effect_remaining"] - delta_time
+    )
+    state["inferno_explosion_effect_remaining"] = max(
+        0.0, state["inferno_explosion_effect_remaining"] - delta_time
+    )
+
+    for explosion in state["cinderbolt_explosions"]:
+        explosion["remaining"] -= delta_time
+    state["cinderbolt_explosions"] = [
+        explosion
+        for explosion in state["cinderbolt_explosions"]
+        if explosion["remaining"] > 0
+    ]
+
+    geometry_changed = update_aurel_cinderbolts(
+        player,
+        actors,
+        walls,
+        destructible_objects,
+        bullet_marks,
+        delta_time,
+    )
+
+    message = None
+    if state["inferno_charge_remaining"] > 0:
+        previous = state["inferno_charge_remaining"]
+        state["inferno_charge_remaining"] = max(
+            0.0, previous - delta_time
+        )
+        if previous > 0 and state["inferno_charge_remaining"] <= 0:
+            geometry_changed = (
+                aurel_detonate_inferno(
+                    player,
+                    actors,
+                    walls,
+                    destructible_objects,
+                    bullet_marks,
+                )
+                or geometry_changed
+            )
+            message = "EXPLOSIVE INFERNO RELEASED"
+
+    if state["inferno_after_remaining"] > 0:
+        state["inferno_after_remaining"] = max(
+            0.0, state["inferno_after_remaining"] - delta_time
+        )
+        state["fire_trail_spawn_timer"] = max(
+            0.0, state["fire_trail_spawn_timer"] - delta_time
+        )
+
+        last_position = state.get("fire_trail_last_position")
+        if last_position is None:
+            last_position = pygame.Vector2(player["position"])
+        moved = player["position"].distance_squared_to(last_position) >= 8 * 8
+        if moved and state["fire_trail_spawn_timer"] <= 0:
+            state["fire_trail"].append(
+                {
+                    "position": pygame.Vector2(player["position"]),
+                    "remaining": AUREL_FIRE_TRAIL_LIFETIME,
+                }
+            )
+            state["fire_trail_spawn_timer"] = AUREL_FIRE_TRAIL_SPAWN_INTERVAL
+        state["fire_trail_last_position"] = pygame.Vector2(player["position"])
+
+    # Fire patches may outlive the 15-second damage buff briefly.
+    active_obstacles = get_active_obstacle_rects(walls, destructible_objects)
+    for patch in state["fire_trail"]:
+        patch["remaining"] -= delta_time
+        for actor in actors:
+            if (
+                actor["team"] == player["team"]
+                or not actor_can_fight(actor)
+                or actor["position"].distance_to(patch["position"]) > AUREL_FIRE_TRAIL_RADIUS
+            ):
+                continue
+            if not has_line_of_sight(
+                patch["position"],
+                actor["position"],
+                active_obstacles,
+            ):
+                continue
+            apply_burn(
+                actor,
+                AUREL_TRAIL_BURN_DURATION,
+                AUREL_TRAIL_BURN_MAX_HEALTH_PER_SECOND,
+                player,
+            )
+    state["fire_trail"] = [
+        patch for patch in state["fire_trail"] if patch["remaining"] > 0
+    ]
+
+    return message, geometry_changed
+
+
 def try_activate_oni_blade(player):
     """Draw Varek's Rift-forged katana for a short close-range attack window."""
     if player.get("character_id") != VAREK["id"]:
@@ -2169,11 +3403,15 @@ def try_activate_breach_charge(
     actors,
     bullet_marks,
 ):
-    """Blast a forward cone, damaging cover and pushing enemies away."""
-    if player.get("character_id") != VAREK["id"]:
+    """Use the shared Breaker cone: destroy cover, damage enemies, push everyone."""
+    if player.get("character_class") != "Breaker":
         return False, "BREACH CHARGE UNAVAILABLE", False
+    if aurel_inferno_charging(player):
+        return False, "INFERNO CHARGING", False
 
     state = player["ability_state"]
+    if "breach_cooldown" not in state:
+        return False, "BREACH CHARGE UNAVAILABLE", False
     if state["breach_cooldown"] > 0:
         return (
             False,
@@ -2182,17 +3420,19 @@ def try_activate_breach_charge(
         )
 
     forward = pygame.Vector2(math.cos(aim_angle), math.sin(aim_angle))
-    minimum_dot = get_cone_dot_threshold(VAREK_BREACH_ARC_DEGREES)
+    minimum_dot = get_cone_dot_threshold(BREAKER_BREACH_ARC_DEGREES)
     geometry_changed = False
     enemies_hit = 0
-    objects_hit = 0
+    allies_pushed = 0
+    objects_destroyed = 0
 
+    # The force of Breach Charge affects both teams, but friendly fire is disabled.
     for actor in actors:
-        if actor is player or actor["team"] == player["team"] or not actor_can_fight(actor):
+        if actor is player or not actor_can_fight(actor):
             continue
         offset = actor["position"] - player["position"]
         distance = offset.length()
-        if distance <= 0 or distance > VAREK_BREACH_RANGE:
+        if distance <= 0 or distance > BREAKER_BREACH_RANGE:
             continue
         direction = offset / distance
         if forward.dot(direction) < minimum_dot:
@@ -2200,14 +3440,21 @@ def try_activate_breach_charge(
         if not has_line_of_sight(player["position"], actor["position"], obstacles):
             continue
 
-        damage_actor(actor, VAREK_BREACH_DAMAGE, player)
-        move_player(
-            actor["position"],
-            direction * VAREK_BREACH_PUSH_DISTANCE,
+        if actor["team"] != player["team"]:
+            damage_actor(actor, BREAKER_BREACH_DAMAGE, player)
+            enemies_hit += 1
+        else:
+            allies_pushed += 1
+
+        push_actor_safely(
+            actor,
+            direction,
+            BREAKER_BREACH_PUSH_DISTANCE,
             obstacles,
         )
-        enemies_hit += 1
 
+    # Destructible cover no longer has a Breach damage value. If it is inside
+    # the class ability's cone and reachable from the caster, it is destroyed.
     for destructible in destructible_objects:
         if destructible["destroyed"]:
             continue
@@ -2218,7 +3465,7 @@ def try_activate_breach_charge(
         )
         offset = contact - player["position"]
         distance = offset.length()
-        if distance <= 0 or distance > VAREK_BREACH_RANGE:
+        if distance <= 0 or distance > BREAKER_BREACH_RANGE:
             continue
         direction = offset / distance
         if forward.dot(direction) < minimum_dot:
@@ -2231,24 +3478,23 @@ def try_activate_breach_charge(
         ):
             continue
 
-        destructible["health"] = max(
-            0,
-            destructible["health"] - VAREK_BREACH_OBJECT_DAMAGE,
-        )
-        objects_hit += 1
-        if destructible["health"] == 0:
-            destructible["destroyed"] = True
-            geometry_changed = True
-            bullet_marks[:] = [
-                mark for mark in bullet_marks if mark.get("wall") is not rectangle
-            ]
+        destructible["health"] = 0
+        destructible["destroyed"] = True
+        objects_destroyed += 1
+        geometry_changed = True
+        bullet_marks[:] = [
+            mark for mark in bullet_marks if mark.get("wall") is not rectangle
+        ]
 
-    state["breach_cooldown"] = VAREK_BREACH_COOLDOWN
-    state["breach_effect_remaining"] = VAREK_BREACH_EFFECT_DURATION
+    state["breach_cooldown"] = BREAKER_BREACH_COOLDOWN
+    state["breach_effect_remaining"] = BREAKER_BREACH_EFFECT_DURATION
     state["breach_angle"] = aim_angle
     return (
         True,
-        f"BREACH CHARGE - {enemies_hit} ENEMY / {objects_hit} COVER HIT",
+        (
+            f"BREACH CHARGE - {enemies_hit} ENEMY / "
+            f"{allies_pushed} ALLY PUSHED / {objects_destroyed} COVER DESTROYED"
+        ),
         geometry_changed,
     )
 
@@ -2864,11 +4110,12 @@ def perform_knife_attack(
         valid_targets,
         key=lambda candidate: candidate[0],
     )
+    weapon_damage = knife["damage"] * get_weapon_damage_multiplier(attacker)
     if target_type == "actor":
-        damage_actor(target, knife["damage"], attacker)
+        damage_actor(target, weapon_damage, attacker)
         return target, False
 
-    target["health"] = max(0, target["health"] - knife["damage"])
+    target["health"] = max(0, target["health"] - weapon_damage)
     if target["health"] == 0:
         target["destroyed"] = True
         target_rect = target["rect"]
@@ -2970,6 +4217,21 @@ def update_bullets(
 
                     bullet_removed = True
                     break
+
+            if not bullet_removed:
+                for decoy_target in get_haze_hallucination_targets(
+                    bullet["team"], actors
+                ):
+                    distance_to_decoy = bullet["position"].distance_to(
+                        decoy_target["position"]
+                    )
+                    if distance_to_decoy <= bullet["radius"] + ACTOR_RADIUS:
+                        hit_damage = calculate_bullet_damage(bullet)
+                        damage_haze_hallucination(
+                            decoy_target["haze_owner"], hit_damage
+                        )
+                        bullet_removed = True
+                        break
 
             if bullet_removed:
                 break
@@ -3210,55 +4472,161 @@ def get_bot_patrol_destination(bot):
     return destination
 
 
-def get_bot_rift_destination(bot, rift_state, walls):
-    """Choose a visible route point that advances the bot toward the Rift."""
-    rift_position = rift_state["position"]
-    if has_line_of_sight(bot["position"], rift_position, walls):
-        return rift_position
+def get_bot_navigation_cell_center(cell):
+    """Return the world-space center of one coarse navigation-grid cell."""
+    column, row = cell
+    half_cell = BOT_NAVIGATION_GRID_SIZE / 2
+    return pygame.Vector2(
+        min(WORLD_WIDTH - ACTOR_RADIUS, column * BOT_NAVIGATION_GRID_SIZE + half_cell),
+        min(WORLD_HEIGHT - ACTOR_RADIUS, row * BOT_NAVIGATION_GRID_SIZE + half_cell),
+    )
 
-    visible_waypoints = [
-        waypoint
-        for waypoint in bot["route"]
-        if has_line_of_sight(bot["position"], waypoint, walls)
-    ]
-    if not visible_waypoints:
-        return get_bot_patrol_destination(bot)
 
+def build_bot_walkable_grid(walls):
+    """Return grid cells whose centers safely fit a full character body."""
+    columns = math.ceil(WORLD_WIDTH / BOT_NAVIGATION_GRID_SIZE)
+    rows = math.ceil(WORLD_HEIGHT / BOT_NAVIGATION_GRID_SIZE)
+    walkable = set()
+    for row in range(rows):
+        for column in range(columns):
+            cell = (column, row)
+            if actor_position_is_clear(get_bot_navigation_cell_center(cell), walls):
+                walkable.add(cell)
+    return walkable
+
+
+def get_nearest_walkable_bot_cell(position, walkable_cells):
+    """Choose the clear navigation cell whose center is nearest a world point."""
+    if not walkable_cells:
+        return None
+    position = pygame.Vector2(position)
     return min(
-        visible_waypoints,
-        key=lambda waypoint: (
-            waypoint.distance_squared_to(rift_position)
-            + 0.20 * bot["position"].distance_squared_to(waypoint)
+        walkable_cells,
+        key=lambda cell: position.distance_squared_to(
+            get_bot_navigation_cell_center(cell)
         ),
     )
+
+
+def find_bot_navigation_path(start_position, target_position, walls):
+    """Find a cached four-direction A* path around the current collision map."""
+    walkable = build_bot_walkable_grid(walls)
+    start_cell = get_nearest_walkable_bot_cell(start_position, walkable)
+    goal_cell = get_nearest_walkable_bot_cell(target_position, walkable)
+    if start_cell is None or goal_cell is None:
+        return []
+    if start_cell == goal_cell:
+        return [get_bot_navigation_cell_center(start_cell)]
+
+    frontier = []
+    heapq.heappush(frontier, (0, start_cell))
+    came_from = {}
+    cost_so_far = {start_cell: 0}
+
+    while frontier:
+        _, current = heapq.heappop(frontier)
+        if current == goal_cell:
+            break
+
+        column, row = current
+        for neighbor in (
+            (column + 1, row),
+            (column - 1, row),
+            (column, row + 1),
+            (column, row - 1),
+        ):
+            if neighbor not in walkable:
+                continue
+            new_cost = cost_so_far[current] + 1
+            if new_cost >= cost_so_far.get(neighbor, float("inf")):
+                continue
+            cost_so_far[neighbor] = new_cost
+            came_from[neighbor] = current
+            heuristic = abs(neighbor[0] - goal_cell[0]) + abs(
+                neighbor[1] - goal_cell[1]
+            )
+            heapq.heappush(frontier, (new_cost + heuristic, neighbor))
+
+    if goal_cell not in cost_so_far:
+        return []
+
+    cell_path = [goal_cell]
+    while cell_path[-1] != start_cell:
+        parent = came_from.get(cell_path[-1])
+        if parent is None:
+            return []
+        cell_path.append(parent)
+    cell_path.reverse()
+    return [get_bot_navigation_cell_center(cell) for cell in cell_path]
+
+
+def clear_bot_navigation_path(bot):
+    """Forget a cached navigation path without changing the bot's patrol route."""
+    bot["navigation_path"] = []
+    bot["navigation_path_index"] = 0
+
+
+def get_bot_navigation_destination(bot, target_position, walls):
+    """Return the next cached A* waypoint toward a Rift or downed teammate."""
+    target_position = pygame.Vector2(target_position)
+    bot_position = bot["position"]
+
+    # Do not abandon the collision-aware route merely because the centers of the
+    # bot and target have line of sight. A center ray can squeeze past a corner
+    # that a 55-pixel character body cannot, which was another source of stalls.
+    # The cached grid route is followed until its final cell, then the bot makes
+    # the short direct approach to the exact target position.
+
+    cached_target = bot.get("navigation_target")
+    target_changed = (
+        cached_target is None
+        or pygame.Vector2(cached_target).distance_to(target_position)
+        > BOT_NAVIGATION_TARGET_CHANGE_DISTANCE
+    )
+    path = bot.get("navigation_path", [])
+    path_index = bot.get("navigation_path_index", 0)
+
+    # If combat dragged the bot far away from its old next cell, recalculate from
+    # the new position instead of trying to return to an obsolete route segment.
+    path_stale = False
+    if path and path_index < len(path):
+        next_position = pygame.Vector2(path[path_index])
+        if bot_position.distance_to(next_position) > BOT_NAVIGATION_REPATH_DISTANCE:
+            path_stale = True
+
+    if target_changed or not path or path_index >= len(path) or path_stale:
+        path = find_bot_navigation_path(bot_position, target_position, walls)
+        bot["navigation_path"] = path
+        bot["navigation_path_index"] = 0
+        bot["navigation_target"] = pygame.Vector2(target_position)
+        path_index = 0
+
+    if not path:
+        return get_bot_patrol_destination(bot)
+
+    # Move cell-by-cell. Crucially, the completed index is stored on the bot, so it
+    # can never repeatedly choose its current position as the next destination.
+    while path_index < len(path):
+        waypoint = pygame.Vector2(path[path_index])
+        if bot_position.distance_to(waypoint) > BOT_NAVIGATION_REACHED_DISTANCE:
+            break
+        path_index += 1
+
+    bot["navigation_path_index"] = path_index
+    if path_index < len(path):
+        return pygame.Vector2(path[path_index])
+
+    return target_position
+
+
+def get_bot_rift_destination(bot, rift_state, walls):
+    """Navigate toward the active Rift without getting trapped at a waypoint."""
+    return get_bot_navigation_destination(bot, rift_state["position"], walls)
 
 
 def get_bot_revival_destination(bot, downed_ally, walls):
-    """Choose a route point that leads a bot toward a downed teammate."""
-    target_position = downed_ally["position"]
-    if has_line_of_sight(bot["position"], target_position, walls):
-        return target_position
-
-    waypoint_pool = [
-        pygame.Vector2(point)
-        for route in BOT_ROUTES
-        for point in route
-    ]
-    visible_waypoints = [
-        waypoint
-        for waypoint in waypoint_pool
-        if has_line_of_sight(bot["position"], waypoint, walls)
-    ]
-    if not visible_waypoints:
-        return target_position
-
-    return min(
-        visible_waypoints,
-        key=lambda waypoint: (
-            waypoint.distance_squared_to(target_position)
-            + 0.20 * bot["position"].distance_squared_to(waypoint)
-        ),
-    )
+    """Use the same collision-aware navigation to reach a downed teammate."""
+    return get_bot_navigation_destination(bot, downed_ally["position"], walls)
 
 
 def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
@@ -3334,9 +4702,12 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
         and actor_can_fight(actor)
         and (
             team_has_rift_intel
-            or is_actor_visible(bot["position"], actor, walls)
+            or sable_visible_to_bot(bot, actor, walls)
         )
     ]
+    # The AI receives Haze's false targets through the same perception list as
+    # real enemies, so the deception is useful in the current single-player build.
+    visible_enemies.extend(get_haze_false_targets_for_bot(bot, actors, walls))
 
     if not visible_enemies:
         # Movement sound gives bots only a rough location to investigate. They
@@ -3402,11 +4773,17 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
 
     forward = target_vector.normalize()
     bot["aim_angle"] = math.atan2(forward.y, forward.x)
-    target_in_line_of_sight = is_actor_visible(
-        bot["position"],
-        target,
-        walls,
-    )
+    if (
+        target.get("character_id") == SABLE["id"]
+        and not team_has_rift_intel
+    ):
+        target_in_line_of_sight = sable_visible_to_bot(bot, target, walls)
+    else:
+        target_in_line_of_sight = is_actor_visible(
+            bot["position"],
+            target,
+            walls,
+        )
 
     if target_distance > BOT_PREFERRED_DISTANCE:
         move_player(bot["position"], forward * BOT_SPEED * delta_time, walls)
@@ -3838,6 +5215,9 @@ def draw_actor(screen, font, actor, camera):
     is_varek = actor.get("character_id") == VAREK["id"]
     is_miri = actor.get("character_id") == MIRI["id"]
     is_relay = actor.get("character_id") == RELAY["id"]
+    is_haze = actor.get("character_id") == HAZE["id"]
+    is_sable = actor.get("character_id") == SABLE["id"]
+    is_aurel = actor.get("character_id") == AUREL["id"]
     if is_malphas and not actor["downed"] and not actor["eliminated"]:
         fill_color = MALPHAS_BODY_COLOR
         # Keep the blue outer edge so the playable character still reads as
@@ -3854,6 +5234,15 @@ def draw_actor(screen, font, actor, camera):
         edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
     elif is_relay and not actor["downed"] and not actor["eliminated"]:
         fill_color = RELAY_BODY_COLOR
+        edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
+    elif is_haze and not actor["downed"] and not actor["eliminated"]:
+        fill_color = HAZE_BODY_COLOR
+        edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
+    elif is_sable and not actor["downed"] and not actor["eliminated"]:
+        fill_color = SABLE_BODY_COLOR
+        edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
+    elif is_aurel and not actor["downed"] and not actor["eliminated"]:
+        fill_color = AUREL_BODY_COLOR
         edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
 
     if actor["eliminated"]:
@@ -4059,11 +5448,127 @@ def draw_actor(screen, font, actor, camera):
         relay_state = actor.get("ability_state", {})
         if relay_state.get("rift_boost_bullets_remaining", 0) > 0:
             pygame.draw.circle(screen, RELAY_RIFT_COLOR, center_tuple, radius + 7, width=2)
+    elif is_sable:
+        # Wilderness Hunter placeholder: leather gear, short dark hair, green
+        # warpaint, and a compact silhouette suited to stalking through cover.
+        shoulder_left = center + side * 15 - facing * 4
+        shoulder_right = center - side * 15 - facing * 4
+        pygame.draw.line(screen, SABLE_LEATHER_COLOR, shoulder_left, shoulder_right, width=8)
+        hair_center = center + facing * 10
+        pygame.draw.circle(
+            screen, SABLE_HAIR_COLOR,
+            (round(hair_center.x), round(hair_center.y)), 14,
+        )
+        paint_center = center + facing * 13
+        pygame.draw.line(
+            screen, SABLE_WARPAINT_COLOR,
+            paint_center + side * 5 - facing * 2,
+            paint_center + side * 12 - facing * 2,
+            width=3,
+        )
+        pygame.draw.line(
+            screen, SABLE_WARPAINT_COLOR,
+            paint_center - side * 5 - facing * 2,
+            paint_center - side * 12 - facing * 2,
+            width=3,
+        )
+        if sable_wild_hunt_active(actor):
+            pulse = 3 + round(2 * math.sin(pygame.time.get_ticks() * 0.012))
+            pygame.draw.circle(
+                screen, SABLE_CAMOUFLAGE_COLOR, center_tuple, radius + 6 + pulse, width=2
+            )
+    elif is_aurel:
+        # Sleek elven fire-mage placeholder: pale suit, gold trim, flowing
+        # coattails, long white hair, and bright gold eyes.
+        shoulder_left = center + side * 14 - facing * 4
+        shoulder_right = center - side * 14 - facing * 4
+        pygame.draw.line(
+            screen, AUREL_SUIT_COLOR, shoulder_left, shoulder_right, width=8
+        )
+        coat_back = center - facing * 12
+        pygame.draw.line(
+            screen,
+            AUREL_GOLD_COLOR,
+            coat_back + side * 13,
+            center - facing * 34 + side * 18,
+            width=5,
+        )
+        pygame.draw.line(
+            screen,
+            AUREL_GOLD_COLOR,
+            coat_back - side * 13,
+            center - facing * 34 - side * 18,
+            width=5,
+        )
+        hair_center = center + facing * 8
+        pygame.draw.circle(
+            screen,
+            AUREL_HAIR_COLOR,
+            (round(hair_center.x), round(hair_center.y)),
+            13,
+        )
+        eye_center = center + facing * 13
+        pygame.draw.line(
+            screen,
+            AUREL_EYE_COLOR,
+            eye_center - side * 7,
+            eye_center + side * 7,
+            width=3,
+        )
+        pygame.draw.circle(screen, AUREL_GOLD_COLOR, center_tuple, 5)
+        if aurel_inferno_charging(actor):
+            pygame.draw.circle(
+                screen, AUREL_FIRE_GOLD_COLOR, center_tuple, radius + 9, width=3
+            )
+        elif aurel_inferno_after_active(actor):
+            pulse = 3 + round(2 * math.sin(pygame.time.get_ticks() * 0.014))
+            pygame.draw.circle(
+                screen, AUREL_FIRE_COLOR, center_tuple, radius + 6 + pulse, width=2
+            )
+    elif is_haze:
+        # Torn gray cloak, completely shadowed hood, and Rift-colored core.
+        cloak_back = center - facing * 15
+        cloak_left = cloak_back + side * 20
+        cloak_right = cloak_back - side * 20
+        cloak_tip = center - facing * 29
+        pygame.draw.polygon(
+            screen, HAZE_CLOAK_COLOR,
+            (center + facing * 12, cloak_left, cloak_tip, cloak_right),
+        )
+        hood_center = center + facing * 10
+        pygame.draw.circle(
+            screen, HAZE_CLOAK_COLOR,
+            (round(hood_center.x), round(hood_center.y)), 17,
+        )
+        hood_shadow = hood_center + facing * 3
+        pygame.draw.circle(
+            screen, HAZE_SHADOW_COLOR,
+            (round(hood_shadow.x), round(hood_shadow.y)), 11,
+        )
+        pygame.draw.circle(screen, HAZE_PURPLE_COLOR, center_tuple, 6)
+        pygame.draw.circle(screen, HAZE_GREEN_COLOR, center_tuple, 3)
     else:
         arrow_tip = center + facing * 34
         arrow_left = center - facing * 5 + side * 10
         arrow_right = center - facing * 5 - side * 10
         pygame.draw.polygon(screen, edge_color, (arrow_tip, arrow_left, arrow_right))
+
+    if actor.get("burn_remaining", 0.0) > 0:
+        flicker = 2 + round(2 * math.sin(pygame.time.get_ticks() * 0.025))
+        pygame.draw.circle(
+            screen,
+            AUREL_FIRE_COLOR,
+            center_tuple,
+            radius + 4 + flicker,
+            width=2,
+        )
+        flame_tip = center - pygame.Vector2(0, radius + 10 + flicker)
+        pygame.draw.circle(
+            screen,
+            AUREL_FIRE_GOLD_COLOR,
+            (round(flame_tip.x), round(flame_tip.y)),
+            4,
+        )
 
     bar_width = 70
     bar_height = 8
@@ -4182,46 +5687,6 @@ def draw_longshot_world_effects(screen, player, actors, camera):
             width=2,
         )
 
-    if state["track_remaining"] > 0:
-        for actor in actors:
-            if actor["team"] == player["team"]:
-                continue
-            for event in actor.get("track_events", []):
-                position = pygame.Vector2(event["position"]) - camera
-                center = (round(position.x), round(position.y))
-                if not screen.get_rect().inflate(80, 80).collidepoint(center):
-                    continue
-                fraction = min(1.0, event["remaining"] / LONGSHOT_TRACK_EVENT_LIFETIME)
-                radius = max(3, round(7 * fraction))
-                if event["kind"] == "fire":
-                    pygame.draw.circle(
-                        screen,
-                        LONGSHOT_VISOR_COLOR,
-                        center,
-                        radius + 5,
-                        width=2,
-                    )
-                    pygame.draw.line(
-                        screen,
-                        LONGSHOT_VISOR_COLOR,
-                        (center[0] - 6, center[1] - 6),
-                        (center[0] + 6, center[1] + 6),
-                        width=2,
-                    )
-                else:
-                    pygame.draw.circle(
-                        screen,
-                        LONGSHOT_TRACK_COLOR,
-                        center,
-                        radius,
-                    )
-                    pygame.draw.circle(
-                        screen,
-                        (21, 40, 51),
-                        center,
-                        max(1, radius - 3),
-                    )
-
     if state["dead_line_active"] and state["dead_line_charge"] > 0:
         direction = pygame.Vector2(
             math.cos(player["aim_angle"]),
@@ -4262,6 +5727,86 @@ def draw_longshot_world_effects(screen, player, actors, camera):
             (round(end.x), round(end.y)),
             width=2,
         )
+
+
+def draw_hunter_track_effects(screen, player, actors, camera):
+    """Draw the shared Hunter Track markers for Longshot or Sable."""
+    if player.get("character_class") != "Hunter":
+        return
+    state = player.get("ability_state", {})
+    if state.get("track_remaining", 0.0) <= 0:
+        return
+
+    track_color = SABLE_TRACK_COLOR if player.get("character_id") == SABLE["id"] else LONGSHOT_TRACK_COLOR
+    fire_color = SABLE_WARPAINT_COLOR if player.get("character_id") == SABLE["id"] else LONGSHOT_VISOR_COLOR
+    for actor in actors:
+        if actor["team"] == player["team"]:
+            continue
+        for event in actor.get("track_events", []):
+            position = pygame.Vector2(event["position"]) - camera
+            center = (round(position.x), round(position.y))
+            if not screen.get_rect().inflate(80, 80).collidepoint(center):
+                continue
+            fraction = min(1.0, event["remaining"] / LONGSHOT_TRACK_EVENT_LIFETIME)
+            radius = max(3, round(7 * fraction))
+            if event["kind"] == "fire":
+                pygame.draw.circle(screen, fire_color, center, radius + 5, width=2)
+                pygame.draw.line(screen, fire_color, (center[0] - 6, center[1] - 6), (center[0] + 6, center[1] + 6), width=2)
+            else:
+                pygame.draw.circle(screen, track_color, center, radius)
+                pygame.draw.circle(screen, (21, 40, 35), center, max(1, radius - 3))
+
+
+def draw_sable_world_effects(screen, font, player, actors, camera):
+    """Draw Scent hints, Wild Hunt leaves, camouflage aura, and hunting knife."""
+    if player.get("character_id") != SABLE["id"]:
+        return
+
+    state = player["ability_state"]
+    center = pygame.Vector2(player["position"] - camera)
+
+    if state.get("scent_remaining", 0.0) > 0:
+        valid_targets = []
+        for actor in state.get("scent_targets", []):
+            if not actor_can_fight(actor) or actor["team"] == player["team"]:
+                continue
+            health_fraction = actor["health"] / max(1.0, actor["max_health"])
+            if health_fraction > SABLE_SCENT_HEALTH_THRESHOLD:
+                continue
+            offset = actor["position"] - player["position"]
+            distance = offset.length()
+            if distance > SABLE_SCENT_RADIUS:
+                continue
+            valid_targets.append(actor)
+            direction = offset.normalize() if distance > 0 else pygame.Vector2(1, 0)
+            marker = center + direction * 145
+            marker_center = (round(marker.x), round(marker.y))
+            pygame.draw.circle(screen, SABLE_TRACK_COLOR, marker_center, 15, width=3)
+            tip = marker + direction * 17
+            perpendicular = pygame.Vector2(-direction.y, direction.x)
+            left = marker - direction * 6 + perpendicular * 8
+            right = marker - direction * 6 - perpendicular * 8
+            pygame.draw.polygon(screen, SABLE_TRACK_COLOR, (tip, left, right))
+            label = font.render(
+                f"{sable_injury_label(actor)} | {sable_compass_label(offset)} | {sable_distance_label(distance)}",
+                True,
+                SABLE_TRACK_COLOR,
+            )
+            screen.blit(label, label.get_rect(center=(marker_center[0], marker_center[1] - 28)))
+            for event in actor.get("track_events", [])[-3:]:
+                event_center = pygame.Vector2(event["position"] - camera)
+                if screen.get_rect().inflate(60, 60).collidepoint(event_center):
+                    pygame.draw.circle(screen, SABLE_WARPAINT_COLOR, (round(event_center.x), round(event_center.y)), 5, width=2)
+        state["scent_targets"] = valid_targets
+
+    if sable_wild_hunt_active(player):
+        ticks = pygame.time.get_ticks()
+        for index in range(16):
+            x = (index * 173 + ticks * (0.018 + 0.003 * (index % 4))) % (screen.get_width() + 80) - 40
+            y = (index * 109 + ticks * (0.030 + 0.004 * (index % 3))) % (screen.get_height() + 100) - 50
+            size = 4 + index % 4
+            pygame.draw.ellipse(screen, SABLE_CAMOUFLAGE_COLOR, (round(x), round(y), size * 2, size))
+        draw_knife(screen, player, camera, player["aim_angle"], state.get("hunt_attack_animation_timer", 0.0))
 
 
 def draw_varek_world_effects(screen, player, camera):
@@ -4311,12 +5856,12 @@ def draw_varek_world_effects(screen, player, camera):
     if state["breach_effect_remaining"] > 0:
         fraction = min(
             1.0,
-            state["breach_effect_remaining"] / VAREK_BREACH_EFFECT_DURATION,
+            state["breach_effect_remaining"] / BREAKER_BREACH_EFFECT_DURATION,
         )
         forward = pygame.Vector2(
             math.cos(state["breach_angle"]), math.sin(state["breach_angle"])
         )
-        half_arc = math.radians(VAREK_BREACH_ARC_DEGREES / 2)
+        half_arc = math.radians(BREAKER_BREACH_ARC_DEGREES / 2)
         left = pygame.Vector2(
             math.cos(state["breach_angle"] - half_arc),
             math.sin(state["breach_angle"] - half_arc),
@@ -4325,7 +5870,7 @@ def draw_varek_world_effects(screen, player, camera):
             math.cos(state["breach_angle"] + half_arc),
             math.sin(state["breach_angle"] + half_arc),
         )
-        distance = VAREK_BREACH_RANGE * (1.0 - 0.25 * fraction)
+        distance = BREAKER_BREACH_RANGE * (1.0 - 0.25 * fraction)
         points = [
             center_tuple,
             (round((center + left * distance).x), round((center + left * distance).y)),
@@ -4357,6 +5902,177 @@ def draw_varek_world_effects(screen, player, camera):
             width=3,
         )
 
+
+
+def draw_aurel_world_effects(screen, player, camera):
+    """Draw Aurel's fireballs, shared Breach cone, Inferno charge, blast, and trail."""
+    if player.get("character_id") != AUREL["id"]:
+        return
+
+    state = player["ability_state"]
+    center = pygame.Vector2(player["position"] - camera)
+    center_tuple = (round(center.x), round(center.y))
+
+    # Cinderbolt projectile and its bright traveling wake.
+    for bolt in state.get("cinderbolts", []):
+        bolt_center = pygame.Vector2(bolt["position"] - camera)
+        velocity = pygame.Vector2(bolt["velocity"])
+        direction = velocity.normalize() if velocity.length_squared() > 0 else pygame.Vector2(1, 0)
+        for trail_index in range(1, 5):
+            trail_center = bolt_center - direction * (trail_index * 10)
+            radius = max(2, AUREL_CINDERBOLT_PROJECTILE_RADIUS - trail_index * 2)
+            pygame.draw.circle(
+                screen,
+                AUREL_FIRE_COLOR,
+                (round(trail_center.x), round(trail_center.y)),
+                radius,
+            )
+        pygame.draw.circle(
+            screen,
+            AUREL_FIRE_GOLD_COLOR,
+            (round(bolt_center.x), round(bolt_center.y)),
+            AUREL_CINDERBOLT_PROJECTILE_RADIUS,
+        )
+        pygame.draw.circle(
+            screen,
+            (255, 240, 178),
+            (round(bolt_center.x), round(bolt_center.y)),
+            max(3, AUREL_CINDERBOLT_PROJECTILE_RADIUS // 2),
+        )
+
+    for explosion in state.get("cinderbolt_explosions", []):
+        fraction = max(
+            0.0,
+            min(1.0, explosion["remaining"] / AUREL_CINDERBOLT_EXPLOSION_VISUAL_TIME),
+        )
+        explosion_center = pygame.Vector2(explosion["position"] - camera)
+        radius = round(AUREL_CINDERBOLT_EXPLOSION_RADIUS * (1.0 - 0.35 * fraction))
+        layer = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        pygame.draw.circle(
+            layer,
+            (*AUREL_FIRE_COLOR, round(70 * fraction)),
+            (round(explosion_center.x), round(explosion_center.y)),
+            radius,
+        )
+        pygame.draw.circle(
+            layer,
+            (*AUREL_FIRE_GOLD_COLOR, round(235 * fraction)),
+            (round(explosion_center.x), round(explosion_center.y)),
+            radius,
+            width=5,
+        )
+        screen.blit(layer, (0, 0))
+
+    # Shared Breach Charge gets Aurel's fire-gold visual language.
+    if state.get("breach_effect_remaining", 0.0) > 0:
+        fraction = min(
+            1.0,
+            state["breach_effect_remaining"] / BREAKER_BREACH_EFFECT_DURATION,
+        )
+        half_arc = math.radians(BREAKER_BREACH_ARC_DEGREES / 2)
+        left = pygame.Vector2(
+            math.cos(state["breach_angle"] - half_arc),
+            math.sin(state["breach_angle"] - half_arc),
+        )
+        forward = pygame.Vector2(
+            math.cos(state["breach_angle"]),
+            math.sin(state["breach_angle"]),
+        )
+        right = pygame.Vector2(
+            math.cos(state["breach_angle"] + half_arc),
+            math.sin(state["breach_angle"] + half_arc),
+        )
+        distance = BREAKER_BREACH_RANGE * (1.0 - 0.25 * fraction)
+        points = [
+            center_tuple,
+            (round((center + left * distance).x), round((center + left * distance).y)),
+            (round((center + forward * distance).x), round((center + forward * distance).y)),
+            (round((center + right * distance).x), round((center + right * distance).y)),
+        ]
+        layer = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        pygame.draw.polygon(
+            layer,
+            (*AUREL_FIRE_COLOR, round(75 * fraction)),
+            points,
+        )
+        pygame.draw.lines(
+            layer,
+            (*AUREL_FIRE_GOLD_COLOR, round(220 * fraction)),
+            False,
+            points,
+            width=3,
+        )
+        screen.blit(layer, (0, 0))
+
+    if state.get("inferno_charge_remaining", 0.0) > 0:
+        progress = 1.0 - min(
+            1.0,
+            state["inferno_charge_remaining"] / AUREL_INFERNO_CHARGE_TIME,
+        )
+        layer = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        for ring_index in range(3):
+            radius = round(55 + progress * 110 + ring_index * 24)
+            pygame.draw.circle(
+                layer,
+                (*AUREL_FIRE_GOLD_COLOR, 100 + ring_index * 35),
+                center_tuple,
+                radius,
+                width=4,
+            )
+        pygame.draw.circle(
+            layer,
+            (*AUREL_INFERNO_COLOR, round(45 + progress * 70)),
+            center_tuple,
+            round(45 + progress * 65),
+        )
+        screen.blit(layer, (0, 0))
+
+    if state.get("inferno_explosion_effect_remaining", 0.0) > 0:
+        fraction = min(
+            1.0,
+            state["inferno_explosion_effect_remaining"] / AUREL_INFERNO_EXPLOSION_VISUAL_TIME,
+        )
+        radius = round(AUREL_INFERNO_RADIUS * (1.0 - 0.72 * fraction))
+        layer = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        pygame.draw.circle(
+            layer,
+            (*AUREL_INFERNO_COLOR, round(55 * fraction)),
+            center_tuple,
+            radius,
+        )
+        pygame.draw.circle(
+            layer,
+            (*AUREL_FIRE_GOLD_COLOR, round(235 * fraction)),
+            center_tuple,
+            radius,
+            width=8,
+        )
+        screen.blit(layer, (0, 0))
+
+    for patch in state.get("fire_trail", []):
+        patch_center = pygame.Vector2(patch["position"] - camera)
+        fade = max(0.0, min(1.0, patch["remaining"] / AUREL_FIRE_TRAIL_LIFETIME))
+        layer = pygame.Surface((AUREL_FIRE_TRAIL_RADIUS * 2 + 12, AUREL_FIRE_TRAIL_RADIUS * 2 + 12), pygame.SRCALPHA)
+        local_center = (layer.get_width() // 2, layer.get_height() // 2)
+        pygame.draw.circle(
+            layer,
+            (*AUREL_INFERNO_COLOR, round(75 * fade)),
+            local_center,
+            AUREL_FIRE_TRAIL_RADIUS,
+        )
+        pygame.draw.circle(
+            layer,
+            (*AUREL_FIRE_GOLD_COLOR, round(150 * fade)),
+            local_center,
+            max(5, AUREL_FIRE_TRAIL_RADIUS // 2),
+        )
+        screen.blit(
+            layer,
+            (
+                round(patch_center.x - layer.get_width() / 2),
+                round(patch_center.y - layer.get_height() / 2),
+            ),
+        )
 
 
 def draw_miri_world_effects(screen, player, camera):
@@ -4472,11 +6188,164 @@ def format_ability_timer(seconds):
     return "READY" if seconds <= 0 else f"{seconds:.1f}s"
 
 
+def draw_haze_spray_mark(screen, mark, camera):
+    """Draw a small neon graffiti mark at one Haze ability activation point."""
+    center = pygame.Vector2(mark["position"] - camera)
+    if not (-50 <= center.x <= screen.get_width() + 50 and -50 <= center.y <= screen.get_height() + 50):
+        return
+    fade_fraction = min(1.0, mark["remaining"] / 2.0)
+    radius = 14
+    forward = pygame.Vector2(math.cos(mark["rotation"]), math.sin(mark["rotation"]))
+    side = pygame.Vector2(-forward.y, forward.x)
+    purple = tuple(round(channel * fade_fraction) for channel in HAZE_PURPLE_COLOR)
+    green = tuple(round(channel * fade_fraction) for channel in HAZE_GREEN_COLOR)
+    pygame.draw.line(screen, purple, center - forward * radius, center + forward * radius, width=4)
+    pygame.draw.line(screen, green, center - side * radius, center + side * radius, width=3)
+
+
+def draw_haze_decoy_sprite(screen, font, decoy, camera, allied=True, alpha=255):
+    """Draw Haze's Q double, including its ally-only outline and fade."""
+    center = pygame.Vector2(decoy["position"] - camera)
+    if not (-90 <= center.x <= screen.get_width() + 90 and -90 <= center.y <= screen.get_height() + 90):
+        return
+
+    size = 100
+    sprite = pygame.Surface((size, size), pygame.SRCALPHA)
+    local_center = pygame.Vector2(size / 2, size / 2)
+    facing = pygame.Vector2(math.cos(decoy.get("aim_angle", 0.0)), math.sin(decoy.get("aim_angle", 0.0)))
+    side = pygame.Vector2(-facing.y, facing.x)
+
+    def rgba(color, local_alpha=255):
+        return (*color, round(local_alpha * alpha / 255))
+
+    pygame.draw.circle(sprite, rgba(HAZE_BODY_COLOR), (50, 50), ACTOR_RADIUS)
+    cloak_back = local_center - facing * 15
+    pygame.draw.polygon(
+        sprite, rgba(HAZE_CLOAK_COLOR),
+        (local_center + facing * 12, cloak_back + side * 20, local_center - facing * 29, cloak_back - side * 20),
+    )
+    hood = local_center + facing * 10
+    pygame.draw.circle(sprite, rgba(HAZE_CLOAK_COLOR), (round(hood.x), round(hood.y)), 17)
+    shadow = hood + facing * 3
+    pygame.draw.circle(sprite, rgba(HAZE_SHADOW_COLOR), (round(shadow.x), round(shadow.y)), 11)
+    pygame.draw.circle(sprite, rgba(HAZE_PURPLE_COLOR), (50, 50), 6)
+    pygame.draw.circle(sprite, rgba(HAZE_GREEN_COLOR), (50, 50), 3)
+    if allied:
+        pygame.draw.circle(sprite, rgba(HAZE_GREEN_COLOR), (50, 50), ACTOR_RADIUS + 5, width=3)
+    screen.blit(sprite, (round(center.x - size / 2), round(center.y - size / 2)))
+
+    if alpha >= 220:
+        bar_width = 64
+        maximum = max(1.0, decoy.get("max_health", 1.0))
+        health_fraction = max(0.0, min(1.0, decoy.get("health", 0.0) / maximum))
+        bar_rect = pygame.Rect(round(center.x - bar_width / 2), round(center.y - 48), bar_width, 7)
+        pygame.draw.rect(screen, (26, 29, 36), bar_rect)
+        pygame.draw.rect(screen, HEALTH_COLOR, (bar_rect.x, bar_rect.y, round(bar_width * health_fraction), bar_rect.height))
+        if allied:
+            label = font.render("DECOY", True, HAZE_GREEN_COLOR)
+            screen.blit(label, label.get_rect(center=(round(center.x), round(center.y + 46))))
+
+
+def draw_haze_world_effects(screen, font, player, camera):
+    """Draw the Haze player's graffiti and friendly-readable Q duplicate."""
+    if player.get("character_id") != HAZE["id"]:
+        return
+    state = player.get("ability_state", {})
+    for mark in state.get("spray_marks", []):
+        draw_haze_spray_mark(screen, mark, camera)
+    decoy = state.get("hallucination")
+    if decoy is not None:
+        draw_haze_decoy_sprite(screen, font, decoy, camera, allied=True, alpha=255)
+    for faded in state.get("hallucination_fades", []):
+        fraction = max(0.0, min(1.0, faded["fade_remaining"] / HAZE_HALLUCINATION_FADE_TIME))
+        draw_haze_decoy_sprite(screen, font, faded, camera, allied=True, alpha=round(255 * fraction))
+
+
+def make_haze_child_visual_actor(illusion, haze_team):
+    """Build an actor-like drawing proxy for a Child's Play illusion."""
+    return {
+        "position": illusion["position"],
+        "team": haze_team,
+        "is_player": False,
+        "character_id": illusion.get("source_character_id"),
+        "character_name": illusion.get("source_character_name", illusion.get("source_name", "Illusion")),
+        "character_class": illusion.get("source_character_class", "Soldier"),
+        "max_health": max(1, illusion.get("source_max_health", ACTOR_MAX_HEALTH)),
+        "health": max(1, illusion.get("source_health", ACTOR_MAX_HEALTH)),
+        "alive": True,
+        "downed": False,
+        "eliminated": False,
+        "revive_progress": 0.0,
+        "aim_angle": illusion.get("aim_angle", 0.0),
+        "ability_state": {},
+    }
+
+
+def draw_haze_enemy_perception(screen, font, local_player, actors, camera, obstacles):
+    """Draw the enemy-facing versions of Hallucination and Child's Play."""
+    enemy_hazes = [
+        actor
+        for actor in actors
+        if actor.get("character_id") == HAZE["id"]
+        and actor["team"] != local_player["team"]
+    ]
+    if not enemy_hazes:
+        return
+
+    # Q has no enemy-facing tell: an opposing player sees the decoy as Haze.
+    for haze_actor in enemy_hazes:
+        decoy = haze_actor.get("ability_state", {}).get("hallucination")
+        if decoy is None:
+            continue
+        proxy = {"position": decoy["position"]}
+        if is_actor_visible(local_player["position"], proxy, obstacles):
+            draw_haze_decoy_sprite(
+                screen, font, decoy, camera, allied=False, alpha=255
+            )
+
+    active_enemy_haze = next(
+        (
+            actor
+            for actor in enemy_hazes
+            if actor.get("ability_state", {}).get("childs_play_remaining", 0.0) > 0
+        ),
+        None,
+    )
+    if active_enemy_haze is None:
+        return
+
+    # Child's Play keeps the real map geometry but makes the world feel dreamlike.
+    tint = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+    tint.fill((62, 20, 78, 24))
+    screen.blit(tint, (0, 0))
+
+    illusion_list = active_enemy_haze["ability_state"].get("childs_play_illusions", {}).get(
+        local_player["name"], []
+    )
+    for index, illusion in enumerate(illusion_list):
+        proxy = make_haze_child_visual_actor(illusion, active_enemy_haze["team"])
+        if not is_actor_visible(local_player["position"], proxy, obstacles):
+            continue
+        draw_actor(screen, font, proxy, camera)
+        center = pygame.Vector2(illusion["position"] - camera)
+        overlay = pygame.Surface((76, 76), pygame.SRCALPHA)
+        color = HAZE_GREEN_COLOR if index % 2 == 0 else HAZE_PURPLE_COLOR
+        pygame.draw.circle(overlay, (*color, 38), (38, 38), 34)
+        screen.blit(overlay, (round(center.x - 38), round(center.y - 38)))
+
+
 def draw_character_panel(screen, font, player, status_message):
     """Show the selected character's unique statistics, abilities, and timers."""
     character_id = player.get("character_id")
     if character_id not in (
-        MALPHAS["id"], LONGSHOT["id"], VAREK["id"], MIRI["id"], RELAY["id"]
+        MALPHAS["id"],
+        LONGSHOT["id"],
+        VAREK["id"],
+        MIRI["id"],
+        RELAY["id"],
+        HAZE["id"],
+        SABLE["id"],
+        AUREL["id"],
     ):
         return
 
@@ -4498,8 +6367,14 @@ def draw_character_panel(screen, font, player, status_message):
         title_color = VAREK_BLADE_COLOR
     elif character_id == MIRI["id"]:
         title_color = MIRI_HEAL_COLOR
-    else:
+    elif character_id == RELAY["id"]:
         title_color = RELAY_RIFT_COLOR
+    elif character_id == HAZE["id"]:
+        title_color = HAZE_GREEN_COLOR
+    elif character_id == SABLE["id"]:
+        title_color = SABLE_TRACK_COLOR
+    else:
+        title_color = AUREL_FIRE_GOLD_COLOR
     title = font.render(
         f"{player['character_name'].upper()} - {player['character_class'].upper()}",
         True,
@@ -4616,7 +6491,7 @@ def draw_character_panel(screen, font, player, status_message):
             f"X  NINE LIVES      - {ultimate_status}",
         ]
         status_color = MIRI_HEAL_COLOR
-    else:
+    elif character_id == RELAY["id"]:
         if state["rift_boost_bullets_remaining"] > 0:
             signature_status = f"{state['rift_boost_bullets_remaining']} PROJECTILES"
         elif state["rift_boost_cooldown"] > 0:
@@ -4651,6 +6526,69 @@ def draw_character_panel(screen, font, player, status_message):
             f"X  RIFT OVERCLOCK - {ultimate_status}",
         ]
         status_color = RELAY_RIFT_COLOR
+    elif character_id == HAZE["id"]:
+        decoy = state.get("hallucination")
+        if decoy is not None:
+            signature_status = f"ACTIVE {decoy['remaining']:.1f}s | {decoy['health']:.0f} HP"
+        else:
+            signature_status = format_ability_timer(state["hallucination_cooldown"])
+
+        if state["silence_remaining"] > 0:
+            class_status = f"ACTIVE {state['silence_remaining']:.1f}s"
+        else:
+            class_status = format_ability_timer(state["silence_cooldown"])
+
+        if state["childs_play_remaining"] > 0:
+            ultimate_status = f"ACTIVE {state['childs_play_remaining']:.1f}s"
+        elif state["childs_play_used"]:
+            ultimate_status = "USED THIS ROUND"
+        else:
+            ultimate_status = "READY"
+
+        lines = [
+            f"Q  HALLUCINATION - {signature_status}",
+            f"C  SILENCE       - {class_status}",
+            f"X  CHILD'S PLAY  - {ultimate_status}",
+        ]
+        status_color = HAZE_GREEN_COLOR
+    elif character_id == SABLE["id"]:
+        if state["scent_remaining"] > 0:
+            signature_status = f"ACTIVE {state['scent_remaining']:.1f}s | {len(state['scent_targets'])} PREY"
+        else:
+            signature_status = format_ability_timer(state["scent_cooldown"])
+        if state["track_remaining"] > 0:
+            class_status = f"ACTIVE {state['track_remaining']:.1f}s"
+        else:
+            class_status = format_ability_timer(state["track_cooldown"])
+        if state["wild_hunt_remaining"] > 0:
+            ultimate_status = f"ACTIVE {state['wild_hunt_remaining']:.1f}s"
+        elif state["wild_hunt_used"]:
+            ultimate_status = "USED THIS ROUND"
+        else:
+            ultimate_status = "READY"
+        lines = [
+            f"Q  SCENT OF BLOOD - {signature_status}",
+            f"C  TRACK          - {class_status}",
+            f"X  WILD HUNT      - {ultimate_status}",
+        ]
+        status_color = SABLE_TRACK_COLOR
+    else:
+        signature_status = format_ability_timer(state["cinderbolt_cooldown"])
+        class_status = format_ability_timer(state["breach_cooldown"])
+        if state["inferno_charge_remaining"] > 0:
+            ultimate_status = f"CHARGING {state['inferno_charge_remaining']:.1f}s"
+        elif state["inferno_after_remaining"] > 0:
+            ultimate_status = f"INFERNO {state['inferno_after_remaining']:.1f}s"
+        elif state["inferno_used"]:
+            ultimate_status = "USED THIS ROUND"
+        else:
+            ultimate_status = "READY"
+        lines = [
+            f"Q  CINDERBOLT        - {signature_status}",
+            f"C  BREACH CHARGE     - {class_status}",
+            f"X  EXPLOSIVE INFERNO - {ultimate_status}",
+        ]
+        status_color = AUREL_FIRE_GOLD_COLOR
 
     for index, line in enumerate(lines):
         rendered = font.render(line, True, TEXT_COLOR)
@@ -6090,7 +8028,7 @@ def draw_character_select(screen, regular_font, large_font, match_state):
                 ),
             )
             pygame.draw.circle(screen, MIRI_HEAL_COLOR, portrait_center, 12)
-        else:
+        elif character["id"] == "relay":
             # Relay: slender silver maintenance chassis with a purple Rift core.
             pygame.draw.ellipse(
                 screen, RELAY_BODY_COLOR,
@@ -6105,6 +8043,76 @@ def draw_character_select(screen, regular_font, large_font, match_state):
             pygame.draw.circle(screen, RELAY_CORE_COLOR, portrait_center, 7)
             pygame.draw.circle(screen, RELAY_RIFT_COLOR, (portrait_center[0] - 43, portrait_center[1] - 4), 7)
             pygame.draw.circle(screen, RELAY_RIFT_COLOR, (portrait_center[0] + 43, portrait_center[1] - 4), 7)
+        elif character["id"] == "haze":
+            # Haze: torn cloak over a hood with no visible face.
+            pygame.draw.circle(screen, HAZE_BODY_COLOR, portrait_center, 50)
+            pygame.draw.polygon(
+                screen, HAZE_CLOAK_COLOR,
+                (
+                    (portrait_center[0], portrait_center[1] - 58),
+                    (portrait_center[0] - 52, portrait_center[1] + 48),
+                    (portrait_center[0], portrait_center[1] + 34),
+                    (portrait_center[0] + 52, portrait_center[1] + 48),
+                ),
+            )
+            pygame.draw.circle(screen, HAZE_CLOAK_COLOR, (portrait_center[0], portrait_center[1] - 17), 28)
+            pygame.draw.circle(screen, HAZE_SHADOW_COLOR, (portrait_center[0], portrait_center[1] - 13), 18)
+            pygame.draw.circle(screen, HAZE_PURPLE_COLOR, portrait_center, 10)
+            pygame.draw.circle(screen, HAZE_GREEN_COLOR, portrait_center, 4)
+        elif character["id"] == "sable":
+            pygame.draw.circle(screen, SABLE_BODY_COLOR, portrait_center, 50)
+            pygame.draw.circle(screen, SABLE_HAIR_COLOR, (portrait_center[0], portrait_center[1] - 22), 28)
+            pygame.draw.line(screen, SABLE_WARPAINT_COLOR, (portrait_center[0] - 31, portrait_center[1] - 7), (portrait_center[0] - 12, portrait_center[1] - 7), width=5)
+            pygame.draw.line(screen, SABLE_WARPAINT_COLOR, (portrait_center[0] + 12, portrait_center[1] - 7), (portrait_center[0] + 31, portrait_center[1] - 7), width=5)
+            pygame.draw.line(screen, SABLE_KNIFE_COLOR, (portrait_center[0] - 43, portrait_center[1] + 43), (portrait_center[0] + 46, portrait_center[1] - 45), width=7)
+        else:
+            # Aurel: pale elven fire mage in a white-and-gold tailored suit.
+            pygame.draw.circle(screen, AUREL_BODY_COLOR, portrait_center, 50)
+            pygame.draw.circle(
+                screen,
+                AUREL_SUIT_COLOR,
+                portrait_center,
+                47,
+                width=10,
+            )
+            pygame.draw.arc(
+                screen,
+                AUREL_GOLD_COLOR,
+                (
+                    portrait_center[0] - 49,
+                    portrait_center[1] - 49,
+                    98,
+                    98,
+                ),
+                math.radians(25),
+                math.radians(155),
+                width=6,
+            )
+            pygame.draw.circle(
+                screen,
+                AUREL_HAIR_COLOR,
+                (portrait_center[0], portrait_center[1] - 23),
+                29,
+            )
+            pygame.draw.line(
+                screen,
+                AUREL_EYE_COLOR,
+                (portrait_center[0] - 16, portrait_center[1] - 11),
+                (portrait_center[0] + 16, portrait_center[1] - 11),
+                width=5,
+            )
+            pygame.draw.circle(
+                screen,
+                AUREL_FIRE_COLOR,
+                (portrait_center[0], portrait_center[1] + 12),
+                14,
+            )
+            pygame.draw.circle(
+                screen,
+                AUREL_FIRE_GOLD_COLOR,
+                (portrait_center[0], portrait_center[1] + 12),
+                7,
+            )
 
         name = large_font.render(
             character["name"].upper(),
@@ -6147,12 +8155,33 @@ def draw_character_select(screen, regular_font, large_font, match_state):
                 "C Field Treatment",
                 "X Nine Lives",
             ]
-        else:
+        elif character["id"] == "relay":
             detail_lines = [
                 "100 HP | Rift objective specialist",
                 "Q Rift Boost",
                 "C Rift Teleport",
                 "X Rift Overclock",
+            ]
+        elif character["id"] == "haze":
+            detail_lines = [
+                "95 HP | Deception Phantom",
+                "Q Hallucination",
+                "C Silence",
+                "X Child's Play",
+            ]
+        elif character["id"] == "sable":
+            detail_lines = [
+                "100 HP | Endurance hunter",
+                "Q Scent of Blood",
+                "C Track",
+                "X Wild Hunt",
+            ]
+        else:
+            detail_lines = [
+                "95 HP | Ranged fire breaker",
+                "Q Cinderbolt",
+                "C Breach Charge",
+                "X Explosive Inferno",
             ]
 
         for line_index, line in enumerate(detail_lines):
@@ -6184,7 +8213,7 @@ def draw_character_select(screen, regular_font, large_font, match_state):
         )
     else:
         instruction = regular_font.render(
-            "Click a character or press 1-5. If time expires, Malphas is selected automatically.",
+            "Click a character or press 1-8. If time expires, Malphas is selected automatically.",
             True,
             (176, 190, 207),
         )
@@ -6443,7 +8472,7 @@ def main():
     pygame.init()
 
     screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-    pygame.display.set_caption("Riftbound - Version 0.8 Characters - Relay Conduit")
+    pygame.display.set_caption("Riftbound - Version 0.8 Characters - Aurel Breaker")
     pygame.mouse.set_visible(True)
 
     clock = pygame.time.Clock()
@@ -6564,6 +8593,12 @@ def main():
                         character_select_requested = "miri"
                     elif event.key == pygame.K_5:
                         character_select_requested = "relay"
+                    elif event.key == pygame.K_6:
+                        character_select_requested = "haze"
+                    elif event.key == pygame.K_7:
+                        character_select_requested = "sable"
+                    elif event.key == pygame.K_8:
+                        character_select_requested = "aurel"
                     continue
 
                 if match_state["phase"] == "playing" and relay_teleport_selecting(player):
@@ -6946,6 +8981,32 @@ def main():
             if relay_update_message:
                 ability_status_message = relay_update_message
                 ability_status_timer = 2.0
+            update_haze_abilities(player, actors, active_obstacles, delta_time)
+            update_sable_abilities(player, delta_time)
+            aurel_update_message, aurel_geometry_changed = update_aurel_abilities(
+                player,
+                actors,
+                walls,
+                destructible_objects,
+                bullet_marks,
+                delta_time,
+            )
+            if aurel_update_message:
+                ability_status_message = aurel_update_message
+                ability_status_timer = 2.0
+            if aurel_geometry_changed:
+                active_obstacles = get_active_obstacle_rects(
+                    walls,
+                    destructible_objects,
+                )
+                active_obstacle_signature = tuple(
+                    not destructible["destroyed"]
+                    for destructible in destructible_objects
+                )
+                wall_segments = get_wall_segments(active_obstacles)
+                wall_corners = get_wall_corners(active_obstacles)
+                cached_world_polygon = []
+                vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
             if teleported or relay_teleported:
                 cached_world_polygon = []
                 vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
@@ -6961,15 +9022,15 @@ def main():
             ability_status_timer = 2.0
 
         if player_can_act and class_ability_requested:
-            if player.get("character_id") == MALPHAS["id"]:
+            if player.get("character_id") in (MALPHAS["id"], HAZE["id"]):
                 _, ability_status_message = try_activate_silence(player)
-            elif player.get("character_id") == LONGSHOT["id"]:
+            elif player.get("character_class") == "Hunter":
                 _, ability_status_message = try_activate_track(player)
             elif player.get("character_id") == MIRI["id"]:
                 _, ability_status_message = try_activate_field_treatment(player)
             elif player.get("character_id") == RELAY["id"]:
                 _, ability_status_message = try_activate_rift_teleport(player, rift_state)
-            elif player.get("character_id") == VAREK["id"]:
+            elif player.get("character_class") == "Breaker":
                 breach_mouse_world = (
                     pygame.Vector2(pygame.mouse.get_pos())
                     + calculate_camera(player["position"], screen.get_size())
@@ -7020,7 +9081,18 @@ def main():
                 _, ability_status_message = try_activate_rift_overclock(
                     player, rift_state
                 )
+            elif player.get("character_id") == HAZE["id"]:
+                _, ability_status_message = try_activate_childs_play(
+                    player, actors, active_obstacles
+                )
+            elif player.get("character_id") == SABLE["id"]:
+                _, ability_status_message = try_activate_wild_hunt(player)
+            elif player.get("character_id") == AUREL["id"]:
+                _, ability_status_message = try_activate_explosive_inferno(player)
             ability_status_timer = 2.0
+
+        if aurel_inferno_charging(player):
+            movement_direction.update(0, 0)
 
         moving = movement_direction.length_squared() > 0
         sprinting = (
@@ -7061,8 +9133,13 @@ def main():
             if miri_field_treatment_active(player)
             else 1.0
         )
+        wild_hunt_speed_multiplier = (
+            SABLE_WILD_HUNT_SPEED_MULTIPLIER
+            if sable_wild_hunt_active(player)
+            else 1.0
+        )
         base_character_speed = (
-            player["move_speed"] * fury_speed_multiplier * treatment_move_multiplier
+            player["move_speed"] * fury_speed_multiplier * treatment_move_multiplier * wild_hunt_speed_multiplier
         )
         selected_speed = (
             base_character_speed * player["sprint_multiplier"]
@@ -7138,6 +9215,17 @@ def main():
                 _, ability_status_message = try_activate_feline_lunge(player)
             elif player.get("character_id") == RELAY["id"]:
                 _, ability_status_message = try_activate_rift_boost(player)
+            elif player.get("character_id") == HAZE["id"]:
+                _, ability_status_message = try_activate_hallucination(player)
+            elif player.get("character_id") == SABLE["id"]:
+                _, ability_status_message = try_activate_scent_of_blood(
+                    player, actors, active_obstacles
+                )
+            elif player.get("character_id") == AUREL["id"]:
+                _, ability_status_message = try_activate_cinderbolt(
+                    player,
+                    aim_angle,
+                )
             ability_status_timer = 2.0
 
         for weapon_state in weapon_states:
@@ -7159,12 +9247,16 @@ def main():
             relay_teleport_selecting(player)
             or relay_teleport_channel_active(player)
         )
+        sable_blocks_weapon = sable_wild_hunt_active(player)
+        aurel_blocks_weapon = aurel_inferno_charging(player)
         if (
             active_weapon["fire_mode"] != "melee"
             and reload_requested
             and not active_weapon_state["reloading"]
             and not miri_blocks_weapon
             and not relay_blocks_weapon
+            and not sable_blocks_weapon
+            and not aurel_blocks_weapon
         ):
             magazine_has_space = (
                 active_weapon_state["magazine_ammo"]
@@ -7230,6 +9322,7 @@ def main():
 
         varek_blade_is_active = player_can_act and varek_blade_active(player)
         miri_claws_are_active = player_can_act and miri_feline_lunge_active(player)
+        sable_hunt_is_active = player_can_act and sable_wild_hunt_active(player)
         if miri_claws_are_active and trigger_held and not miri_field_treatment_active(player):
             perform_miri_claw_attack(
                 player,
@@ -7237,6 +9330,17 @@ def main():
                 actors,
                 active_obstacles,
             )
+        if sable_hunt_is_active and trigger_held:
+            sable_geometry_changed = perform_sable_hunting_knife_attack(
+                player, aim_angle, actors, active_obstacles, destructible_objects, bullet_marks
+            )
+            if sable_geometry_changed:
+                active_obstacles = get_active_obstacle_rects(walls, destructible_objects)
+                active_obstacle_signature = tuple(not destructible["destroyed"] for destructible in destructible_objects)
+                wall_segments = get_wall_segments(active_obstacles)
+                wall_corners = get_wall_corners(active_obstacles)
+                cached_world_polygon = []
+                vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
         if varek_blade_is_active and trigger_held:
             blade_geometry_changed = perform_varek_blade_attack(
                 player,
@@ -7276,6 +9380,8 @@ def main():
             and not varek_blade_is_active
             and not miri_blocks_weapon
             and not relay_blocks_weapon
+            and not sable_blocks_weapon
+            and not aurel_blocks_weapon
         )
         if can_fire:
             if active_weapon["fire_mode"] == "melee":
@@ -7347,6 +9453,8 @@ def main():
             and active_weapon_state["reserve_ammo"] > 0
             and not miri_blocks_weapon
             and not relay_blocks_weapon
+            and not sable_blocks_weapon
+            and not aurel_blocks_weapon
         ):
             active_weapon_state["reloading"] = True
             active_weapon_state["reload_timer"] = active_weapon["reload_time"]
@@ -7416,6 +9524,7 @@ def main():
                 vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
 
             update_actor_activity_tracking(actors, delta_time)
+            update_burn_effects(actors, delta_time)
 
             rift_winner = update_rift_state(
                 rift_state,
@@ -7590,6 +9699,10 @@ def main():
         draw_varek_world_effects(screen, player, camera)
         draw_miri_world_effects(screen, player, camera)
         draw_relay_world_effects(screen, player, rift_state, camera)
+        draw_haze_world_effects(screen, debug_font, player, camera)
+        draw_hunter_track_effects(screen, player, actors, camera)
+        draw_sable_world_effects(screen, debug_font, player, actors, camera)
+        draw_aurel_world_effects(screen, player, camera)
 
         # Bots and bullets retain exact partial visibility, but only their
         # small bounding surfaces are multiplied by the visibility mask.
@@ -7620,11 +9733,15 @@ def main():
             camera,
             include_player=True,
         )
+        draw_haze_enemy_perception(
+            screen, debug_font, player, actors, camera, active_obstacles
+        )
         if (
             active_weapon["fire_mode"] == "melee"
             and actor_can_fight(player)
             and not varek_blade_active(player)
             and not miri_feline_lunge_active(player)
+            and not sable_wild_hunt_active(player)
         ):
             draw_knife(
                 screen,
@@ -7711,6 +9828,7 @@ def main():
             and not miri_field_treatment_active(player)
             and not miri_nine_lives_active(player)
             and not relay_blocks_weapon
+            and not aurel_blocks_weapon
         ):
             draw_crosshair(screen, pygame.mouse.get_pos(), current_spread)
         draw_buy_phase(
