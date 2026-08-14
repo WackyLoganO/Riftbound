@@ -316,6 +316,16 @@ AUREL = {
     "max_stamina": 110,
 }
 
+WARD = {
+    "id": "ward",
+    "name": "Ward",
+    "class": "Guardian",
+    "max_health": 100,
+    "move_speed": 240,
+    "sprint_multiplier": 1.30,
+    "max_stamina": 90,
+}
+
 CHARACTER_ROSTER = [
     {**MALPHAS, "implemented": True},
     {**LONGSHOT, "implemented": True},
@@ -325,6 +335,7 @@ CHARACTER_ROSTER = [
     {**HAZE, "implemented": True},
     {**SABLE, "implemented": True},
     {**AUREL, "implemented": True},
+    {**WARD, "implemented": True},
 ]
 
 # Malphas - Phantom
@@ -428,11 +439,11 @@ MIRI_CLAW_ARC_DEGREES = 90
 MIRI_CLAW_SECONDS_PER_ATTACK = 0.35
 MIRI_CLAW_ANIMATION_TIME = 0.16
 
-MIRI_FIELD_TREATMENT_RADIUS = 180
-MIRI_FIELD_TREATMENT_CAST_TIME = 1.0
-MIRI_FIELD_TREATMENT_COOLDOWN = 12.0
-MIRI_FIELD_TREATMENT_MISSING_HEALTH_FRACTION = 0.50
-MIRI_FIELD_TREATMENT_MOVE_MULTIPLIER = 0.60
+GUARDIAN_FIELD_TREATMENT_RADIUS = 180
+GUARDIAN_FIELD_TREATMENT_CAST_TIME = 1.0
+GUARDIAN_FIELD_TREATMENT_COOLDOWN = 12.0
+GUARDIAN_FIELD_TREATMENT_MISSING_HEALTH_FRACTION = 0.50
+GUARDIAN_FIELD_TREATMENT_MOVE_MULTIPLIER = 0.60
 
 MIRI_NINE_LIVES_RANGE = 100
 MIRI_NINE_LIVES_CHANNEL_TIME = 4.0
@@ -550,6 +561,23 @@ AUREL_EYE_COLOR = (255, 210, 67)
 AUREL_FIRE_COLOR = (244, 92, 34)
 AUREL_FIRE_GOLD_COLOR = (255, 188, 46)
 AUREL_INFERNO_COLOR = (156, 24, 24)
+
+# Ward - Guardian
+WARD_BULWARK_HEALTH = 200
+WARD_BULWARK_COOLDOWN = 15.0
+WARD_BULWARK_RANGE = 500
+WARD_BULWARK_WIDTH = 260
+WARD_BULWARK_THICKNESS = 18
+
+WARD_AEGIS_HEALTH = 100
+WARD_AEGIS_KNOCKBACK_MULTIPLIER = 0.80
+
+WARD_BODY_COLOR = (224, 228, 230)
+WARD_COAT_COLOR = (245, 247, 248)
+WARD_CLOTHING_COLOR = (31, 34, 39)
+WARD_DEVICE_COLOR = (112, 119, 126)
+WARD_SHIELD_COLOR = (255, 211, 74)
+WARD_SHIELD_CORE_COLOR = (255, 239, 158)
 
 BACKGROUND_COLOR = (31, 37, 46)
 GRID_COLOR = (42, 49, 60)
@@ -1022,6 +1050,16 @@ def make_character_ability_state(character_id):
             "fire_trail_spawn_timer": 0.0,
             "fire_trail_last_position": None,
         }
+    if character_id == WARD["id"]:
+        return {
+            "bulwark_cooldown": 0.0,
+            "bulwark": None,
+            "field_treatment_cooldown": 0.0,
+            "field_treatment_remaining": 0.0,
+            "field_treatment_pending": False,
+            "personal_aegis_health": 0.0,
+            "personal_aegis_used": False,
+        }
     return {}
 
 
@@ -1043,6 +1081,8 @@ def get_playable_character(character_id):
         return SABLE
     if character_id == AUREL["id"]:
         return AUREL
+    if character_id == WARD["id"]:
+        return WARD
     return None
 
 
@@ -1550,20 +1590,25 @@ def move_player(position, movement, walls):
     return player_rect
 
 
-def push_actor_safely(actor, direction, distance, obstacles):
-    """Push a standing actor in small collision-safe steps so walls cannot be tunneled."""
+def push_actor_safely(actor, direction, distance, obstacles, actors=None):
+    """Push safely; Personal Aegis reduces force and enemy Bulwarks block movement."""
     if not actor_can_fight(actor):
         return
     direction = pygame.Vector2(direction)
     if direction.length_squared() <= 0 or distance <= 0:
         return
+    if ward_personal_aegis_active(actor):
+        distance *= WARD_AEGIS_KNOCKBACK_MULTIPLIER
+    movement_obstacles = list(obstacles)
+    if actors is not None:
+        movement_obstacles += get_bulwark_movement_obstacles(actor, actors)
     direction = direction.normalize()
     remaining = float(distance)
     max_step = 12.0
     while remaining > 0:
         step = min(max_step, remaining)
         before = pygame.Vector2(actor["position"])
-        move_player(actor["position"], direction * step, obstacles)
+        move_player(actor["position"], direction * step, movement_obstacles)
         if actor["position"].distance_squared_to(before) < 0.01:
             break
         remaining -= step
@@ -1898,16 +1943,160 @@ def sable_wild_hunt_active(actor):
     )
 
 
+def ward_personal_aegis_active(actor):
+    """Return whether Ward still has Personal Aegis shield health."""
+    return (
+        actor.get("character_id") == WARD["id"]
+        and actor.get("ability_state", {}).get("personal_aegis_health", 0.0) > 0
+    )
+
+
+def get_active_bulwarks(actors):
+    """Return every currently deployed Ward barrier without making it vision cover."""
+    bulwarks = []
+    for actor in actors:
+        if actor.get("character_id") != WARD["id"]:
+            continue
+        barrier = actor.get("ability_state", {}).get("bulwark")
+        if barrier is None or barrier.get("health", 0.0) <= 0:
+            continue
+        bulwarks.append(barrier)
+    return bulwarks
+
+
+def destroy_ward_bulwark(barrier):
+    """Remove a deployed Bulwark from its owner's state."""
+    if barrier is None:
+        return False
+    barrier["health"] = 0.0
+    owner = barrier.get("owner")
+    if owner is not None:
+        state = owner.get("ability_state", {})
+        if state.get("bulwark") is barrier:
+            state["bulwark"] = None
+    return True
+
+
+def damage_ward_bulwark(barrier, damage):
+    """Damage an enemy Bulwark and return whether that hit destroyed it."""
+    if barrier is None or barrier.get("health", 0.0) <= 0:
+        return False
+    barrier["health"] = max(0.0, barrier["health"] - max(0.0, float(damage)))
+    if barrier["health"] <= 0:
+        destroy_ward_bulwark(barrier)
+        return True
+    return False
+
+
+def get_bulwark_movement_obstacles(actor, actors):
+    """Enemy Bulwarks block movement; allies and lunging Miri can pass through."""
+    if miri_feline_lunge_active(actor):
+        return []
+    return [
+        barrier["rect"]
+        for barrier in get_active_bulwarks(actors)
+        if barrier["team"] != actor["team"]
+    ]
+
+
+def get_bulwark_hit_by_projectile(position, radius, actors):
+    """Return the first barrier overlapping a circular projectile sample."""
+    projectile_rect = pygame.Rect(0, 0, max(2, radius * 2), max(2, radius * 2))
+    projectile_rect.center = (round(position.x), round(position.y))
+    for barrier in get_active_bulwarks(actors):
+        if projectile_rect.colliderect(barrier["rect"]):
+            return barrier
+    return None
+
+
+def try_activate_bulwark(player, target_position, aim_angle, obstacles):
+    """Deploy Ward's one-at-a-time 200 HP projectile barrier."""
+    if player.get("character_id") != WARD["id"]:
+        return False, "BULWARK UNAVAILABLE"
+    state = player["ability_state"]
+    if state["bulwark_cooldown"] > 0:
+        return False, f"BULWARK COOLDOWN {state['bulwark_cooldown']:.1f}s"
+
+    target = pygame.Vector2(target_position)
+    if player["position"].distance_to(target) > WARD_BULWARK_RANGE:
+        return False, "BULWARK TARGET TOO FAR"
+    if not has_line_of_sight(player["position"], target, obstacles):
+        return False, "BULWARK NEEDS LINE OF SIGHT"
+
+    facing = pygame.Vector2(math.cos(aim_angle), math.sin(aim_angle))
+    if abs(facing.x) >= abs(facing.y):
+        rectangle = pygame.Rect(0, 0, WARD_BULWARK_THICKNESS, WARD_BULWARK_WIDTH)
+        orientation = "vertical"
+    else:
+        rectangle = pygame.Rect(0, 0, WARD_BULWARK_WIDTH, WARD_BULWARK_THICKNESS)
+        orientation = "horizontal"
+    rectangle.center = (round(target.x), round(target.y))
+
+    world_rect = pygame.Rect(0, 0, WORLD_WIDTH, WORLD_HEIGHT)
+    if not world_rect.contains(rectangle):
+        return False, "BULWARK TARGET OUTSIDE MAP"
+    if any(rectangle.colliderect(obstacle) for obstacle in obstacles):
+        return False, "BULWARK TARGET BLOCKED"
+
+    previous = state.get("bulwark")
+    if previous is not None:
+        destroy_ward_bulwark(previous)
+    state["bulwark"] = {
+        "owner": player,
+        "team": player["team"],
+        "rect": rectangle,
+        "orientation": orientation,
+        "health": float(WARD_BULWARK_HEALTH),
+        "max_health": float(WARD_BULWARK_HEALTH),
+    }
+    state["bulwark_cooldown"] = WARD_BULWARK_COOLDOWN
+    return True, "BULWARK DEPLOYED"
+
+
+def try_activate_personal_aegis(player):
+    """Give Ward a once-per-round 100 point all-damage personal shield."""
+    if player.get("character_id") != WARD["id"]:
+        return False, "PERSONAL AEGIS UNAVAILABLE"
+    state = player["ability_state"]
+    if state["personal_aegis_used"]:
+        return False, "PERSONAL AEGIS ALREADY USED THIS ROUND"
+    state["personal_aegis_health"] = float(WARD_AEGIS_HEALTH)
+    state["personal_aegis_used"] = True
+    return True, "PERSONAL AEGIS ACTIVE"
+
+
+def update_ward_abilities(player, delta_time):
+    """Advance Ward's deployable-shield cooldown."""
+    if player.get("character_id") != WARD["id"]:
+        return
+    state = player["ability_state"]
+    state["bulwark_cooldown"] = max(0.0, state["bulwark_cooldown"] - delta_time)
+    barrier = state.get("bulwark")
+    if barrier is not None and barrier.get("health", 0.0) <= 0:
+        state["bulwark"] = None
+
+
 def damage_actor(target, damage, attacker=None):
-    """Damage an actor and apply character-specific on-hit/elimination effects."""
+    """Damage an actor, letting Ward's Aegis absorb every damage type first."""
     if not target["alive"] or target["downed"] or target["eliminated"]:
         return 0.0, False
     if aurel_inferno_charging(target):
         return 0.0, False
 
-    damage = max(0.0, float(damage))
-    damage_done = min(float(target["health"]), damage)
-    target["health"] = max(0.0, float(target["health"]) - damage_done)
+    incoming_damage = max(0.0, float(damage))
+    shield_absorbed = 0.0
+    if ward_personal_aegis_active(target) and incoming_damage > 0:
+        state = target["ability_state"]
+        shield_absorbed = min(state["personal_aegis_health"], incoming_damage)
+        state["personal_aegis_health"] = max(
+            0.0, state["personal_aegis_health"] - shield_absorbed
+        )
+        incoming_damage -= shield_absorbed
+
+    health_damage = min(float(target["health"]), incoming_damage)
+    target["health"] = max(0.0, float(target["health"]) - health_damage)
+    damage_done = shield_absorbed + health_damage
+
     if damage_done > 0:
         target["damaged_recent"] = max(
             target.get("damaged_recent", 0.0),
@@ -2690,15 +2879,13 @@ def ray_actor_hit_distance(origin, direction, actor, max_distance):
 
 
 def fire_dead_line_shot(player, aim_angle, walls, destructible_objects, actors):
-    """Fire Dead Line as hitscan, penetrating at most one thin solid obstacle."""
+    """Fire Dead Line; a Ward Bulwark always stops the supernatural rifle shot."""
     origin = pygame.Vector2(player["position"])
     direction = pygame.Vector2(math.cos(aim_angle), math.sin(aim_angle))
     candidates = []
 
     for wall in walls:
-        distance = ray_rect_hit_distance(
-            origin, direction, wall, LONGSHOT_DEAD_LINE_RANGE
-        )
+        distance = ray_rect_hit_distance(origin, direction, wall, LONGSHOT_DEAD_LINE_RANGE)
         if distance is not None:
             candidates.append((distance, "wall", wall))
 
@@ -2711,12 +2898,17 @@ def fire_dead_line_shot(player, aim_angle, walls, destructible_objects, actors):
         if distance is not None:
             candidates.append((distance, "destructible", destructible))
 
+    for barrier in get_active_bulwarks(actors):
+        distance = ray_rect_hit_distance(
+            origin, direction, barrier["rect"], LONGSHOT_DEAD_LINE_RANGE
+        )
+        if distance is not None:
+            candidates.append((distance, "bulwark", barrier))
+
     for actor in actors:
         if actor is player or actor["team"] == player["team"] or not actor_can_fight(actor):
             continue
-        distance = ray_actor_hit_distance(
-            origin, direction, actor, LONGSHOT_DEAD_LINE_RANGE
-        )
+        distance = ray_actor_hit_distance(origin, direction, actor, LONGSHOT_DEAD_LINE_RANGE)
         if distance is not None:
             candidates.append((distance, "actor", actor))
 
@@ -2728,6 +2920,12 @@ def fire_dead_line_shot(player, aim_angle, walls, destructible_objects, actors):
     for distance, target_type, target in candidates:
         if target_type == "actor":
             damage_actor(target, LONGSHOT_DEAD_LINE_DAMAGE, player)
+            impact_distance = distance
+            break
+
+        if target_type == "bulwark":
+            if target["team"] != player["team"]:
+                damage_ward_bulwark(target, LONGSHOT_DEAD_LINE_OBJECT_DAMAGE)
             impact_distance = distance
             break
 
@@ -2743,11 +2941,7 @@ def fire_dead_line_shot(player, aim_angle, walls, destructible_objects, actors):
             penetrated_obstacle = True
             continue
 
-        # Destructible cover counts as the single allowed penetration and takes
-        # the supernatural rifle's impact damage at the same time.
-        target["health"] = max(
-            0.0, target["health"] - LONGSHOT_DEAD_LINE_OBJECT_DAMAGE
-        )
+        target["health"] = max(0.0, target["health"] - LONGSHOT_DEAD_LINE_OBJECT_DAMAGE)
         if target["health"] <= 0:
             target["destroyed"] = True
             geometry_changed = True
@@ -3064,6 +3258,7 @@ def aurel_apply_cinderbolt_explosion(
                 offset.normalize(),
                 AUREL_CINDERBOLT_PUSH_DISTANCE,
                 push_obstacles,
+                actors,
             )
 
     return geometry_changed
@@ -3094,25 +3289,18 @@ def try_activate_cinderbolt(player, aim_angle):
 
 
 def update_aurel_cinderbolts(
-    player,
-    actors,
-    walls,
-    destructible_objects,
-    bullet_marks,
-    delta_time,
+    player, actors, walls, destructible_objects, bullet_marks, delta_time,
 ):
-    """Move Cinderbolts in small steps and detonate on the first solid contact."""
+    """Move Cinderbolts and let Bulwark stop the projectile before it detonates."""
     state = player["ability_state"]
     surviving = []
     geometry_changed = False
-
     for bolt in state["cinderbolts"]:
         total_movement = bolt["velocity"] * delta_time
         step_length = max(4.0, AUREL_CINDERBOLT_PROJECTILE_RADIUS * 0.75)
         step_count = max(1, math.ceil(total_movement.length() / step_length))
         movement_step = total_movement / step_count
         exploded = False
-
         for _ in range(step_count):
             previous_position = pygame.Vector2(bolt["position"])
             bolt["position"] += movement_step
@@ -3124,52 +3312,39 @@ def update_aurel_cinderbolts(
                 AUREL_CINDERBOLT_PROJECTILE_RADIUS * 2,
                 AUREL_CINDERBOLT_PROJECTILE_RADIUS * 2,
             )
-
-            hit_solid = any(projectile_rect.colliderect(wall) for wall in walls)
+            hit_bulwark = get_bulwark_hit_by_projectile(center, AUREL_CINDERBOLT_PROJECTILE_RADIUS, actors)
+            hit_solid = hit_bulwark is not None
+            if hit_bulwark is not None and hit_bulwark["team"] != player["team"]:
+                damage_ward_bulwark(hit_bulwark, AUREL_CINDERBOLT_OBJECT_DAMAGE)
+            if not hit_solid:
+                hit_solid = any(projectile_rect.colliderect(wall) for wall in walls)
             if not hit_solid:
                 hit_solid = any(
-                    not destructible["destroyed"]
-                    and projectile_rect.colliderect(destructible["rect"])
+                    not destructible["destroyed"] and projectile_rect.colliderect(destructible["rect"])
                     for destructible in destructible_objects
                 )
-
             hit_actor = False
             if not hit_solid:
                 for actor in actors:
                     if actor is player or not actor_can_fight(actor):
                         continue
-                    if center.distance_to(actor["position"]) <= (
-                        ACTOR_RADIUS + AUREL_CINDERBOLT_PROJECTILE_RADIUS
-                    ):
+                    if center.distance_to(actor["position"]) <= ACTOR_RADIUS + AUREL_CINDERBOLT_PROJECTILE_RADIUS:
                         hit_actor = True
                         break
-
             reached_limit = bolt["distance_traveled"] >= AUREL_CINDERBOLT_MAX_RANGE
             if hit_solid or hit_actor or reached_limit:
                 explosion_position = previous_position if hit_solid else center
-                geometry_changed = (
-                    aurel_apply_cinderbolt_explosion(
-                        player,
-                        explosion_position,
-                        actors,
-                        walls,
-                        destructible_objects,
-                        bullet_marks,
-                    )
-                    or geometry_changed
-                )
-                state["cinderbolt_explosions"].append(
-                    {
-                        "position": pygame.Vector2(explosion_position),
-                        "remaining": AUREL_CINDERBOLT_EXPLOSION_VISUAL_TIME,
-                    }
-                )
+                geometry_changed = aurel_apply_cinderbolt_explosion(
+                    player, explosion_position, actors, walls, destructible_objects, bullet_marks
+                ) or geometry_changed
+                state["cinderbolt_explosions"].append({
+                    "position": pygame.Vector2(explosion_position),
+                    "remaining": AUREL_CINDERBOLT_EXPLOSION_VISUAL_TIME,
+                })
                 exploded = True
                 break
-
         if not exploded:
             surviving.append(bolt)
-
     state["cinderbolts"] = surviving
     return geometry_changed
 
@@ -3192,19 +3367,12 @@ def try_activate_explosive_inferno(player):
 
 
 def aurel_detonate_inferno(
-    player,
-    actors,
-    walls,
-    destructible_objects,
-    bullet_marks,
+    player, actors, walls, destructible_objects, bullet_marks,
 ):
-    """Release the wall-penetrating Inferno blast and start its 15-second aftermath."""
+    """Release Inferno, destroying every destructible cover type in the blast."""
     state = player["ability_state"]
     center = pygame.Vector2(player["position"])
     geometry_changed = False
-
-    # Inferno passes through permanent walls and annihilates every destructible
-    # piece of cover whose rectangle reaches the blast radius.
     for destructible in destructible_objects:
         if destructible["destroyed"]:
             continue
@@ -3218,40 +3386,27 @@ def aurel_detonate_inferno(
         destructible["health"] = 0
         destructible["destroyed"] = True
         geometry_changed = True
-        bullet_marks[:] = [
-            mark for mark in bullet_marks if mark.get("wall") is not rectangle
-        ]
-
-    # Destroyed cover no longer blocks the physical displacement, while permanent
-    # walls still stop bodies from being shoved through solid architecture.
+        bullet_marks[:] = [mark for mark in bullet_marks if mark.get("wall") is not rectangle]
+    for barrier in list(get_active_bulwarks(actors)):
+        rectangle = barrier["rect"]
+        contact = pygame.Vector2(
+            max(rectangle.left, min(center.x, rectangle.right)),
+            max(rectangle.top, min(center.y, rectangle.bottom)),
+        )
+        if center.distance_to(contact) <= AUREL_INFERNO_RADIUS:
+            destroy_ward_bulwark(barrier)
     push_obstacles = get_active_obstacle_rects(walls, destructible_objects)
     for actor in actors:
         if actor is player or not actor_can_fight(actor):
             continue
         offset = actor["position"] - center
-        distance = offset.length()
-        if distance > AUREL_INFERNO_RADIUS:
+        if offset.length() > AUREL_INFERNO_RADIUS:
             continue
-
-        # Allies receive only the force. Enemies receive damage + burn + force.
         if actor["team"] != player["team"]:
             damage_actor(actor, AUREL_INFERNO_INITIAL_DAMAGE, player)
-            apply_burn(
-                actor,
-                AUREL_INFERNO_BURN_DURATION,
-                AUREL_INFERNO_BURN_MAX_HEALTH_PER_SECOND,
-                player,
-            )
-
+            apply_burn(actor, AUREL_INFERNO_BURN_DURATION, AUREL_INFERNO_BURN_MAX_HEALTH_PER_SECOND, player)
         if offset.length_squared() > 0:
-            push_actor_safely(
-                actor,
-                offset.normalize(),
-                AUREL_INFERNO_PUSH_DISTANCE,
-                push_obstacles,
-            )
-
-    # Aurel remains precisely at the center: no self-damage, burn, or knockback.
+            push_actor_safely(actor, offset.normalize(), AUREL_INFERNO_PUSH_DISTANCE, push_obstacles, actors)
     state["inferno_after_remaining"] = AUREL_INFERNO_AFTEREFFECT_DURATION
     state["inferno_explosion_effect_remaining"] = AUREL_INFERNO_EXPLOSION_VISUAL_TIME
     state["fire_trail_spawn_timer"] = 0.0
@@ -3396,37 +3551,22 @@ def get_cone_dot_threshold(arc_degrees):
 
 
 def try_activate_breach_charge(
-    player,
-    aim_angle,
-    obstacles,
-    destructible_objects,
-    actors,
-    bullet_marks,
+    player, aim_angle, obstacles, destructible_objects, actors, bullet_marks,
 ):
-    """Use the shared Breaker cone: destroy cover, damage enemies, push everyone."""
+    """Shared Breaker C: destroy all destructible cover, damage enemies, push both teams."""
     if player.get("character_class") != "Breaker":
         return False, "BREACH CHARGE UNAVAILABLE", False
     if aurel_inferno_charging(player):
         return False, "INFERNO CHARGING", False
-
     state = player["ability_state"]
     if "breach_cooldown" not in state:
         return False, "BREACH CHARGE UNAVAILABLE", False
     if state["breach_cooldown"] > 0:
-        return (
-            False,
-            f"BREACH CHARGE COOLDOWN {state['breach_cooldown']:.1f}s",
-            False,
-        )
-
+        return False, f"BREACH CHARGE COOLDOWN {state['breach_cooldown']:.1f}s", False
     forward = pygame.Vector2(math.cos(aim_angle), math.sin(aim_angle))
     minimum_dot = get_cone_dot_threshold(BREAKER_BREACH_ARC_DEGREES)
     geometry_changed = False
-    enemies_hit = 0
-    allies_pushed = 0
-    objects_destroyed = 0
-
-    # The force of Breach Charge affects both teams, but friendly fire is disabled.
+    enemies_hit = allies_pushed = objects_destroyed = 0
     for actor in actors:
         if actor is player or not actor_can_fight(actor):
             continue
@@ -3435,26 +3575,14 @@ def try_activate_breach_charge(
         if distance <= 0 or distance > BREAKER_BREACH_RANGE:
             continue
         direction = offset / distance
-        if forward.dot(direction) < minimum_dot:
+        if forward.dot(direction) < minimum_dot or not has_line_of_sight(player["position"], actor["position"], obstacles):
             continue
-        if not has_line_of_sight(player["position"], actor["position"], obstacles):
-            continue
-
         if actor["team"] != player["team"]:
             damage_actor(actor, BREAKER_BREACH_DAMAGE, player)
             enemies_hit += 1
         else:
             allies_pushed += 1
-
-        push_actor_safely(
-            actor,
-            direction,
-            BREAKER_BREACH_PUSH_DISTANCE,
-            obstacles,
-        )
-
-    # Destructible cover no longer has a Breach damage value. If it is inside
-    # the class ability's cone and reachable from the caster, it is destroyed.
+        push_actor_safely(actor, direction, BREAKER_BREACH_PUSH_DISTANCE, obstacles, actors)
     for destructible in destructible_objects:
         if destructible["destroyed"]:
             continue
@@ -3470,33 +3598,32 @@ def try_activate_breach_charge(
         direction = offset / distance
         if forward.dot(direction) < minimum_dot:
             continue
-        if not has_line_of_sight(
-            player["position"],
-            contact,
-            obstacles,
-            ignored_wall=rectangle,
-        ):
+        if not has_line_of_sight(player["position"], contact, obstacles, ignored_wall=rectangle):
             continue
-
         destructible["health"] = 0
         destructible["destroyed"] = True
         objects_destroyed += 1
         geometry_changed = True
-        bullet_marks[:] = [
-            mark for mark in bullet_marks if mark.get("wall") is not rectangle
-        ]
-
+        bullet_marks[:] = [mark for mark in bullet_marks if mark.get("wall") is not rectangle]
+    for barrier in list(get_active_bulwarks(actors)):
+        rectangle = barrier["rect"]
+        contact = pygame.Vector2(
+            max(rectangle.left, min(player["position"].x, rectangle.right)),
+            max(rectangle.top, min(player["position"].y, rectangle.bottom)),
+        )
+        offset = contact - player["position"]
+        distance = offset.length()
+        if distance <= 0 or distance > BREAKER_BREACH_RANGE:
+            continue
+        direction = offset / distance
+        if forward.dot(direction) < minimum_dot or not has_line_of_sight(player["position"], contact, obstacles):
+            continue
+        destroy_ward_bulwark(barrier)
+        objects_destroyed += 1
     state["breach_cooldown"] = BREAKER_BREACH_COOLDOWN
     state["breach_effect_remaining"] = BREAKER_BREACH_EFFECT_DURATION
     state["breach_angle"] = aim_angle
-    return (
-        True,
-        (
-            f"BREACH CHARGE - {enemies_hit} ENEMY / "
-            f"{allies_pushed} ALLY PUSHED / {objects_destroyed} COVER DESTROYED"
-        ),
-        geometry_changed,
-    )
+    return True, f"BREACH CHARGE - {enemies_hit} ENEMY / {allies_pushed} ALLY PUSHED / {objects_destroyed} COVER DESTROYED", geometry_changed
 
 
 def try_activate_unbound_fury(player):
@@ -3542,20 +3669,24 @@ def update_varek_abilities(player, delta_time):
     state["fury_remaining"] = max(0.0, state["fury_remaining"] - delta_time)
 
 
-def get_character_movement_obstacles(player, walls, destructible_objects, normal_obstacles):
-    """Apply character-specific low-cover vaulting while preserving hard walls."""
+def get_character_movement_obstacles(player, walls, destructible_objects, normal_obstacles, actors=None):
+    """Apply character movement rules plus enemy Ward barrier collision."""
     if varek_unbound_fury_active(player):
-        return walls + [
+        result = walls + [
             destructible["rect"]
             for destructible in destructible_objects
             if not destructible["destroyed"] and destructible["type"] != "crate"
         ]
-    return get_miri_movement_obstacles(
-        player,
-        walls,
-        destructible_objects,
-        normal_obstacles,
-    )
+    else:
+        result = get_miri_movement_obstacles(
+            player,
+            walls,
+            destructible_objects,
+            normal_obstacles,
+        )
+    if actors is not None:
+        result = list(result) + get_bulwark_movement_obstacles(player, actors)
+    return result
 
 
 def perform_varek_blade_attack(
@@ -3597,10 +3728,10 @@ def miri_feline_lunge_active(actor):
     )
 
 
-def miri_field_treatment_active(actor):
-    """Return whether Miri is currently casting her one-second heal."""
+def guardian_field_treatment_active(actor):
+    """Return whether any Guardian is currently casting the shared heal."""
     return (
-        actor.get("character_id") == MIRI["id"]
+        actor.get("character_class") == "Guardian"
         and actor.get("ability_state", {}).get("field_treatment_remaining", 0.0) > 0
     )
 
@@ -3633,21 +3764,21 @@ def try_activate_feline_lunge(player):
 
 
 def try_activate_field_treatment(player):
-    """Begin Miri's one-second nearby-ally healing cast."""
-    if player.get("character_id") != MIRI["id"]:
+    """Begin the shared Guardian one-second nearby-ally healing cast."""
+    if player.get("character_class") != "Guardian":
         return False, "FIELD TREATMENT UNAVAILABLE"
 
     state = player["ability_state"]
-    if state["nine_lives_remaining"] > 0:
+    if player.get("character_id") == MIRI["id"] and state.get("nine_lives_remaining", 0.0) > 0:
         return False, "NINE LIVES CHANNEL IN PROGRESS"
     if state["field_treatment_remaining"] > 0:
         return False, "FIELD TREATMENT ALREADY CASTING"
     if state["field_treatment_cooldown"] > 0:
         return False, f"FIELD TREATMENT COOLDOWN {state['field_treatment_cooldown']:.1f}s"
 
-    state["field_treatment_remaining"] = MIRI_FIELD_TREATMENT_CAST_TIME
+    state["field_treatment_remaining"] = GUARDIAN_FIELD_TREATMENT_CAST_TIME
     state["field_treatment_pending"] = True
-    state["field_treatment_cooldown"] = MIRI_FIELD_TREATMENT_COOLDOWN
+    state["field_treatment_cooldown"] = GUARDIAN_FIELD_TREATMENT_COOLDOWN
     return True, "FIELD TREATMENT CASTING"
 
 
@@ -3719,8 +3850,50 @@ def resurrect_actor_with_nine_lives(target):
     # they are eliminated immediately instead of receiving another normal down.
 
 
+def update_guardian_field_treatment(player, actors, delta_time):
+    """Advance the fixed Guardian C for both Miri and Ward."""
+    if player.get("character_class") != "Guardian":
+        return None
+    state = player["ability_state"]
+    state["field_treatment_cooldown"] = max(
+        0.0, state["field_treatment_cooldown"] - delta_time
+    )
+    if not actor_can_fight(player) and state["field_treatment_remaining"] > 0:
+        state["field_treatment_remaining"] = 0.0
+        state["field_treatment_pending"] = False
+        return None
+    if state["field_treatment_remaining"] <= 0:
+        return None
+
+    previous = state["field_treatment_remaining"]
+    state["field_treatment_remaining"] = max(0.0, previous - delta_time)
+    if state["field_treatment_remaining"] > 0 or not state["field_treatment_pending"]:
+        return None
+
+    state["field_treatment_pending"] = False
+    healed_count = 0
+    for actor in actors:
+        if actor is player or actor["team"] != player["team"]:
+            continue
+        if not actor_can_fight(actor):
+            continue
+        if player["position"].distance_to(actor["position"]) > GUARDIAN_FIELD_TREATMENT_RADIUS:
+            continue
+        missing_health = max(0.0, actor["max_health"] - actor["health"])
+        heal_amount = missing_health * GUARDIAN_FIELD_TREATMENT_MISSING_HEALTH_FRACTION
+        if heal_amount <= 0:
+            continue
+        actor["health"] = min(actor["max_health"], actor["health"] + heal_amount)
+        healed_count += 1
+    return (
+        f"FIELD TREATMENT HEALED {healed_count} ALLY"
+        if healed_count == 1
+        else f"FIELD TREATMENT HEALED {healed_count} ALLIES"
+    )
+
+
 def update_miri_abilities(player, actors, obstacles, delta_time):
-    """Advance Miri's mobility, healing cast, and resurrection channel."""
+    """Advance Miri's unique mobility and resurrection abilities."""
     if player.get("character_id") != MIRI["id"]:
         return None
 
@@ -3737,30 +3910,6 @@ def update_miri_abilities(player, actors, obstacles, delta_time):
     state["claw_animation_timer"] = max(
         0.0, state["claw_animation_timer"] - delta_time
     )
-    state["field_treatment_cooldown"] = max(
-        0.0, state["field_treatment_cooldown"] - delta_time
-    )
-
-    healed_count = None
-    if state["field_treatment_remaining"] > 0:
-        previous = state["field_treatment_remaining"]
-        state["field_treatment_remaining"] = max(0.0, previous - delta_time)
-        if state["field_treatment_remaining"] <= 0 and state["field_treatment_pending"]:
-            state["field_treatment_pending"] = False
-            healed_count = 0
-            for actor in actors:
-                if actor is player or actor["team"] != player["team"]:
-                    continue
-                if not actor_can_fight(actor):
-                    continue
-                if player["position"].distance_to(actor["position"]) > MIRI_FIELD_TREATMENT_RADIUS:
-                    continue
-                missing_health = max(0.0, actor["max_health"] - actor["health"])
-                heal_amount = missing_health * MIRI_FIELD_TREATMENT_MISSING_HEALTH_FRACTION
-                if heal_amount <= 0:
-                    continue
-                actor["health"] = min(actor["max_health"], actor["health"] + heal_amount)
-                healed_count += 1
 
     if state["nine_lives_remaining"] > 0:
         target = state["nine_lives_target"]
@@ -3789,9 +3938,6 @@ def update_miri_abilities(player, actors, obstacles, delta_time):
             state["nine_lives_target"] = None
             state["nine_lives_start_position"] = None
             return f"{target['name']} RETURNED TO THE FIGHT"
-
-    if healed_count is not None:
-        return f"FIELD TREATMENT HEALED {healed_count} ALLY" if healed_count == 1 else f"FIELD TREATMENT HEALED {healed_count} ALLIES"
     return None
 
 
@@ -4137,7 +4283,7 @@ def update_bullets(
     actors,
     bullet_marks,
 ):
-    """Move bullets and damage the first actor, object, or wall they strike."""
+    """Move bullets; Ward barriers stop every shot without blocking normal vision."""
     surviving_bullets = []
     obstacle_geometry_changed = False
 
@@ -4149,7 +4295,6 @@ def update_bullets(
         movement_step_length = movement_step.length()
         bullet_removed = False
 
-        # Small movement steps prevent fast bullets from skipping through thin walls.
         for _ in range(step_count):
             bullet["position"] += movement_step
             bullet["distance_traveled"] += movement_step_length
@@ -4162,6 +4307,15 @@ def update_bullets(
                 bullet_removed = True
                 break
 
+            hit_bulwark = get_bulwark_hit_by_projectile(
+                bullet["position"], bullet["radius"], actors
+            )
+            if hit_bulwark is not None:
+                if hit_bulwark["team"] != bullet["team"]:
+                    damage_ward_bulwark(hit_bulwark, calculate_bullet_damage(bullet))
+                bullet_removed = True
+                break
+
             hit_destructible = get_bullet_hit_destructible(
                 bullet,
                 destructible_objects,
@@ -4170,18 +4324,14 @@ def update_bullets(
                 hit_rect = hit_destructible["rect"]
                 hit_destructible["health"] = max(
                     0,
-                    hit_destructible["health"]
-                    - calculate_bullet_damage(bullet),
+                    hit_destructible["health"] - calculate_bullet_damage(bullet),
                 )
 
                 if hit_destructible["health"] == 0:
                     hit_destructible["destroyed"] = True
                     obstacle_geometry_changed = True
-                    # Remove marks attached to an object that no longer exists.
                     bullet_marks[:] = [
-                        mark
-                        for mark in bullet_marks
-                        if mark.get("wall") is not hit_rect
+                        mark for mark in bullet_marks if mark.get("wall") is not hit_rect
                     ]
                 else:
                     bullet_marks.append(create_bullet_mark(bullet, hit_rect))
@@ -4196,7 +4346,6 @@ def update_bullets(
                 bullet_marks.append(create_bullet_mark(bullet, hit_wall))
                 if len(bullet_marks) > MAX_BULLET_MARKS:
                     del bullet_marks[0]
-
                 bullet_removed = True
                 break
 
@@ -4207,28 +4356,16 @@ def update_bullets(
                     or actor is bullet["shooter"]
                 ):
                     continue
-
-                distance_to_target = bullet["position"].distance_to(
-                    actor["position"]
-                )
-                if distance_to_target <= bullet["radius"] + ACTOR_RADIUS:
-                    hit_damage = calculate_bullet_damage(bullet)
-                    damage_actor(actor, hit_damage, bullet["shooter"])
-
+                if bullet["position"].distance_to(actor["position"]) <= bullet["radius"] + ACTOR_RADIUS:
+                    damage_actor(actor, calculate_bullet_damage(bullet), bullet["shooter"])
                     bullet_removed = True
                     break
 
             if not bullet_removed:
-                for decoy_target in get_haze_hallucination_targets(
-                    bullet["team"], actors
-                ):
-                    distance_to_decoy = bullet["position"].distance_to(
-                        decoy_target["position"]
-                    )
-                    if distance_to_decoy <= bullet["radius"] + ACTOR_RADIUS:
-                        hit_damage = calculate_bullet_damage(bullet)
+                for decoy_target in get_haze_hallucination_targets(bullet["team"], actors):
+                    if bullet["position"].distance_to(decoy_target["position"]) <= bullet["radius"] + ACTOR_RADIUS:
                         damage_haze_hallucination(
-                            decoy_target["haze_owner"], hit_damage
+                            decoy_target["haze_owner"], calculate_bullet_damage(bullet)
                         )
                         bullet_removed = True
                         break
@@ -4630,10 +4767,11 @@ def get_bot_revival_destination(bot, downed_ally, walls):
 
 
 def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
-    """Run bot priorities: revive, fight, then contest or defend the Rift."""
+    """Run bot priorities; enemy Bulwarks affect movement but never line of sight."""
     if not actor_can_fight(bot):
         return
 
+    movement_walls = list(walls) + get_bulwark_movement_obstacles(bot, actors)
     bot["shot_cooldown"] = max(0.0, bot["shot_cooldown"] - delta_time)
     bot["heard_timer"] = max(0.0, bot["heard_timer"] - delta_time)
     if bot["heard_timer"] == 0:
@@ -4643,18 +4781,10 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
         bot["strafe_direction"] *= -1
         bot["strafe_timer"] = random.uniform(0.7, 1.5)
 
-    downed_ally = find_nearest_actor(
-        bot,
-        actors,
-        team=bot["team"],
-        downed_only=True,
-    )
+    downed_ally = find_nearest_actor(bot, actors, team=bot["team"], downed_only=True)
     if downed_ally is not None:
-        # A bot no longer has to SEE the downed teammate before volunteering.
-        # The nearest standing bot is assigned, then navigates toward the revive.
         possible_revivers = [
-            actor
-            for actor in actors
+            actor for actor in actors
             if actor["team"] == bot["team"]
             and not actor["is_player"]
             and actor_can_fight(actor)
@@ -4662,9 +4792,7 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
         if possible_revivers:
             designated_reviver = min(
                 possible_revivers,
-                key=lambda actor: actor["position"].distance_squared_to(
-                    downed_ally["position"]
-                ),
+                key=lambda actor: actor["position"].distance_squared_to(downed_ally["position"]),
             )
             if designated_reviver is not bot:
                 downed_ally = None
@@ -4673,60 +4801,41 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
 
     if downed_ally is not None:
         ally_distance = bot["position"].distance_to(downed_ally["position"])
-        ally_visible = has_line_of_sight(
-            bot["position"],
-            downed_ally["position"],
-            walls,
-        )
+        ally_visible = has_line_of_sight(bot["position"], downed_ally["position"], walls)
         if ally_distance > REVIVE_RANGE or not ally_visible:
             move_actor_toward(
                 bot,
-                get_bot_revival_destination(bot, downed_ally, walls),
+                get_bot_revival_destination(bot, downed_ally, movement_walls),
                 BOT_SPEED,
                 delta_time,
-                walls,
+                movement_walls,
             )
         else:
             try_revive(bot, downed_ally, delta_time, walls)
         return
 
     enemy_team = "red" if bot["team"] == "blue" else "blue"
-    team_has_rift_intel = (
-        rift_state["owner"] == bot["team"]
-        and rift_state["intel_remaining"] > 0
-    )
+    team_has_rift_intel = rift_state["owner"] == bot["team"] and rift_state["intel_remaining"] > 0
     visible_enemies = [
-        actor
-        for actor in actors
+        actor for actor in actors
         if actor["team"] == enemy_team
         and actor_can_fight(actor)
-        and (
-            team_has_rift_intel
-            or sable_visible_to_bot(bot, actor, walls)
-        )
+        and (team_has_rift_intel or sable_visible_to_bot(bot, actor, walls))
     ]
-    # The AI receives Haze's false targets through the same perception list as
-    # real enemies, so the deception is useful in the current single-player build.
     visible_enemies.extend(get_haze_false_targets_for_bot(bot, actors, walls))
 
     if not visible_enemies:
-        # Movement sound gives bots only a rough location to investigate. They
-        # still require real line of sight before they are allowed to fire.
         heard_enemies = [
-            actor
-            for actor in actors
+            actor for actor in actors
             if actor["team"] == enemy_team
             and actor_can_fight(actor)
             and actor.get("movement_sound_radius", 0.0) > 0
-            and bot["position"].distance_to(actor["position"])
-            <= actor["movement_sound_radius"]
+            and bot["position"].distance_to(actor["position"]) <= actor["movement_sound_radius"]
         ]
         if heard_enemies:
             heard_actor = min(
                 heard_enemies,
-                key=lambda actor: bot["position"].distance_squared_to(
-                    actor["position"]
-                ),
+                key=lambda actor: bot["position"].distance_squared_to(actor["position"]),
             )
             bot["heard_position"] = pygame.Vector2(heard_actor["position"])
             bot["heard_timer"] = MALPHAS_SOUND_MEMORY
@@ -4737,11 +4846,7 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
                 bot["aim_angle"] = math.atan2(sound_vector.y, sound_vector.x)
             if sound_vector.length() > 55:
                 move_actor_toward(
-                    bot,
-                    bot["heard_position"],
-                    BOT_SPEED,
-                    delta_time,
-                    walls,
+                    bot, bot["heard_position"], BOT_SPEED, delta_time, movement_walls
                 )
             return
 
@@ -4749,14 +4854,12 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
         if rift_distance > RIFT_RADIUS * 0.60:
             move_actor_toward(
                 bot,
-                get_bot_rift_destination(bot, rift_state, walls),
+                get_bot_rift_destination(bot, rift_state, movement_walls),
                 BOT_SPEED,
                 delta_time,
-                walls,
+                movement_walls,
             )
         else:
-            # Face outward while holding the site instead of piling into its
-            # exact center. Actor separation handles the remaining spacing.
             outward = bot["position"] - rift_state["position"]
             if outward.length_squared() > 0:
                 bot["aim_angle"] = math.atan2(outward.y, outward.x)
@@ -4773,28 +4876,21 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
 
     forward = target_vector.normalize()
     bot["aim_angle"] = math.atan2(forward.y, forward.x)
-    if (
-        target.get("character_id") == SABLE["id"]
-        and not team_has_rift_intel
-    ):
+    if target.get("character_id") == SABLE["id"] and not team_has_rift_intel:
         target_in_line_of_sight = sable_visible_to_bot(bot, target, walls)
     else:
-        target_in_line_of_sight = is_actor_visible(
-            bot["position"],
-            target,
-            walls,
-        )
+        target_in_line_of_sight = is_actor_visible(bot["position"], target, walls)
 
     if target_distance > BOT_PREFERRED_DISTANCE:
-        move_player(bot["position"], forward * BOT_SPEED * delta_time, walls)
+        move_player(bot["position"], forward * BOT_SPEED * delta_time, movement_walls)
     elif target_distance < BOT_RETREAT_DISTANCE:
-        move_player(bot["position"], -forward * BOT_SPEED * delta_time, walls)
+        move_player(bot["position"], -forward * BOT_SPEED * delta_time, movement_walls)
     else:
         sideways = pygame.Vector2(-forward.y, forward.x)
         move_player(
             bot["position"],
             sideways * BOT_SPEED * 0.55 * bot["strafe_direction"] * delta_time,
-            walls,
+            movement_walls,
         )
 
     if bot["shot_cooldown"] <= 0 and target_in_line_of_sight:
@@ -4802,26 +4898,18 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
         bot_weapon = WEAPONS[bot_weapon_index]
         projectile_count = bot_weapon.get("projectiles_per_shot", 1)
         bot_spread = max(BOT_SPREAD, bot_weapon["standing_spread"])
-        if projectile_count > 1:
-            damage_override = max(1, round(BOT_BULLET_DAMAGE * 0.65))
-        else:
-            damage_override = BOT_BULLET_DAMAGE
-
+        damage_override = (
+            max(1, round(BOT_BULLET_DAMAGE * 0.65))
+            if projectile_count > 1 else BOT_BULLET_DAMAGE
+        )
         for _ in range(projectile_count):
             bullets.append(
                 create_bullet(
-                    bot,
-                    bot["aim_angle"],
-                    bot_spread,
-                    bot_weapon,
+                    bot, bot["aim_angle"], bot_spread, bot_weapon,
                     damage_override=damage_override,
                 )
             )
-
-        bot["shot_cooldown"] = max(
-            BOT_FIRE_INTERVAL,
-            bot_weapon["seconds_per_shot"],
-        )
+        bot["shot_cooldown"] = max(BOT_FIRE_INTERVAL, bot_weapon["seconds_per_shot"])
 
 
 def reset_revival_sources(actors):
@@ -4844,7 +4932,7 @@ def team_has_standing_actor(actors, team):
 
 
 def separate_standing_actors(actors, walls):
-    """Prevent living players and bots from occupying the same position."""
+    """Prevent overlap without letting separation push actors through enemy Bulwarks."""
     standing_actors = [actor for actor in actors if actor_can_fight(actor)]
 
     for first_index, first_actor in enumerate(standing_actors):
@@ -4856,7 +4944,6 @@ def separate_standing_actors(actors, walls):
                 continue
 
             if distance_squared <= 0.0001:
-                # Stable fallback direction for actors at precisely one point.
                 direction = pygame.Vector2(1, 0)
                 distance = 0.0
             else:
@@ -4864,22 +4951,16 @@ def separate_standing_actors(actors, walls):
                 direction = difference / distance
 
             overlap = minimum_distance - distance
+            first_walls = list(walls) + get_bulwark_movement_obstacles(first_actor, actors)
+            second_walls = list(walls) + get_bulwark_movement_obstacles(second_actor, actors)
             if first_actor["is_player"]:
-                move_player(
-                    second_actor["position"],
-                    direction * overlap,
-                    walls,
-                )
+                move_player(second_actor["position"], direction * overlap, second_walls)
             elif second_actor["is_player"]:
-                move_player(
-                    first_actor["position"],
-                    -direction * overlap,
-                    walls,
-                )
+                move_player(first_actor["position"], -direction * overlap, first_walls)
             else:
                 push = direction * (overlap / 2)
-                move_player(first_actor["position"], -push, walls)
-                move_player(second_actor["position"], push, walls)
+                move_player(first_actor["position"], -push, first_walls)
+                move_player(second_actor["position"], push, second_walls)
 
 
 def update_camera_recoil(recoil_offset, recoil_velocity, shake_strength, delta_time):
@@ -5218,6 +5299,7 @@ def draw_actor(screen, font, actor, camera):
     is_haze = actor.get("character_id") == HAZE["id"]
     is_sable = actor.get("character_id") == SABLE["id"]
     is_aurel = actor.get("character_id") == AUREL["id"]
+    is_ward = actor.get("character_id") == WARD["id"]
     if is_malphas and not actor["downed"] and not actor["eliminated"]:
         fill_color = MALPHAS_BODY_COLOR
         # Keep the blue outer edge so the playable character still reads as
@@ -5243,6 +5325,9 @@ def draw_actor(screen, font, actor, camera):
         edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
     elif is_aurel and not actor["downed"] and not actor["eliminated"]:
         fill_color = AUREL_BODY_COLOR
+        edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
+    elif is_ward and not actor["downed"] and not actor["eliminated"]:
+        fill_color = WARD_BODY_COLOR
         edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
 
     if actor["eliminated"]:
@@ -5524,6 +5609,28 @@ def draw_actor(screen, font, actor, camera):
             pulse = 3 + round(2 * math.sin(pygame.time.get_ticks() * 0.014))
             pygame.draw.circle(
                 screen, AUREL_FIRE_COLOR, center_tuple, radius + 6 + pulse, width=2
+            )
+    elif is_ward:
+        # Scientist Guardian placeholder: white coat, dark clothing, yellow emitter.
+        coat_left = center - facing * 5 + side * 16
+        coat_right = center - facing * 5 - side * 16
+        pygame.draw.line(screen, WARD_COAT_COLOR, coat_left, center + facing * 19 + side * 8, width=8)
+        pygame.draw.line(screen, WARD_COAT_COLOR, coat_right, center + facing * 19 - side * 8, width=8)
+        pygame.draw.line(screen, WARD_CLOTHING_COLOR, center - facing * 13, center + facing * 17, width=8)
+        device_center = center - facing * 7 + side * 18
+        pygame.draw.circle(screen, WARD_DEVICE_COLOR, (round(device_center.x), round(device_center.y)), 8)
+        pygame.draw.circle(screen, WARD_SHIELD_COLOR, (round(device_center.x), round(device_center.y)), 4)
+        if ward_personal_aegis_active(actor):
+            shield_fraction = actor["ability_state"]["personal_aegis_health"] / WARD_AEGIS_HEALTH
+            pulse = 2 + round(2 * math.sin(pygame.time.get_ticks() * 0.014))
+            pygame.draw.circle(screen, WARD_SHIELD_COLOR, center_tuple, radius + 8 + pulse, width=3)
+            pygame.draw.arc(
+                screen,
+                WARD_SHIELD_CORE_COLOR,
+                pygame.Rect(center.x - radius - 13, center.y - radius - 13, (radius + 13) * 2, (radius + 13) * 2),
+                -math.pi / 2,
+                -math.pi / 2 + math.tau * shield_fraction,
+                width=4,
             )
     elif is_haze:
         # Torn gray cloak, completely shadowed hood, and Rift-colored core.
@@ -5904,6 +6011,44 @@ def draw_varek_world_effects(screen, player, camera):
 
 
 
+def draw_ward_world_effects(screen, font, player, actors, camera):
+    """Draw Bulwark barriers and Ward's shared healing cast without affecting vision."""
+    for barrier in get_active_bulwarks(actors):
+        rect = barrier["rect"].move(-round(camera.x), -round(camera.y))
+        if not screen.get_rect().colliderect(rect.inflate(20, 20)):
+            continue
+        fraction = max(0.0, min(1.0, barrier["health"] / barrier["max_health"]))
+        layer = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        pygame.draw.rect(layer, (*WARD_SHIELD_COLOR, 48), rect)
+        pygame.draw.rect(layer, (*WARD_SHIELD_COLOR, 225), rect, width=4)
+        # Simple energy lattice makes the barrier readable without making it opaque.
+        if barrier["orientation"] == "vertical":
+            for y in range(rect.top + 12, rect.bottom, 24):
+                pygame.draw.line(layer, (*WARD_SHIELD_CORE_COLOR, 105), (rect.left, y), (rect.right, y + 8), width=2)
+        else:
+            for x in range(rect.left + 12, rect.right, 24):
+                pygame.draw.line(layer, (*WARD_SHIELD_CORE_COLOR, 105), (x, rect.top), (x + 8, rect.bottom), width=2)
+        if fraction < 0.60:
+            pygame.draw.line(layer, (*WARD_SHIELD_CORE_COLOR, 210), rect.midtop, rect.center, width=2)
+        if fraction < 0.20:
+            pygame.draw.line(layer, (*WARD_SHIELD_CORE_COLOR, 230), rect.center, rect.midbottom, width=3)
+        screen.blit(layer, (0, 0))
+        hp_text = font.render(f"BULWARK {barrier['health']:.0f}/{barrier['max_health']:.0f}", True, WARD_SHIELD_COLOR)
+        screen.blit(hp_text, hp_text.get_rect(center=(rect.centerx, rect.top - 13)))
+
+    if player.get("character_class") == "Guardian" and guardian_field_treatment_active(player):
+        state = player["ability_state"]
+        progress = 1.0 - min(1.0, state["field_treatment_remaining"] / GUARDIAN_FIELD_TREATMENT_CAST_TIME)
+        center = pygame.Vector2(player["position"] - camera)
+        pygame.draw.circle(
+            screen,
+            WARD_SHIELD_COLOR if player.get("character_id") == WARD["id"] else MIRI_HEAL_COLOR,
+            (round(center.x), round(center.y)),
+            round(35 + GUARDIAN_FIELD_TREATMENT_RADIUS * progress),
+            width=3,
+        )
+
+
 def draw_aurel_world_effects(screen, player, camera):
     """Draw Aurel's fireballs, shared Breach cone, Inferno charge, blast, and trail."""
     if player.get("character_id") != AUREL["id"]:
@@ -6107,9 +6252,9 @@ def draw_miri_world_effects(screen, player, camera):
     if state["field_treatment_remaining"] > 0:
         progress = 1.0 - min(
             1.0,
-            state["field_treatment_remaining"] / MIRI_FIELD_TREATMENT_CAST_TIME,
+            state["field_treatment_remaining"] / GUARDIAN_FIELD_TREATMENT_CAST_TIME,
         )
-        radius = round(MIRI_FIELD_TREATMENT_RADIUS * (0.35 + 0.65 * progress))
+        radius = round(GUARDIAN_FIELD_TREATMENT_RADIUS * (0.35 + 0.65 * progress))
         pygame.draw.circle(screen, MIRI_HEAL_COLOR, center_tuple, radius, width=3)
 
     if state["nine_lives_remaining"] > 0 and state["nine_lives_target"] is not None:
@@ -6346,6 +6491,7 @@ def draw_character_panel(screen, font, player, status_message):
         HAZE["id"],
         SABLE["id"],
         AUREL["id"],
+        WARD["id"],
     ):
         return
 
@@ -6373,8 +6519,10 @@ def draw_character_panel(screen, font, player, status_message):
         title_color = HAZE_GREEN_COLOR
     elif character_id == SABLE["id"]:
         title_color = SABLE_TRACK_COLOR
-    else:
+    elif character_id == AUREL["id"]:
         title_color = AUREL_FIRE_GOLD_COLOR
+    else:
+        title_color = WARD_SHIELD_COLOR
     title = font.render(
         f"{player['character_name'].upper()} - {player['character_class'].upper()}",
         True,
@@ -6572,7 +6720,7 @@ def draw_character_panel(screen, font, player, status_message):
             f"X  WILD HUNT      - {ultimate_status}",
         ]
         status_color = SABLE_TRACK_COLOR
-    else:
+    elif character_id == AUREL["id"]:
         signature_status = format_ability_timer(state["cinderbolt_cooldown"])
         class_status = format_ability_timer(state["breach_cooldown"])
         if state["inferno_charge_remaining"] > 0:
@@ -6589,6 +6737,28 @@ def draw_character_panel(screen, font, player, status_message):
             f"X  EXPLOSIVE INFERNO - {ultimate_status}",
         ]
         status_color = AUREL_FIRE_GOLD_COLOR
+    else:
+        barrier = state.get("bulwark")
+        if barrier is not None and barrier.get("health", 0) > 0:
+            signature_status = f"{barrier['health']:.0f}/{barrier['max_health']:.0f} HP"
+        else:
+            signature_status = format_ability_timer(state["bulwark_cooldown"])
+        if state["field_treatment_remaining"] > 0:
+            class_status = f"CASTING {state['field_treatment_remaining']:.1f}s"
+        else:
+            class_status = format_ability_timer(state["field_treatment_cooldown"])
+        if state["personal_aegis_health"] > 0:
+            ultimate_status = f"{state['personal_aegis_health']:.0f}/{WARD_AEGIS_HEALTH} SHIELD"
+        elif state["personal_aegis_used"]:
+            ultimate_status = "USED THIS ROUND"
+        else:
+            ultimate_status = "READY"
+        lines = [
+            f"Q  BULWARK         - {signature_status}",
+            f"C  FIELD TREATMENT - {class_status}",
+            f"X  PERSONAL AEGIS  - {ultimate_status}",
+        ]
+        status_color = WARD_SHIELD_COLOR
 
     for index, line in enumerate(lines):
         rendered = font.render(line, True, TEXT_COLOR)
@@ -7802,19 +7972,33 @@ def get_pause_menu_buttons(screen):
 
 
 def get_character_card_rects(screen):
-    """Return evenly spaced character cards that still fit as the roster grows."""
-    gap = 20
+    """Lay the expanding roster out in at most five columns per row."""
     card_count = len(CHARACTER_ROSTER)
+    columns = min(5, card_count)
+    rows = math.ceil(card_count / columns)
+    gap_x = 16
+    gap_y = 18
     available_width = max(900, screen.get_width() - 70)
-    card_width = min(260, max(190, (available_width - gap * (card_count - 1)) // card_count))
-    card_height = 360
-    total_width = card_width * card_count + gap * (card_count - 1)
-    left = screen.get_width() // 2 - total_width // 2
-    top = screen.get_height() // 2 - 155
-    return [
-        pygame.Rect(left + index * (card_width + gap), top, card_width, card_height)
-        for index in range(card_count)
-    ]
+    card_width = min(250, max(180, (available_width - gap_x * (columns - 1)) // columns))
+    card_height = 390
+    total_height = rows * card_height + (rows - 1) * gap_y
+    top = max(145, screen.get_height() // 2 - total_height // 2 + 35)
+    rectangles = []
+    for row in range(rows):
+        start = row * columns
+        count = min(columns, card_count - start)
+        row_width = count * card_width + (count - 1) * gap_x
+        left = screen.get_width() // 2 - row_width // 2
+        for column in range(count):
+            rectangles.append(
+                pygame.Rect(
+                    left + column * (card_width + gap_x),
+                    top + row * (card_height + gap_y),
+                    card_width,
+                    card_height,
+                )
+            )
+    return rectangles
 
 
 def handle_character_select_click(match_state, player, click_position):
@@ -8065,7 +8249,7 @@ def draw_character_select(screen, regular_font, large_font, match_state):
             pygame.draw.line(screen, SABLE_WARPAINT_COLOR, (portrait_center[0] - 31, portrait_center[1] - 7), (portrait_center[0] - 12, portrait_center[1] - 7), width=5)
             pygame.draw.line(screen, SABLE_WARPAINT_COLOR, (portrait_center[0] + 12, portrait_center[1] - 7), (portrait_center[0] + 31, portrait_center[1] - 7), width=5)
             pygame.draw.line(screen, SABLE_KNIFE_COLOR, (portrait_center[0] - 43, portrait_center[1] + 43), (portrait_center[0] + 46, portrait_center[1] - 45), width=7)
-        else:
+        elif character["id"] == "aurel":
             # Aurel: pale elven fire mage in a white-and-gold tailored suit.
             pygame.draw.circle(screen, AUREL_BODY_COLOR, portrait_center, 50)
             pygame.draw.circle(
@@ -8113,6 +8297,35 @@ def draw_character_select(screen, regular_font, large_font, match_state):
                 (portrait_center[0], portrait_center[1] + 12),
                 7,
             )
+
+        else:
+            # Ward: white-coated shielding scientist with a bright yellow emitter.
+            pygame.draw.circle(screen, WARD_CLOTHING_COLOR, portrait_center, 50)
+            pygame.draw.arc(
+                screen,
+                WARD_COAT_COLOR,
+                (portrait_center[0] - 50, portrait_center[1] - 50, 100, 100),
+                math.radians(190),
+                math.radians(350),
+                width=13,
+            )
+            pygame.draw.line(
+                screen,
+                WARD_COAT_COLOR,
+                (portrait_center[0] - 30, portrait_center[1] + 5),
+                (portrait_center[0] - 42, portrait_center[1] + 52),
+                width=11,
+            )
+            pygame.draw.line(
+                screen,
+                WARD_COAT_COLOR,
+                (portrait_center[0] + 30, portrait_center[1] + 5),
+                (portrait_center[0] + 42, portrait_center[1] + 52),
+                width=11,
+            )
+            pygame.draw.circle(screen, WARD_DEVICE_COLOR, portrait_center, 17)
+            pygame.draw.circle(screen, WARD_SHIELD_COLOR, portrait_center, 10)
+            pygame.draw.circle(screen, WARD_SHIELD_COLOR, portrait_center, 60, width=4)
 
         name = large_font.render(
             character["name"].upper(),
@@ -8176,12 +8389,19 @@ def draw_character_select(screen, regular_font, large_font, match_state):
                 "C Track",
                 "X Wild Hunt",
             ]
-        else:
+        elif character["id"] == "aurel":
             detail_lines = [
                 "95 HP | Ranged fire breaker",
                 "Q Cinderbolt",
                 "C Breach Charge",
                 "X Explosive Inferno",
+            ]
+        else:
+            detail_lines = [
+                "100 HP | Fortification Guardian",
+                "Q Bulwark",
+                "C Field Treatment",
+                "X Personal Aegis",
             ]
 
         for line_index, line in enumerate(detail_lines):
@@ -8213,7 +8433,7 @@ def draw_character_select(screen, regular_font, large_font, match_state):
         )
     else:
         instruction = regular_font.render(
-            "Click a character or press 1-8. If time expires, Malphas is selected automatically.",
+            "Click a character or press 1-9. If time expires, Malphas is selected automatically.",
             True,
             (176, 190, 207),
         )
@@ -8472,7 +8692,7 @@ def main():
     pygame.init()
 
     screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-    pygame.display.set_caption("Riftbound - Version 0.8 Characters - Aurel Breaker")
+    pygame.display.set_caption("Riftbound - Version 0.8 Characters - Ward Guardian")
     pygame.mouse.set_visible(True)
 
     clock = pygame.time.Clock()
@@ -8599,6 +8819,8 @@ def main():
                         character_select_requested = "sable"
                     elif event.key == pygame.K_8:
                         character_select_requested = "aurel"
+                    elif event.key == pygame.K_9:
+                        character_select_requested = "ward"
                     continue
 
                 if match_state["phase"] == "playing" and relay_teleport_selecting(player):
@@ -8963,6 +9185,12 @@ def main():
             )
             update_longshot_abilities(player, delta_time)
             update_varek_abilities(player, delta_time)
+            guardian_update_message = update_guardian_field_treatment(
+                player, actors, delta_time
+            )
+            if guardian_update_message:
+                ability_status_message = guardian_update_message
+                ability_status_timer = 2.0
             miri_update_message = update_miri_abilities(
                 player,
                 actors,
@@ -8983,6 +9211,7 @@ def main():
                 ability_status_timer = 2.0
             update_haze_abilities(player, actors, active_obstacles, delta_time)
             update_sable_abilities(player, delta_time)
+            update_ward_abilities(player, delta_time)
             aurel_update_message, aurel_geometry_changed = update_aurel_abilities(
                 player,
                 actors,
@@ -9026,7 +9255,7 @@ def main():
                 _, ability_status_message = try_activate_silence(player)
             elif player.get("character_class") == "Hunter":
                 _, ability_status_message = try_activate_track(player)
-            elif player.get("character_id") == MIRI["id"]:
+            elif player.get("character_class") == "Guardian":
                 _, ability_status_message = try_activate_field_treatment(player)
             elif player.get("character_id") == RELAY["id"]:
                 _, ability_status_message = try_activate_rift_teleport(player, rift_state)
@@ -9089,6 +9318,8 @@ def main():
                 _, ability_status_message = try_activate_wild_hunt(player)
             elif player.get("character_id") == AUREL["id"]:
                 _, ability_status_message = try_activate_explosive_inferno(player)
+            elif player.get("character_id") == WARD["id"]:
+                _, ability_status_message = try_activate_personal_aegis(player)
             ability_status_timer = 2.0
 
         if aurel_inferno_charging(player):
@@ -9129,8 +9360,8 @@ def main():
             else 1.0
         )
         treatment_move_multiplier = (
-            MIRI_FIELD_TREATMENT_MOVE_MULTIPLIER
-            if miri_field_treatment_active(player)
+            GUARDIAN_FIELD_TREATMENT_MOVE_MULTIPLIER
+            if guardian_field_treatment_active(player)
             else 1.0
         )
         wild_hunt_speed_multiplier = (
@@ -9152,6 +9383,7 @@ def main():
             walls,
             destructible_objects,
             active_obstacles,
+            actors,
         )
         move_player(player["position"], movement, player_movement_obstacles)
 
@@ -9226,6 +9458,13 @@ def main():
                     player,
                     aim_angle,
                 )
+            elif player.get("character_id") == WARD["id"]:
+                _, ability_status_message = try_activate_bulwark(
+                    player,
+                    mouse_world_position,
+                    aim_angle,
+                    active_obstacles,
+                )
             ability_status_timer = 2.0
 
         for weapon_state in weapon_states:
@@ -9240,7 +9479,7 @@ def main():
 
         miri_blocks_weapon = (
             miri_feline_lunge_active(player)
-            or miri_field_treatment_active(player)
+            or guardian_field_treatment_active(player)
             or miri_nine_lives_active(player)
         )
         relay_blocks_weapon = (
@@ -9323,7 +9562,7 @@ def main():
         varek_blade_is_active = player_can_act and varek_blade_active(player)
         miri_claws_are_active = player_can_act and miri_feline_lunge_active(player)
         sable_hunt_is_active = player_can_act and sable_wild_hunt_active(player)
-        if miri_claws_are_active and trigger_held and not miri_field_treatment_active(player):
+        if miri_claws_are_active and trigger_held and not guardian_field_treatment_active(player):
             perform_miri_claw_attack(
                 player,
                 aim_angle,
@@ -9703,6 +9942,7 @@ def main():
         draw_hunter_track_effects(screen, player, actors, camera)
         draw_sable_world_effects(screen, debug_font, player, actors, camera)
         draw_aurel_world_effects(screen, player, camera)
+        draw_ward_world_effects(screen, debug_font, player, actors, camera)
 
         # Bots and bullets retain exact partial visibility, but only their
         # small bounding surfaces are multiplied by the visibility mask.
@@ -9825,7 +10065,7 @@ def main():
 
         if (
             player_can_act
-            and not miri_field_treatment_active(player)
+            and not guardian_field_treatment_active(player)
             and not miri_nine_lives_active(player)
             and not relay_blocks_weapon
             and not aurel_blocks_weapon
