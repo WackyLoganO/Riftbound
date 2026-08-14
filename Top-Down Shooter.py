@@ -203,7 +203,8 @@ ROUND_WIN_CREDITS = 700
 ROUND_LOSS_CREDITS = 500
 ROUND_DRAW_CREDITS = 600
 MAX_CREDITS = 9000
-BUY_PHASE_DURATION = 30.0
+CHARACTER_SELECT_DURATION = 20.0
+BUY_PHASE_DURATION = 15.0
 MAX_OWNED_WEAPONS = 3
 STARTING_WEAPON_INDICES = (0, 1)
 WEAPON_SHARE_RANGE = 100
@@ -230,9 +231,9 @@ RIFT_ENERGY_CONTROL_REWARD = 3
 RIFT_ENERGY_ROUND_WIN_REWARD = 10
 
 # -----------------------------------------------------------------------------
-# CHARACTERS 0.8 SETTINGS - MALPHAS
-# Malphas is the first playable character. Keeping his balance values together
-# makes it possible to tune the character without rewriting ability logic.
+# CHARACTERS 0.8 SETTINGS
+# Each playable character keeps statistics, ability balance, and placeholder-art
+# colors together so the roster can grow without rewriting shared game systems.
 # -----------------------------------------------------------------------------
 MALPHAS = {
     "id": "malphas",
@@ -244,6 +245,31 @@ MALPHAS = {
     "max_stamina": 105,
 }
 
+LONGSHOT = {
+    "id": "longshot",
+    "name": "Longshot",
+    "class": "Hunter",
+    "max_health": 95,
+    "move_speed": 245,
+    "sprint_multiplier": 1.25,
+    "max_stamina": 100,
+}
+
+# Akari remains visible in Character Select as the next locked roster slot.
+AKARI_PREVIEW = {
+    "id": "akari",
+    "name": "Akari",
+    "class": "Breaker",
+    "implemented": False,
+}
+
+CHARACTER_ROSTER = [
+    {**MALPHAS, "implemented": True},
+    {**LONGSHOT, "implemented": True},
+    AKARI_PREVIEW,
+]
+
+# Malphas - Phantom
 MALPHAS_HELLSTEP_RANGE = 650
 MALPHAS_HELLSTEP_DELAY = 0.65
 MALPHAS_HELLSTEP_COOLDOWN = 8.0
@@ -264,6 +290,36 @@ MALPHAS_BODY_COLOR = (77, 34, 60)
 MALPHAS_GLOW_COLOR = (210, 62, 115)
 MALPHAS_HORN_COLOR = (235, 207, 224)
 MALPHAS_EFFECT_COLOR = (227, 67, 92)
+
+# Longshot - Hunter
+LONGSHOT_RESONANCE_RADIUS = 900
+LONGSHOT_RESONANCE_COOLDOWN = 12.0
+LONGSHOT_RESONANCE_ECHO_DURATION = 2.4
+LONGSHOT_RESONANCE_PULSE_DURATION = 0.75
+LONGSHOT_MOVE_ACTIVITY_MEMORY = 0.35
+LONGSHOT_FIRE_ACTIVITY_MEMORY = 0.55
+
+LONGSHOT_TRACK_DURATION = 6.0
+LONGSHOT_TRACK_COOLDOWN = 14.0
+LONGSHOT_TRACK_EVENT_LIFETIME = 5.0
+LONGSHOT_TRACK_SAMPLE_INTERVAL = 0.30
+LONGSHOT_TRACK_MAX_EVENTS_PER_ACTOR = 24
+
+LONGSHOT_DEAD_LINE_SHOTS = 2
+LONGSHOT_DEAD_LINE_DAMAGE = 150
+LONGSHOT_DEAD_LINE_OBJECT_DAMAGE = 180
+LONGSHOT_DEAD_LINE_AIM_TIME = 0.65
+LONGSHOT_DEAD_LINE_RECOVERY = 1.35
+LONGSHOT_DEAD_LINE_RANGE = 2400
+LONGSHOT_DEAD_LINE_MAX_WALL_THICKNESS = 90
+LONGSHOT_DEAD_LINE_TRACER_DURATION = 0.20
+
+LONGSHOT_BODY_COLOR = (48, 61, 73)
+LONGSHOT_ARMOR_COLOR = (102, 123, 139)
+LONGSHOT_VISOR_COLOR = (90, 219, 255)
+LONGSHOT_RIFLE_COLOR = (205, 219, 228)
+LONGSHOT_EFFECT_COLOR = (72, 190, 255)
+LONGSHOT_TRACK_COLOR = (125, 224, 255)
 
 BACKGROUND_COLOR = (31, 37, 46)
 GRID_COLOR = (42, 49, 60)
@@ -286,6 +342,39 @@ ENEMY_COLOR = (208, 73, 82)
 ENEMY_EDGE_COLOR = (255, 190, 196)
 DOWNED_COLOR = (225, 158, 65)
 ELIMINATED_COLOR = (79, 61, 66)
+
+
+class UIButton:
+    """Small reusable mouse-driven UI button used by menus and overlays."""
+
+    def __init__(self, rectangle, label, action, enabled=True):
+        self.rect = pygame.Rect(rectangle)
+        self.label = label
+        self.action = action
+        self.enabled = enabled
+
+    def contains(self, position):
+        return self.enabled and self.rect.collidepoint(position)
+
+    def draw(self, screen, font, mouse_position):
+        hovered = self.contains(mouse_position)
+        if not self.enabled:
+            fill = (42, 46, 55)
+            edge = (84, 90, 103)
+            text_color = (125, 132, 145)
+        elif hovered:
+            fill = (48, 77, 103)
+            edge = PLAYER_EDGE_COLOR
+            text_color = TEXT_COLOR
+        else:
+            fill = (25, 31, 41)
+            edge = (104, 126, 151)
+            text_color = TEXT_COLOR
+
+        pygame.draw.rect(screen, fill, self.rect, border_radius=8)
+        pygame.draw.rect(screen, edge, self.rect, width=2, border_radius=8)
+        label_surface = font.render(self.label, True, text_color)
+        screen.blit(label_surface, label_surface.get_rect(center=self.rect.center))
 
 # Destructible objects use warm material colors so they cannot be confused
 # with the permanent gray concrete walls, even while terrain is darkened.
@@ -563,7 +652,57 @@ def make_character_ability_state(character_id):
             "bloodlust_remaining": 0.0,
             "bloodlust_used": False,
         }
+    if character_id == LONGSHOT["id"]:
+        return {
+            "resonance_cooldown": 0.0,
+            "resonance_pulse_remaining": 0.0,
+            "track_cooldown": 0.0,
+            "track_remaining": 0.0,
+            "dead_line_active": False,
+            "dead_line_used": False,
+            "dead_line_shots_remaining": 0,
+            "dead_line_charge": 0.0,
+            "dead_line_recovery": 0.0,
+            "dead_line_requires_release": False,
+            "dead_line_tracer_remaining": 0.0,
+            "dead_line_tracer_start": None,
+            "dead_line_tracer_end": None,
+        }
     return {}
+
+
+def get_playable_character(character_id):
+    """Return an implemented character definition or None for a locked preview."""
+    if character_id == MALPHAS["id"]:
+        return MALPHAS
+    if character_id == LONGSHOT["id"]:
+        return LONGSHOT
+    return None
+
+
+def apply_character_to_actor(actor, character):
+    """Apply a selected character's statistics and fresh per-round ability state."""
+    actor["character_id"] = character["id"]
+    actor["character_name"] = character["name"]
+    actor["character_class"] = character["class"]
+    actor["max_health"] = character.get("max_health", ACTOR_MAX_HEALTH)
+    actor["move_speed"] = character.get("move_speed", PLAYER_SPEED)
+    actor["sprint_multiplier"] = character.get(
+        "sprint_multiplier", SPRINT_MULTIPLIER
+    )
+    actor["max_stamina"] = character.get("max_stamina", MAX_STAMINA)
+    actor["health"] = actor["max_health"]
+    actor["ability_state"] = make_character_ability_state(character["id"])
+    actor["movement_sound_radius"] = 0.0
+    actor["heard_position"] = None
+    actor["heard_timer"] = 0.0
+    actor["activity_last_position"] = pygame.Vector2(actor["position"])
+    actor["movement_recent"] = 0.0
+    actor["fired_recent"] = 0.0
+    actor["track_sample_timer"] = 0.0
+    actor["track_events"] = []
+    actor["resonance_echo_remaining"] = 0.0
+    actor["resonance_echo_position"] = None
 
 
 def make_actor(
@@ -613,6 +752,13 @@ def make_actor(
         "movement_sound_radius": 0.0,
         "heard_position": None,
         "heard_timer": 0.0,
+        "activity_last_position": pygame.Vector2(spawn_position),
+        "movement_recent": 0.0,
+        "fired_recent": 0.0,
+        "track_sample_timer": 0.0,
+        "track_events": [],
+        "resonance_echo_remaining": 0.0,
+        "resonance_echo_position": None,
     }
 
 
@@ -670,6 +816,13 @@ def reset_actor_for_round(actor):
     actor["movement_sound_radius"] = 0.0
     actor["heard_position"] = None
     actor["heard_timer"] = 0.0
+    actor["activity_last_position"] = pygame.Vector2(actor["position"])
+    actor["movement_recent"] = 0.0
+    actor["fired_recent"] = 0.0
+    actor["track_sample_timer"] = 0.0
+    actor["track_events"] = []
+    actor["resonance_echo_remaining"] = 0.0
+    actor["resonance_echo_position"] = None
 
 
 def make_weapon_state(weapon):
@@ -1035,6 +1188,15 @@ def create_bullet(
     direction = pygame.Vector2(math.cos(bullet_angle), math.sin(bullet_angle))
     muzzle_distance = PLAYER_SIZE / 2 + weapon["bullet_radius"] + 7
 
+    # Longshot information abilities read recent activity from every actor. A
+    # shotgun creates several projectiles, so record_track_event suppresses
+    # duplicate fire markers at the same position.
+    shooter["fired_recent"] = max(
+        shooter.get("fired_recent", 0.0),
+        LONGSHOT_FIRE_ACTIVITY_MEMORY,
+    )
+    record_track_event(shooter, "fire")
+
     return {
         "position": pygame.Vector2(shooter["position"]) + direction * muzzle_distance,
         "velocity": direction * weapon["bullet_speed"],
@@ -1180,13 +1342,20 @@ def down_or_eliminate_actor(actor):
     actor["movement_sound_radius"] = 0.0
 
     # Active character powers stop when the character is downed. Cooldowns and
-    # the once-per-round ultimate flag remain, so being downed is not a free reset.
+    # once-per-round ultimate flags remain, so being downed is not a free reset.
     ability_state = actor.get("ability_state", {})
-    if ability_state:
+    if "hellstep_windup" in ability_state:
         ability_state["hellstep_windup"] = 0.0
         ability_state["hellstep_target"] = None
         ability_state["silence_remaining"] = 0.0
         ability_state["bloodlust_remaining"] = 0.0
+    if "dead_line_active" in ability_state:
+        ability_state["resonance_pulse_remaining"] = 0.0
+        ability_state["track_remaining"] = 0.0
+        ability_state["dead_line_active"] = False
+        ability_state["dead_line_charge"] = 0.0
+        ability_state["dead_line_recovery"] = 0.0
+        ability_state["dead_line_requires_release"] = False
 
     if actor["times_downed"] >= 2:
         actor["downed"] = False
@@ -1395,6 +1564,323 @@ def update_player_movement_sound(player, movement_state):
         player["movement_sound_radius"] = MALPHAS_WALK_SOUND_RADIUS
     else:
         player["movement_sound_radius"] = 0.0
+
+
+def record_track_event(actor, kind):
+    """Store one recent movement or interaction marker for Longshot's Track."""
+    events = actor.setdefault("track_events", [])
+    position = pygame.Vector2(actor["position"])
+    if events:
+        newest = events[-1]
+        if (
+            newest["kind"] == kind
+            and position.distance_squared_to(newest["position"]) < 14 * 14
+            and newest["remaining"] > LONGSHOT_TRACK_EVENT_LIFETIME - 0.18
+        ):
+            return
+
+    events.append(
+        {
+            "position": position,
+            "kind": kind,
+            "remaining": LONGSHOT_TRACK_EVENT_LIFETIME,
+        }
+    )
+    if len(events) > LONGSHOT_TRACK_MAX_EVENTS_PER_ACTOR:
+        del events[: len(events) - LONGSHOT_TRACK_MAX_EVENTS_PER_ACTOR]
+
+
+def update_actor_activity_tracking(actors, delta_time):
+    """Maintain short activity memory and recent trail points for Hunter abilities."""
+    for actor in actors:
+        actor["movement_recent"] = max(
+            0.0, actor.get("movement_recent", 0.0) - delta_time
+        )
+        actor["fired_recent"] = max(
+            0.0, actor.get("fired_recent", 0.0) - delta_time
+        )
+        actor["resonance_echo_remaining"] = max(
+            0.0, actor.get("resonance_echo_remaining", 0.0) - delta_time
+        )
+        actor["track_sample_timer"] = max(
+            0.0, actor.get("track_sample_timer", 0.0) - delta_time
+        )
+
+        events = actor.setdefault("track_events", [])
+        for event in events:
+            event["remaining"] -= delta_time
+        events[:] = [event for event in events if event["remaining"] > 0]
+
+        previous = actor.get("activity_last_position")
+        if previous is None:
+            previous = pygame.Vector2(actor["position"])
+        moved_distance_sq = actor["position"].distance_squared_to(previous)
+        if actor_can_fight(actor) and moved_distance_sq >= 1.0:
+            actor["movement_recent"] = LONGSHOT_MOVE_ACTIVITY_MEMORY
+            if actor["track_sample_timer"] <= 0:
+                record_track_event(actor, "step")
+                actor["track_sample_timer"] = LONGSHOT_TRACK_SAMPLE_INTERVAL
+
+        actor["activity_last_position"] = pygame.Vector2(actor["position"])
+
+
+def try_activate_resonance_sweep(player, actors):
+    """Reveal snapshots of moving or firing enemies inside Longshot's scan radius."""
+    if player.get("character_id") != LONGSHOT["id"]:
+        return False, "RESONANCE SWEEP UNAVAILABLE"
+
+    state = player["ability_state"]
+    if state["resonance_cooldown"] > 0:
+        return False, f"RESONANCE COOLDOWN {state['resonance_cooldown']:.1f}s"
+
+    echoes = 0
+    for actor in actors:
+        if actor is player or actor["team"] == player["team"]:
+            continue
+        if not actor_can_fight(actor):
+            continue
+        if player["position"].distance_to(actor["position"]) > LONGSHOT_RESONANCE_RADIUS:
+            continue
+        if actor.get("movement_recent", 0.0) <= 0 and actor.get("fired_recent", 0.0) <= 0:
+            continue
+        actor["resonance_echo_position"] = pygame.Vector2(actor["position"])
+        actor["resonance_echo_remaining"] = LONGSHOT_RESONANCE_ECHO_DURATION
+        echoes += 1
+
+    state["resonance_cooldown"] = LONGSHOT_RESONANCE_COOLDOWN
+    state["resonance_pulse_remaining"] = LONGSHOT_RESONANCE_PULSE_DURATION
+    return True, f"RESONANCE SWEEP - {echoes} ECHO{'ES' if echoes != 1 else ''}"
+
+
+def try_activate_track(player):
+    """Temporarily expose recent enemy movement and interaction markers."""
+    if player.get("character_id") != LONGSHOT["id"]:
+        return False, "TRACK UNAVAILABLE"
+
+    state = player["ability_state"]
+    if state["track_remaining"] > 0:
+        return False, "TRACK ALREADY ACTIVE"
+    if state["track_cooldown"] > 0:
+        return False, f"TRACK COOLDOWN {state['track_cooldown']:.1f}s"
+
+    state["track_remaining"] = LONGSHOT_TRACK_DURATION
+    state["track_cooldown"] = LONGSHOT_TRACK_COOLDOWN
+    return True, "TRACK ACTIVE"
+
+
+def try_activate_dead_line(player):
+    """Enter Longshot's two-shot supernatural sniper ultimate mode."""
+    if player.get("character_id") != LONGSHOT["id"]:
+        return False, "DEAD LINE UNAVAILABLE"
+
+    state = player["ability_state"]
+    if state["dead_line_active"]:
+        return False, "DEAD LINE ALREADY ACTIVE"
+    if state["dead_line_used"]:
+        return False, "DEAD LINE USED THIS ROUND"
+
+    state["dead_line_active"] = True
+    state["dead_line_used"] = True
+    state["dead_line_shots_remaining"] = LONGSHOT_DEAD_LINE_SHOTS
+    state["dead_line_charge"] = 0.0
+    state["dead_line_recovery"] = 0.0
+    state["dead_line_requires_release"] = True
+    return True, "DEAD LINE - RELEASE FIRE, THEN HOLD TO AIM"
+
+
+def longshot_dead_line_active(actor):
+    """Return whether Longshot is currently wielding Dead Line."""
+    return (
+        actor.get("character_id") == LONGSHOT["id"]
+        and actor.get("ability_state", {}).get("dead_line_active", False)
+    )
+
+
+def ray_rect_hit_distance(origin, direction, rectangle, max_distance):
+    """Return the entry distance where a ray first crosses an axis-aligned rectangle."""
+    t_min = 0.0
+    t_max = max_distance
+    for origin_value, direction_value, minimum, maximum in (
+        (origin.x, direction.x, rectangle.left, rectangle.right),
+        (origin.y, direction.y, rectangle.top, rectangle.bottom),
+    ):
+        if abs(direction_value) < 0.000001:
+            if origin_value < minimum or origin_value > maximum:
+                return None
+            continue
+        first = (minimum - origin_value) / direction_value
+        second = (maximum - origin_value) / direction_value
+        if first > second:
+            first, second = second, first
+        t_min = max(t_min, first)
+        t_max = min(t_max, second)
+        if t_min > t_max:
+            return None
+    if t_max < 0 or t_min > max_distance:
+        return None
+    return max(0.0, t_min)
+
+
+def ray_actor_hit_distance(origin, direction, actor, max_distance):
+    """Return the first ray distance that enters an actor's circular hit body."""
+    to_center = actor["position"] - origin
+    projection = to_center.dot(direction)
+    if projection < 0 or projection > max_distance:
+        return None
+    perpendicular_sq = to_center.length_squared() - projection * projection
+    radius_sq = ACTOR_RADIUS * ACTOR_RADIUS
+    if perpendicular_sq > radius_sq:
+        return None
+    half_chord = math.sqrt(max(0.0, radius_sq - perpendicular_sq))
+    return max(0.0, projection - half_chord)
+
+
+def fire_dead_line_shot(player, aim_angle, walls, destructible_objects, actors):
+    """Fire Dead Line as hitscan, penetrating at most one thin solid obstacle."""
+    origin = pygame.Vector2(player["position"])
+    direction = pygame.Vector2(math.cos(aim_angle), math.sin(aim_angle))
+    candidates = []
+
+    for wall in walls:
+        distance = ray_rect_hit_distance(
+            origin, direction, wall, LONGSHOT_DEAD_LINE_RANGE
+        )
+        if distance is not None:
+            candidates.append((distance, "wall", wall))
+
+    for destructible in destructible_objects:
+        if destructible["destroyed"]:
+            continue
+        distance = ray_rect_hit_distance(
+            origin, direction, destructible["rect"], LONGSHOT_DEAD_LINE_RANGE
+        )
+        if distance is not None:
+            candidates.append((distance, "destructible", destructible))
+
+    for actor in actors:
+        if actor is player or actor["team"] == player["team"] or not actor_can_fight(actor):
+            continue
+        distance = ray_actor_hit_distance(
+            origin, direction, actor, LONGSHOT_DEAD_LINE_RANGE
+        )
+        if distance is not None:
+            candidates.append((distance, "actor", actor))
+
+    candidates.sort(key=lambda item: item[0])
+    penetrated_obstacle = False
+    geometry_changed = False
+    impact_distance = LONGSHOT_DEAD_LINE_RANGE
+
+    for distance, target_type, target in candidates:
+        if target_type == "actor":
+            damage_actor(target, LONGSHOT_DEAD_LINE_DAMAGE, player)
+            impact_distance = distance
+            break
+
+        if penetrated_obstacle:
+            impact_distance = distance
+            break
+
+        if target_type == "wall":
+            thickness = min(target.width, target.height)
+            if thickness > LONGSHOT_DEAD_LINE_MAX_WALL_THICKNESS:
+                impact_distance = distance
+                break
+            penetrated_obstacle = True
+            continue
+
+        # Destructible cover counts as the single allowed penetration and takes
+        # the supernatural rifle's impact damage at the same time.
+        target["health"] = max(
+            0.0, target["health"] - LONGSHOT_DEAD_LINE_OBJECT_DAMAGE
+        )
+        if target["health"] <= 0:
+            target["destroyed"] = True
+            geometry_changed = True
+        penetrated_obstacle = True
+
+    return origin + direction * impact_distance, geometry_changed
+
+
+def update_longshot_abilities(player, delta_time):
+    """Advance Longshot cooldowns, scan pulse, Track duration, and Dead Line timers."""
+    if player.get("character_id") != LONGSHOT["id"]:
+        return
+
+    state = player["ability_state"]
+    state["resonance_cooldown"] = max(
+        0.0, state["resonance_cooldown"] - delta_time
+    )
+    state["resonance_pulse_remaining"] = max(
+        0.0, state["resonance_pulse_remaining"] - delta_time
+    )
+    state["track_cooldown"] = max(0.0, state["track_cooldown"] - delta_time)
+    state["track_remaining"] = max(0.0, state["track_remaining"] - delta_time)
+    state["dead_line_recovery"] = max(
+        0.0, state["dead_line_recovery"] - delta_time
+    )
+    state["dead_line_tracer_remaining"] = max(
+        0.0, state["dead_line_tracer_remaining"] - delta_time
+    )
+
+
+def update_dead_line_weapon(
+    player,
+    trigger_held,
+    aim_angle,
+    walls,
+    destructible_objects,
+    actors,
+    delta_time,
+):
+    """Charge and automatically fire one Dead Line shot after its warning line."""
+    if player.get("character_id") != LONGSHOT["id"]:
+        return False
+
+    state = player["ability_state"]
+    if not state["dead_line_active"]:
+        if not trigger_held:
+            state["dead_line_requires_release"] = False
+        return False
+
+    if not actor_can_fight(player):
+        state["dead_line_active"] = False
+        state["dead_line_charge"] = 0.0
+        return False
+
+    if not trigger_held:
+        state["dead_line_requires_release"] = False
+        state["dead_line_charge"] = 0.0
+        return False
+
+    if state["dead_line_requires_release"] or state["dead_line_recovery"] > 0:
+        return False
+
+    state["dead_line_charge"] = min(
+        LONGSHOT_DEAD_LINE_AIM_TIME,
+        state["dead_line_charge"] + delta_time,
+    )
+    if state["dead_line_charge"] < LONGSHOT_DEAD_LINE_AIM_TIME:
+        return False
+
+    tracer_end, geometry_changed = fire_dead_line_shot(
+        player,
+        aim_angle,
+        walls,
+        destructible_objects,
+        actors,
+    )
+    state["dead_line_tracer_start"] = pygame.Vector2(player["position"])
+    state["dead_line_tracer_end"] = pygame.Vector2(tracer_end)
+    state["dead_line_tracer_remaining"] = LONGSHOT_DEAD_LINE_TRACER_DURATION
+    state["dead_line_shots_remaining"] -= 1
+    state["dead_line_charge"] = 0.0
+    state["dead_line_recovery"] = LONGSHOT_DEAD_LINE_RECOVERY
+    state["dead_line_requires_release"] = True
+    if state["dead_line_shots_remaining"] <= 0:
+        state["dead_line_active"] = False
+
+    return geometry_changed
 
 
 def perform_knife_attack(
@@ -2447,10 +2933,14 @@ def draw_actor(screen, font, actor, camera):
         edge_color = ENEMY_EDGE_COLOR
 
     is_malphas = actor.get("character_id") == MALPHAS["id"]
+    is_longshot = actor.get("character_id") == LONGSHOT["id"]
     if is_malphas and not actor["downed"] and not actor["eliminated"]:
         fill_color = MALPHAS_BODY_COLOR
         # Keep the blue outer edge so the playable character still reads as
         # a blue-team actor even though his body has unique placeholder art.
+        edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
+    elif is_longshot and not actor["downed"] and not actor["eliminated"]:
+        fill_color = LONGSHOT_BODY_COLOR
         edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
 
     if actor["eliminated"]:
@@ -2546,6 +3036,38 @@ def draw_actor(screen, font, actor, camera):
                 radius + 7 + pulse,
                 width=3,
             )
+    elif is_longshot:
+        # Hunter placeholder: armored body, luminous visor, and a long rifle
+        # silhouette aligned with the character's aim direction.
+        visor_center = center + facing * 9
+        visor_start = visor_center - side * 12
+        visor_end = visor_center + side * 12
+        pygame.draw.line(
+            screen,
+            LONGSHOT_VISOR_COLOR,
+            visor_start,
+            visor_end,
+            width=6,
+        )
+        shoulder_left = center + side * 16 - facing * 4
+        shoulder_right = center - side * 16 - facing * 4
+        pygame.draw.line(
+            screen,
+            LONGSHOT_ARMOR_COLOR,
+            shoulder_left,
+            shoulder_right,
+            width=7,
+        )
+        rifle_start = center - facing * 5 - side * 8
+        rifle_end = center + facing * 43 - side * 8
+        pygame.draw.line(
+            screen,
+            LONGSHOT_RIFLE_COLOR,
+            rifle_start,
+            rifle_end,
+            width=5,
+        )
+        pygame.draw.circle(screen, LONGSHOT_VISOR_COLOR, center_tuple, 5)
     else:
         arrow_tip = center + facing * 34
         arrow_left = center - facing * 5 + side * 10
@@ -2616,14 +3138,150 @@ def draw_malphas_world_effects(screen, player, camera):
         )
 
 
+def draw_longshot_world_effects(screen, player, actors, camera):
+    """Draw Longshot scan echoes, Track trails, and Dead Line telegraphs."""
+    if player.get("character_id") != LONGSHOT["id"]:
+        return
+
+    state = player["ability_state"]
+    player_center = pygame.Vector2(player["position"] - camera)
+    center_tuple = (round(player_center.x), round(player_center.y))
+
+    if state["resonance_pulse_remaining"] > 0:
+        progress = 1.0 - min(
+            1.0,
+            state["resonance_pulse_remaining"] / LONGSHOT_RESONANCE_PULSE_DURATION,
+        )
+        radius = max(8, round(LONGSHOT_RESONANCE_RADIUS * progress))
+        pygame.draw.circle(
+            screen,
+            LONGSHOT_EFFECT_COLOR,
+            center_tuple,
+            radius,
+            width=3,
+        )
+
+    # Resonance Sweep creates historical snapshots rather than wall-hack
+    # silhouettes that continuously track an enemy's live movement.
+    for actor in actors:
+        if actor["team"] == player["team"]:
+            continue
+        if actor.get("resonance_echo_remaining", 0.0) <= 0:
+            continue
+        echo_position = actor.get("resonance_echo_position")
+        if echo_position is None:
+            continue
+        screen_position = pygame.Vector2(echo_position) - camera
+        echo_center = (round(screen_position.x), round(screen_position.y))
+        if not screen.get_rect().inflate(100, 100).collidepoint(echo_center):
+            continue
+        pulse = 4 + round(3 * math.sin(pygame.time.get_ticks() * 0.015))
+        pygame.draw.circle(
+            screen,
+            LONGSHOT_VISOR_COLOR,
+            echo_center,
+            ACTOR_RADIUS + 7 + pulse,
+            width=3,
+        )
+        pygame.draw.line(
+            screen,
+            LONGSHOT_VISOR_COLOR,
+            (echo_center[0] - 11, echo_center[1]),
+            (echo_center[0] + 11, echo_center[1]),
+            width=2,
+        )
+
+    if state["track_remaining"] > 0:
+        for actor in actors:
+            if actor["team"] == player["team"]:
+                continue
+            for event in actor.get("track_events", []):
+                position = pygame.Vector2(event["position"]) - camera
+                center = (round(position.x), round(position.y))
+                if not screen.get_rect().inflate(80, 80).collidepoint(center):
+                    continue
+                fraction = min(1.0, event["remaining"] / LONGSHOT_TRACK_EVENT_LIFETIME)
+                radius = max(3, round(7 * fraction))
+                if event["kind"] == "fire":
+                    pygame.draw.circle(
+                        screen,
+                        LONGSHOT_VISOR_COLOR,
+                        center,
+                        radius + 5,
+                        width=2,
+                    )
+                    pygame.draw.line(
+                        screen,
+                        LONGSHOT_VISOR_COLOR,
+                        (center[0] - 6, center[1] - 6),
+                        (center[0] + 6, center[1] + 6),
+                        width=2,
+                    )
+                else:
+                    pygame.draw.circle(
+                        screen,
+                        LONGSHOT_TRACK_COLOR,
+                        center,
+                        radius,
+                    )
+                    pygame.draw.circle(
+                        screen,
+                        (21, 40, 51),
+                        center,
+                        max(1, radius - 3),
+                    )
+
+    if state["dead_line_active"] and state["dead_line_charge"] > 0:
+        direction = pygame.Vector2(
+            math.cos(player["aim_angle"]),
+            math.sin(player["aim_angle"]),
+        )
+        line_end_world = player["position"] + direction * LONGSHOT_DEAD_LINE_RANGE
+        line_end = line_end_world - camera
+        charge_fraction = min(
+            1.0, state["dead_line_charge"] / LONGSHOT_DEAD_LINE_AIM_TIME
+        )
+        line_width = 1 + round(3 * charge_fraction)
+        pygame.draw.line(
+            screen,
+            LONGSHOT_VISOR_COLOR,
+            center_tuple,
+            (round(line_end.x), round(line_end.y)),
+            width=line_width,
+        )
+
+    if (
+        state["dead_line_tracer_remaining"] > 0
+        and state["dead_line_tracer_start"] is not None
+        and state["dead_line_tracer_end"] is not None
+    ):
+        start = pygame.Vector2(state["dead_line_tracer_start"]) - camera
+        end = pygame.Vector2(state["dead_line_tracer_end"]) - camera
+        pygame.draw.line(
+            screen,
+            LONGSHOT_RIFLE_COLOR,
+            (round(start.x), round(start.y)),
+            (round(end.x), round(end.y)),
+            width=7,
+        )
+        pygame.draw.line(
+            screen,
+            LONGSHOT_VISOR_COLOR,
+            (round(start.x), round(start.y)),
+            (round(end.x), round(end.y)),
+            width=2,
+        )
+
+
 def format_ability_timer(seconds):
     """Return a short HUD label for a cooldown timer."""
     return "READY" if seconds <= 0 else f"{seconds:.1f}s"
 
 
 def draw_character_panel(screen, font, player, status_message):
-    """Show the active character, unique stats, abilities, and cooldowns."""
-    if player.get("character_id") != MALPHAS["id"]:
+    """Show the selected character's unique statistics, abilities, and timers."""
+    character_id = player.get("character_id")
+    if character_id not in (MALPHAS["id"], LONGSHOT["id"]):
         return
 
     state = player["ability_state"]
@@ -2636,10 +3294,11 @@ def draw_character_panel(screen, font, player, status_message):
     panel.fill((10, 13, 18, 220))
     screen.blit(panel, (panel_x, panel_y))
 
+    title_color = MALPHAS_HORN_COLOR if character_id == MALPHAS["id"] else LONGSHOT_VISOR_COLOR
     title = font.render(
-        f"MALPHAS - {player['character_class'].upper()}",
+        f"{player['character_name'].upper()} - {player['character_class'].upper()}",
         True,
-        MALPHAS_HORN_COLOR,
+        title_color,
     )
     screen.blit(title, (panel_x + 16, panel_y + 10))
 
@@ -2651,34 +3310,68 @@ def draw_character_panel(screen, font, player, status_message):
     )
     screen.blit(stats, (panel_x + 16, panel_y + 34))
 
-    if state["hellstep_windup"] > 0:
-        hellstep_status = f"MARKED {state['hellstep_windup']:.1f}s"
-    else:
-        hellstep_status = format_ability_timer(state["hellstep_cooldown"])
+    if character_id == MALPHAS["id"]:
+        if state["hellstep_windup"] > 0:
+            signature_status = f"MARKED {state['hellstep_windup']:.1f}s"
+        else:
+            signature_status = format_ability_timer(state["hellstep_cooldown"])
 
-    if state["silence_remaining"] > 0:
-        silence_status = f"ACTIVE {state['silence_remaining']:.1f}s"
-    else:
-        silence_status = format_ability_timer(state["silence_cooldown"])
+        if state["silence_remaining"] > 0:
+            class_status = f"ACTIVE {state['silence_remaining']:.1f}s"
+        else:
+            class_status = format_ability_timer(state["silence_cooldown"])
 
-    if state["bloodlust_remaining"] > 0:
-        bloodlust_status = f"ACTIVE {state['bloodlust_remaining']:.1f}s"
-    elif state["bloodlust_used"]:
-        bloodlust_status = "USED THIS ROUND"
-    else:
-        bloodlust_status = "READY"
+        if state["bloodlust_remaining"] > 0:
+            ultimate_status = f"ACTIVE {state['bloodlust_remaining']:.1f}s"
+        elif state["bloodlust_used"]:
+            ultimate_status = "USED THIS ROUND"
+        else:
+            ultimate_status = "READY"
 
-    lines = [
-        f"Q  HELLSTEP  - {hellstep_status}",
-        f"C  SILENCE   - {silence_status}",
-        f"X  BLOODLUST - {bloodlust_status}",
-    ]
+        lines = [
+            f"Q  HELLSTEP  - {signature_status}",
+            f"C  SILENCE   - {class_status}",
+            f"X  BLOODLUST - {ultimate_status}",
+        ]
+        status_color = MALPHAS_GLOW_COLOR
+    else:
+        signature_status = format_ability_timer(state["resonance_cooldown"])
+        if state["track_remaining"] > 0:
+            class_status = f"ACTIVE {state['track_remaining']:.1f}s"
+        else:
+            class_status = format_ability_timer(state["track_cooldown"])
+
+        if state["dead_line_active"]:
+            if state["dead_line_recovery"] > 0:
+                ultimate_status = (
+                    f"{state['dead_line_shots_remaining']} SHOT(S) | "
+                    f"RECOVER {state['dead_line_recovery']:.1f}s"
+                )
+            elif state["dead_line_charge"] > 0:
+                ultimate_status = (
+                    f"{state['dead_line_shots_remaining']} SHOT(S) | "
+                    f"AIM {state['dead_line_charge']:.1f}/{LONGSHOT_DEAD_LINE_AIM_TIME:.1f}s"
+                )
+            else:
+                ultimate_status = f"{state['dead_line_shots_remaining']} SHOT(S) READY"
+        elif state["dead_line_used"]:
+            ultimate_status = "USED THIS ROUND"
+        else:
+            ultimate_status = "READY"
+
+        lines = [
+            f"Q  RESONANCE SWEEP - {signature_status}",
+            f"C  TRACK           - {class_status}",
+            f"X  DEAD LINE       - {ultimate_status}",
+        ]
+        status_color = LONGSHOT_VISOR_COLOR
+
     for index, line in enumerate(lines):
         rendered = font.render(line, True, TEXT_COLOR)
         screen.blit(rendered, (panel_x + 16, panel_y + 62 + index * 23))
 
     if status_message:
-        status = font.render(status_message, True, MALPHAS_GLOW_COLOR)
+        status = font.render(status_message, True, status_color)
         screen.blit(status, (panel_x + 16, panel_y + 132))
 
 
@@ -3555,8 +4248,8 @@ def draw_debug_panel(
         )
 
     lines = [
-        "RIFT HUNT 0.8 - MALPHAS",
-        "WASD Move | SHIFT Run | LMB Attack | Q Hellstep | C Silence | X Bloodlust | E Revive",
+        "RIFT HUNT 0.8 - CHARACTERS",
+        "WASD Move | SHIFT Run | LMB Attack | Q Signature | C Class | X Ultimate | E Revive | ESC Pause",
         f"Position: ({player_position.x:.1f}, {player_position.y:.1f})",
         f"Facing: {math.degrees(aim_angle):.1f} degrees",
         f"Movement: {movement_state}",
@@ -3805,6 +4498,311 @@ def draw_match_panel(
         )
 
 
+def get_main_menu_buttons(screen):
+    """Return the clickable controls for the title screen."""
+    center_x = screen.get_width() // 2
+    button_width = 330
+    button_height = 64
+    return [
+        UIButton(
+            (center_x - button_width // 2, screen.get_height() // 2 + 65,
+             button_width, button_height),
+            "PLAY",
+            "play",
+        ),
+        UIButton(
+            (center_x - button_width // 2, screen.get_height() // 2 + 145,
+             button_width, button_height),
+            "QUIT",
+            "quit",
+        ),
+    ]
+
+
+def get_pause_menu_buttons(screen):
+    """Return the clickable controls shown while the match is paused."""
+    center_x = screen.get_width() // 2
+    button_width = 330
+    button_height = 58
+    start_y = screen.get_height() // 2 - 10
+    return [
+        UIButton(
+            (center_x - button_width // 2, start_y, button_width, button_height),
+            "RESUME",
+            "resume",
+        ),
+        UIButton(
+            (center_x - button_width // 2, start_y + 72, button_width, button_height),
+            "MAIN MENU",
+            "main_menu",
+        ),
+        UIButton(
+            (center_x - button_width // 2, start_y + 144, button_width, button_height),
+            "QUIT",
+            "quit",
+        ),
+    ]
+
+
+def get_character_card_rects(screen):
+    """Return three evenly spaced character-card rectangles."""
+    card_width = 300
+    card_height = 360
+    gap = 34
+    total_width = card_width * 3 + gap * 2
+    left = screen.get_width() // 2 - total_width // 2
+    top = screen.get_height() // 2 - 155
+    return [
+        pygame.Rect(left + index * (card_width + gap), top, card_width, card_height)
+        for index in range(3)
+    ]
+
+
+def handle_character_select_click(match_state, player, click_position):
+    """Select an implemented character card and report locked choices."""
+    for character, rectangle in zip(CHARACTER_ROSTER, get_character_card_rects(pygame.display.get_surface())):
+        if not rectangle.collidepoint(click_position):
+            continue
+        if not character.get("implemented", False):
+            match_state["character_status"] = (
+                f"{character['name'].upper()} IS NOT IMPLEMENTED YET"
+            )
+            return False
+        selected = get_playable_character(character["id"])
+        if selected is None:
+            return False
+        apply_character_to_actor(player, selected)
+        match_state["selected_character_id"] = selected["id"]
+        match_state["character_status"] = f"{selected['name'].upper()} SELECTED"
+        return True
+    return False
+
+
+def draw_main_menu(screen, regular_font, large_font, title_font):
+    """Draw the title screen using the reusable button system."""
+    screen.fill((14, 18, 26))
+    center = (screen.get_width() // 2, screen.get_height() // 2 - 145)
+
+    # Temporary Rift emblem behind the logo.
+    pulse = 14 + round(8 * math.sin(pygame.time.get_ticks() * 0.0025))
+    pygame.draw.circle(screen, (31, 44, 61), center, 116 + pulse, width=3)
+    pygame.draw.circle(screen, RIFT_BLUE_COLOR, center, 74 + pulse // 2, width=4)
+    pygame.draw.circle(screen, (22, 18, 35), center, 44)
+    pygame.draw.polygon(
+        screen,
+        RIFT_NEUTRAL_COLOR,
+        (
+            (center[0], center[1] - 38),
+            (center[0] + 31, center[1]),
+            (center[0], center[1] + 38),
+            (center[0] - 31, center[1]),
+        ),
+    )
+
+    title = title_font.render("RIFTBOUND", True, TEXT_COLOR)
+    subtitle = large_font.render("RIFT HUNT", True, RIFT_BLUE_COLOR)
+    screen.blit(title, title.get_rect(center=(center[0], center[1] - 175)))
+    screen.blit(subtitle, subtitle.get_rect(center=(center[0], center[1] + 150)))
+
+    mouse_position = pygame.mouse.get_pos()
+    for button in get_main_menu_buttons(screen):
+        button.draw(screen, large_font, mouse_position)
+
+    version = regular_font.render(
+        "Version 0.8 - Characters Prototype", True, (154, 167, 184)
+    )
+    screen.blit(
+        version,
+        version.get_rect(center=(screen.get_width() // 2, screen.get_height() - 42)),
+    )
+
+
+def draw_pause_menu(screen, regular_font, large_font, title_font):
+    """Darken the game and draw pause controls without advancing simulation."""
+    overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+    overlay.fill((4, 6, 10, 205))
+    screen.blit(overlay, (0, 0))
+
+    title = title_font.render("PAUSED", True, TEXT_COLOR)
+    screen.blit(
+        title,
+        title.get_rect(center=(screen.get_width() // 2, screen.get_height() // 2 - 150)),
+    )
+    subtitle = regular_font.render(
+        "Press ESC to resume", True, (176, 190, 207)
+    )
+    screen.blit(
+        subtitle,
+        subtitle.get_rect(center=(screen.get_width() // 2, screen.get_height() // 2 - 92)),
+    )
+
+    mouse_position = pygame.mouse.get_pos()
+    for button in get_pause_menu_buttons(screen):
+        button.draw(screen, large_font, mouse_position)
+
+
+def draw_character_select(screen, regular_font, large_font, match_state):
+    """Draw the timed character-selection phase before the weapon shop."""
+    if match_state["phase"] != "character_select":
+        return
+
+    overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+    overlay.fill((7, 9, 14, 232))
+    screen.blit(overlay, (0, 0))
+
+    heading = large_font.render("CHOOSE YOUR CHARACTER", True, TEXT_COLOR)
+    screen.blit(
+        heading,
+        heading.get_rect(center=(screen.get_width() // 2, 76)),
+    )
+    timer = large_font.render(
+        f"{max(0.0, match_state['timer']):.1f}s",
+        True,
+        BULLET_COLOR,
+    )
+    screen.blit(timer, timer.get_rect(center=(screen.get_width() // 2, 125)))
+
+    selected_id = match_state.get("selected_character_id")
+    mouse_position = pygame.mouse.get_pos()
+    for character, rectangle in zip(CHARACTER_ROSTER, get_character_card_rects(screen)):
+        implemented = character.get("implemented", False)
+        selected = character["id"] == selected_id
+        hovered = rectangle.collidepoint(mouse_position) and implemented
+
+        if selected:
+            fill = (42, 72, 91)
+            edge = RIFT_BLUE_COLOR
+        elif hovered:
+            fill = (38, 48, 62)
+            edge = PLAYER_EDGE_COLOR
+        elif implemented:
+            fill = (25, 31, 41)
+            edge = (100, 120, 145)
+        else:
+            fill = (29, 31, 37)
+            edge = (68, 72, 82)
+
+        pygame.draw.rect(screen, fill, rectangle, border_radius=12)
+        pygame.draw.rect(screen, edge, rectangle, width=3, border_radius=12)
+
+        portrait_center = (rectangle.centerx, rectangle.top + 104)
+        if character["id"] == "malphas":
+            pygame.draw.circle(screen, MALPHAS_BODY_COLOR, portrait_center, 54)
+            pygame.draw.polygon(
+                screen,
+                MALPHAS_HORN_COLOR,
+                (
+                    (portrait_center[0] - 42, portrait_center[1] - 32),
+                    (portrait_center[0] - 64, portrait_center[1] - 72),
+                    (portrait_center[0] - 18, portrait_center[1] - 48),
+                ),
+            )
+            pygame.draw.polygon(
+                screen,
+                MALPHAS_HORN_COLOR,
+                (
+                    (portrait_center[0] + 42, portrait_center[1] - 32),
+                    (portrait_center[0] + 64, portrait_center[1] - 72),
+                    (portrait_center[0] + 18, portrait_center[1] - 48),
+                ),
+            )
+            pygame.draw.circle(screen, MALPHAS_GLOW_COLOR, portrait_center, 16)
+        elif character["id"] == "longshot":
+            pygame.draw.circle(screen, LONGSHOT_BODY_COLOR, portrait_center, 52)
+            pygame.draw.circle(screen, LONGSHOT_ARMOR_COLOR, portrait_center, 52, width=7)
+            pygame.draw.line(
+                screen,
+                LONGSHOT_VISOR_COLOR,
+                (portrait_center[0] - 20, portrait_center[1] - 10),
+                (portrait_center[0] + 20, portrait_center[1] - 10),
+                width=8,
+            )
+            pygame.draw.line(
+                screen,
+                LONGSHOT_RIFLE_COLOR,
+                (portrait_center[0] - 50, portrait_center[1] + 42),
+                (portrait_center[0] + 58, portrait_center[1] - 48),
+                width=10,
+            )
+        else:
+            pygame.draw.circle(screen, (72, 54, 66), portrait_center, 52)
+            pygame.draw.line(
+                screen,
+                (174, 105, 128),
+                (portrait_center[0] - 46, portrait_center[1] + 48),
+                (portrait_center[0] + 48, portrait_center[1] - 50),
+                width=8,
+            )
+
+        name = large_font.render(
+            character["name"].upper(),
+            True,
+            TEXT_COLOR if implemented else (126, 130, 140),
+        )
+        role = regular_font.render(
+            character["class"].upper(),
+            True,
+            RIFT_BLUE_COLOR if implemented else (105, 109, 119),
+        )
+        screen.blit(name, name.get_rect(center=(rectangle.centerx, rectangle.top + 190)))
+        screen.blit(role, role.get_rect(center=(rectangle.centerx, rectangle.top + 226)))
+
+        if character["id"] == "malphas":
+            detail_lines = [
+                "110 HP | Fast movement",
+                "Q Hellstep",
+                "C Silence",
+                "X Bloodlust",
+            ]
+        elif character["id"] == "longshot":
+            detail_lines = [
+                "95 HP | Precision hunter",
+                "Q Resonance Sweep",
+                "C Track",
+                "X Dead Line",
+            ]
+        else:
+            detail_lines = ["COMING SOON", "Kit not implemented yet"]
+
+        for line_index, line in enumerate(detail_lines):
+            line_surface = regular_font.render(
+                line,
+                True,
+                TEXT_COLOR if implemented else (115, 119, 129),
+            )
+            screen.blit(
+                line_surface,
+                line_surface.get_rect(
+                    center=(rectangle.centerx, rectangle.top + 270 + line_index * 25)
+                ),
+            )
+
+        if selected:
+            lock_text = regular_font.render("SELECTED", True, BULLET_COLOR)
+            screen.blit(
+                lock_text,
+                lock_text.get_rect(center=(rectangle.centerx, rectangle.bottom - 24)),
+            )
+
+    status = match_state.get("character_status", "")
+    if status:
+        status_surface = regular_font.render(status, True, BULLET_COLOR)
+        screen.blit(
+            status_surface,
+            status_surface.get_rect(center=(screen.get_width() // 2, screen.get_height() - 62)),
+        )
+    else:
+        instruction = regular_font.render(
+            "Click a character or press 1-3. If time expires, Malphas is selected automatically.",
+            True,
+            (176, 190, 207),
+        )
+        screen.blit(
+            instruction,
+            instruction.get_rect(center=(screen.get_width() // 2, screen.get_height() - 62)),
+        )
+
+
 def draw_buy_phase(
     screen,
     regular_font,
@@ -3815,7 +4813,7 @@ def draw_buy_phase(
     team_rift_energy,
     status_message,
 ):
-    """Show the 30-second weapon shop and the blue team's current economy."""
+    """Show the 15-second weapon shop and the blue team's current economy."""
     if match_state["phase"] != "buying":
         return
 
@@ -3923,7 +4921,7 @@ def draw_buy_phase(
 
 def draw_round_banner(screen, regular_font, large_font, match_state):
     """Display round and match results during the transition pause."""
-    if match_state["phase"] in ("playing", "buying"):
+    if match_state["phase"] in ("playing", "buying", "character_select"):
         return
 
     panel = pygame.Surface((720, 180), pygame.SRCALPHA)
@@ -3992,10 +4990,12 @@ def begin_new_match(
         actor["credits"] = STARTING_CREDITS
         actor["last_buy_round"] = 0
         reset_actor_loadout(actor)
-    match_state["phase"] = "buying"
-    match_state["timer"] = BUY_PHASE_DURATION
+    match_state["phase"] = "character_select"
+    match_state["timer"] = CHARACTER_SELECT_DURATION
     match_state["message"] = ""
     match_state["round_number"] = 1
+    match_state["selected_character_id"] = None
+    match_state["character_status"] = ""
     reset_round(
         actors,
         weapon_states,
@@ -4052,12 +5052,13 @@ def main():
     pygame.init()
 
     screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-    pygame.display.set_caption("Riftbound - Characters 0.8 - Malphas")
-    pygame.mouse.set_visible(False)
+    pygame.display.set_caption("Riftbound - Version 0.8 Characters")
+    pygame.mouse.set_visible(True)
 
     clock = pygame.time.Clock()
     debug_font = pygame.font.Font(None, 26)
     ammunition_font = pygame.font.Font(None, 48)
+    title_font = pygame.font.Font(None, 96)
     walls = make_walls()
     destructible_objects = make_destructible_objects()
     all_obstacle_rects = walls + [
@@ -4104,10 +5105,12 @@ def main():
         "red": STARTING_TEAM_RIFT_ENERGY,
     }
     match_state = {
-        "phase": "buying",
-        "timer": BUY_PHASE_DURATION,
+        "phase": "character_select",
+        "timer": CHARACTER_SELECT_DURATION,
         "message": "",
         "round_number": 1,
+        "selected_character_id": None,
+        "character_status": "",
     }
     vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
     cached_world_polygon = []
@@ -4118,6 +5121,8 @@ def main():
     share_status_timer = 0.0
     ability_status_message = ""
     ability_status_timer = 0.0
+    ui_state = "main_menu"
+    paused = False
     game_running = True
 
     while game_running:
@@ -4128,30 +5133,55 @@ def main():
         purchase_weapon_requested = None
         drop_weapon_requested = False
         pickup_weapon_requested = False
-        hellstep_requested = False
-        silence_requested = False
-        bloodlust_requested = False
+        signature_requested = False
+        class_ability_requested = False
+        ultimate_requested = False
+        character_select_requested = None
         trigger_just_pressed = False
         restart_requested = False
+        start_game_requested = False
+        ui_click_position = None
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 game_running = False
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    game_running = False
-                elif event.key == pygame.K_r:
+                    if ui_state == "main_menu":
+                        game_running = False
+                    else:
+                        paused = not paused
+                    continue
+
+                if ui_state == "main_menu":
+                    if event.key == pygame.K_RETURN:
+                        start_game_requested = True
+                    continue
+
+                if paused:
+                    continue
+
+                if match_state["phase"] == "character_select":
+                    if event.key == pygame.K_1:
+                        character_select_requested = "malphas"
+                    elif event.key == pygame.K_2:
+                        character_select_requested = "longshot"
+                    elif event.key == pygame.K_3:
+                        character_select_requested = "akari"
+                    continue
+
+                if event.key == pygame.K_r:
                     reload_requested = True
                 elif event.key == pygame.K_g:
                     drop_weapon_requested = True
                 elif event.key == pygame.K_f:
                     pickup_weapon_requested = True
                 elif event.key == pygame.K_q:
-                    hellstep_requested = True
+                    signature_requested = True
                 elif event.key == pygame.K_c:
-                    silence_requested = True
+                    class_ability_requested = True
                 elif event.key == pygame.K_x:
-                    bloodlust_requested = True
+                    ultimate_requested = True
                 elif event.key == pygame.K_1:
                     weapon_switch_requested = 0
                 elif event.key == pygame.K_2:
@@ -4169,7 +5199,130 @@ def main():
                 elif event.key == pygame.K_RETURN:
                     restart_requested = True
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                trigger_just_pressed = True
+                ui_click_position = event.pos
+                if (
+                    ui_state == "game"
+                    and not paused
+                    and match_state["phase"] == "playing"
+                ):
+                    trigger_just_pressed = True
+
+        # Main menu interaction is kept outside the match simulation.
+        if ui_state == "main_menu":
+            if ui_click_position is not None:
+                for button in get_main_menu_buttons(screen):
+                    if button.contains(ui_click_position):
+                        if button.action == "play":
+                            start_game_requested = True
+                        elif button.action == "quit":
+                            game_running = False
+
+            if not game_running:
+                break
+
+            if start_game_requested:
+                begin_new_match(
+                    match_state,
+                    scores,
+                    actors,
+                    weapon_states,
+                    bullets,
+                    bullet_marks,
+                    destructible_objects,
+                    rift_state,
+                    dropped_weapons,
+                    team_rift_energy,
+                )
+                ui_state = "game"
+                paused = False
+                active_weapon_index = 0
+                buy_status_message = ""
+                share_status_timer = 0.0
+                ability_status_message = ""
+                ability_status_timer = 0.0
+                cached_world_polygon = []
+                active_vision_mask_camera.update(-999999, -999999)
+                cached_vision_player_position.update(player["position"])
+                stamina = player["max_stamina"]
+                sprint_exhausted = False
+                camera_recoil_offset.update(0, 0)
+                camera_recoil_velocity.update(0, 0)
+                camera_shake_strength = 0.0
+                vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
+            else:
+                pygame.mouse.set_visible(True)
+                draw_main_menu(screen, debug_font, ammunition_font, title_font)
+                pygame.display.flip()
+                continue
+
+        # Pause-menu clicks are handled before any phase logic.
+        if paused and ui_click_position is not None:
+            for button in get_pause_menu_buttons(screen):
+                if not button.contains(ui_click_position):
+                    continue
+                if button.action == "resume":
+                    paused = False
+                elif button.action == "main_menu":
+                    paused = False
+                    ui_state = "main_menu"
+                elif button.action == "quit":
+                    game_running = False
+                break
+
+        if not game_running:
+            break
+
+        if ui_state == "main_menu":
+            pygame.mouse.set_visible(True)
+            draw_main_menu(screen, debug_font, ammunition_font, title_font)
+            pygame.display.flip()
+            continue
+
+        # A paused frame still renders the current scene, but all simulation
+        # timers and actions use a zero delta so absolutely nothing advances.
+        if paused:
+            delta_time = 0.0
+            reload_requested = False
+            weapon_switch_requested = None
+            purchase_weapon_requested = None
+            drop_weapon_requested = False
+            pickup_weapon_requested = False
+            signature_requested = False
+            class_ability_requested = False
+            ultimate_requested = False
+            character_select_requested = None
+            trigger_just_pressed = False
+
+        pygame.mouse.set_visible(
+            paused or match_state["phase"] == "character_select"
+        )
+
+        if not paused and match_state["phase"] == "character_select":
+            if ui_click_position is not None:
+                selected = handle_character_select_click(
+                    match_state,
+                    player,
+                    ui_click_position,
+                )
+                if selected:
+                    stamina = player["max_stamina"]
+                    sprint_exhausted = False
+
+            if character_select_requested is not None:
+                selected_character = get_playable_character(character_select_requested)
+                if selected_character is None:
+                    locked_name = character_select_requested.upper()
+                    match_state["character_status"] = (
+                        f"{locked_name} IS NOT IMPLEMENTED YET"
+                    )
+                else:
+                    apply_character_to_actor(player, selected_character)
+                    match_state["selected_character_id"] = selected_character["id"]
+                    match_state["character_status"] = (
+                        f"{selected_character['name'].upper()} SELECTED"
+                    )
+                    stamina = player["max_stamina"]
+                    sprint_exhausted = False
 
         if restart_requested and match_state["phase"] == "match_over":
             begin_new_match(
@@ -4231,7 +5384,11 @@ def main():
                 camera_shake_strength = 0.0
                 vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
 
-        if purchase_weapon_requested is not None:
+        if (
+            not paused
+            and match_state["phase"] == "buying"
+            and purchase_weapon_requested is not None
+        ):
             purchased, buy_status_message = try_buy_weapon(
                 player,
                 purchase_weapon_requested,
@@ -4260,7 +5417,22 @@ def main():
                 active_weapon_index = picked_weapon_index
                 share_status_timer = SHARE_STATUS_DURATION
 
-        if match_state["phase"] == "buying":
+        if match_state["phase"] == "character_select" and not paused:
+            match_state["timer"] = max(0.0, match_state["timer"] - delta_time)
+            if match_state["timer"] <= 0:
+                if match_state.get("selected_character_id") is None:
+                    apply_character_to_actor(player, MALPHAS)
+                    match_state["selected_character_id"] = MALPHAS["id"]
+                    match_state["character_status"] = "MALPHAS AUTO-SELECTED"
+                stamina = player["max_stamina"]
+                sprint_exhausted = False
+                match_state["phase"] = "buying"
+                match_state["timer"] = BUY_PHASE_DURATION
+                match_state["message"] = ""
+                buy_status_message = ""
+                share_status_timer = 0.0
+
+        if match_state["phase"] == "buying" and not paused:
             # Bots decide once per Buy Phase. Surviving bots with a purchased
             # third weapon naturally keep it and therefore skip another purchase.
             update_bot_buying(actors, match_state["round_number"])
@@ -4331,16 +5503,23 @@ def main():
                 active_obstacles,
                 delta_time,
             )
+            update_longshot_abilities(player, delta_time)
             if teleported:
                 cached_world_polygon = []
                 vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
 
-        if player_can_act and silence_requested:
-            _, ability_status_message = try_activate_silence(player)
+        if player_can_act and class_ability_requested:
+            if player.get("character_id") == MALPHAS["id"]:
+                _, ability_status_message = try_activate_silence(player)
+            elif player.get("character_id") == LONGSHOT["id"]:
+                _, ability_status_message = try_activate_track(player)
             ability_status_timer = 2.0
 
-        if player_can_act and bloodlust_requested:
-            _, ability_status_message = try_activate_bloodlust(player)
+        if player_can_act and ultimate_requested:
+            if player.get("character_id") == MALPHAS["id"]:
+                _, ability_status_message = try_activate_bloodlust(player)
+            elif player.get("character_id") == LONGSHOT["id"]:
+                _, ability_status_message = try_activate_dead_line(player)
             ability_status_timer = 2.0
 
         moving = movement_direction.length_squared() > 0
@@ -4420,12 +5599,18 @@ def main():
             aim_angle = math.atan2(aim_vector.y, aim_vector.x)
         player["aim_angle"] = aim_angle
 
-        if player_can_act and hellstep_requested:
-            _, ability_status_message = try_activate_hellstep(
-                player,
-                mouse_world_position,
-                active_obstacles,
-            )
+        if player_can_act and signature_requested:
+            if player.get("character_id") == MALPHAS["id"]:
+                _, ability_status_message = try_activate_hellstep(
+                    player,
+                    mouse_world_position,
+                    active_obstacles,
+                )
+            elif player.get("character_id") == LONGSHOT["id"]:
+                _, ability_status_message = try_activate_resonance_sweep(
+                    player,
+                    actors,
+                )
             ability_status_timer = 2.0
 
         for weapon_state in weapon_states:
@@ -4468,6 +5653,38 @@ def main():
                 active_weapon_state["reloading"] = False
                 active_weapon_state["reload_timer"] = 0.0
 
+        dead_line_blocks_weapon = (
+            player.get("character_id") == LONGSHOT["id"]
+            and (
+                player["ability_state"].get("dead_line_active", False)
+                or player["ability_state"].get("dead_line_requires_release", False)
+            )
+        )
+        dead_line_geometry_changed = False
+        if player_can_act and player.get("character_id") == LONGSHOT["id"]:
+            dead_line_geometry_changed = update_dead_line_weapon(
+                player,
+                trigger_held,
+                aim_angle,
+                walls,
+                destructible_objects,
+                actors,
+                delta_time,
+            )
+            if dead_line_geometry_changed:
+                active_obstacles = get_active_obstacle_rects(
+                    walls,
+                    destructible_objects,
+                )
+                active_obstacle_signature = tuple(
+                    not destructible["destroyed"]
+                    for destructible in destructible_objects
+                )
+                wall_segments = get_wall_segments(active_obstacles)
+                wall_corners = get_wall_corners(active_obstacles)
+                cached_world_polygon = []
+                vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
+
         if active_weapon["fire_mode"] in ("semi", "melee"):
             firing = trigger_just_pressed
         else:
@@ -4485,6 +5702,7 @@ def main():
             and not active_weapon_state["reloading"]
             and weapon_has_attack
             and active_weapon_state["shot_cooldown"] <= 0
+            and not dead_line_blocks_weapon
         )
         if can_fire:
             if active_weapon["fire_mode"] == "melee":
@@ -4621,6 +5839,8 @@ def main():
                 wall_corners = get_wall_corners(active_obstacles)
                 cached_world_polygon = []
                 vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
+
+            update_actor_activity_tracking(actors, delta_time)
 
             rift_winner = update_rift_state(
                 rift_state,
@@ -4791,6 +6011,7 @@ def main():
             camera,
         )
         draw_malphas_world_effects(screen, player, camera)
+        draw_longshot_world_effects(screen, player, actors, camera)
 
         # Bots and bullets retain exact partial visibility, but only their
         # small bounding surfaces are multiplied by the visibility mask.
@@ -4923,6 +6144,19 @@ def main():
             ammunition_font,
             match_state,
         )
+        draw_character_select(
+            screen,
+            debug_font,
+            ammunition_font,
+            match_state,
+        )
+        if paused:
+            draw_pause_menu(
+                screen,
+                debug_font,
+                ammunition_font,
+                title_font,
+            )
 
         pygame.display.flip()
 
