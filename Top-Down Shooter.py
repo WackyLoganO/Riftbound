@@ -255,18 +255,20 @@ LONGSHOT = {
     "max_stamina": 100,
 }
 
-# Akari remains visible in Character Select as the next locked roster slot.
-AKARI_PREVIEW = {
-    "id": "akari",
-    "name": "Akari",
+VAREK = {
+    "id": "varek",
+    "name": "Varek",
     "class": "Breaker",
-    "implemented": False,
+    "max_health": 105,
+    "move_speed": 255,
+    "sprint_multiplier": 1.30,
+    "max_stamina": 110,
 }
 
 CHARACTER_ROSTER = [
     {**MALPHAS, "implemented": True},
     {**LONGSHOT, "implemented": True},
-    AKARI_PREVIEW,
+    {**VAREK, "implemented": True},
 ]
 
 # Malphas - Phantom
@@ -320,6 +322,45 @@ LONGSHOT_VISOR_COLOR = (90, 219, 255)
 LONGSHOT_RIFLE_COLOR = (205, 219, 228)
 LONGSHOT_EFFECT_COLOR = (72, 190, 255)
 LONGSHOT_TRACK_COLOR = (125, 224, 255)
+
+# Varek - Breaker
+VAREK_ONI_BLADE_DURATION = 5.0
+VAREK_ONI_BLADE_COOLDOWN = 10.0
+VAREK_ONI_BLADE_DAMAGE = 70
+VAREK_ONI_BLADE_RANGE = 140
+VAREK_ONI_BLADE_ARC_DEGREES = 100
+VAREK_ONI_BLADE_SECONDS_PER_SWING = 0.42
+VAREK_ONI_BLADE_ANIMATION_TIME = 0.20
+
+VAREK_BREACH_COOLDOWN = 11.0
+VAREK_BREACH_RANGE = 280
+VAREK_BREACH_ARC_DEGREES = 70
+VAREK_BREACH_DAMAGE = 25
+VAREK_BREACH_OBJECT_DAMAGE = 90
+VAREK_BREACH_PUSH_DISTANCE = 150
+VAREK_BREACH_EFFECT_DURATION = 0.28
+
+VAREK_FURY_DURATION = 8.0
+VAREK_FURY_SPEED_MULTIPLIER = 1.30
+VAREK_FURY_EXTENSION_PER_ELIMINATION = 1.5
+VAREK_FURY_MAX_REMAINING = 12.0
+
+VAREK_ONI_BLADE = {
+    "name": "Oni Blade",
+    "fire_mode": "melee",
+    "damage": VAREK_ONI_BLADE_DAMAGE,
+    "melee_range": VAREK_ONI_BLADE_RANGE,
+    "melee_arc_degrees": VAREK_ONI_BLADE_ARC_DEGREES,
+    "seconds_per_shot": VAREK_ONI_BLADE_SECONDS_PER_SWING,
+    "attack_animation_time": VAREK_ONI_BLADE_ANIMATION_TIME,
+}
+
+VAREK_BODY_COLOR = (75, 55, 48)
+VAREK_ARMOR_COLOR = (121, 106, 91)
+VAREK_MASK_COLOR = (222, 203, 173)
+VAREK_BLADE_COLOR = (116, 215, 255)
+VAREK_EFFECT_COLOR = (83, 174, 232)
+VAREK_FURY_COLOR = (217, 91, 67)
 
 BACKGROUND_COLOR = (31, 37, 46)
 GRID_COLOR = (42, 49, 60)
@@ -668,6 +709,18 @@ def make_character_ability_state(character_id):
             "dead_line_tracer_start": None,
             "dead_line_tracer_end": None,
         }
+    if character_id == VAREK["id"]:
+        return {
+            "oni_blade_cooldown": 0.0,
+            "oni_blade_remaining": 0.0,
+            "blade_attack_cooldown": 0.0,
+            "blade_animation_timer": 0.0,
+            "breach_cooldown": 0.0,
+            "breach_effect_remaining": 0.0,
+            "breach_angle": 0.0,
+            "fury_remaining": 0.0,
+            "fury_used": False,
+        }
     return {}
 
 
@@ -677,6 +730,8 @@ def get_playable_character(character_id):
         return MALPHAS
     if character_id == LONGSHOT["id"]:
         return LONGSHOT
+    if character_id == VAREK["id"]:
+        return VAREK
     return None
 
 
@@ -1356,6 +1411,12 @@ def down_or_eliminate_actor(actor):
         ability_state["dead_line_charge"] = 0.0
         ability_state["dead_line_recovery"] = 0.0
         ability_state["dead_line_requires_release"] = False
+    if "oni_blade_remaining" in ability_state:
+        ability_state["oni_blade_remaining"] = 0.0
+        ability_state["blade_attack_cooldown"] = 0.0
+        ability_state["blade_animation_timer"] = 0.0
+        ability_state["breach_effect_remaining"] = 0.0
+        ability_state["fury_remaining"] = 0.0
 
     if actor["times_downed"] >= 2:
         actor["downed"] = False
@@ -1383,8 +1444,24 @@ def malphas_bloodlust_active(actor):
     )
 
 
+def varek_unbound_fury_active(actor):
+    """Return whether Varek currently has Unbound Fury active."""
+    return (
+        actor.get("character_id") == VAREK["id"]
+        and actor.get("ability_state", {}).get("fury_remaining", 0.0) > 0
+    )
+
+
+def varek_blade_active(actor):
+    """Return whether Varek is currently forced into the Rift-forged katana."""
+    if actor.get("character_id") != VAREK["id"]:
+        return False
+    state = actor.get("ability_state", {})
+    return state.get("oni_blade_remaining", 0.0) > 0 or state.get("fury_remaining", 0.0) > 0
+
+
 def damage_actor(target, damage, attacker=None):
-    """Damage an actor and apply Malphas Bloodlust healing when appropriate."""
+    """Damage an actor and apply character-specific on-hit/elimination effects."""
     if not target["alive"] or target["downed"] or target["eliminated"]:
         return 0.0, False
 
@@ -1417,6 +1494,19 @@ def damage_actor(target, damage, attacker=None):
                 * MALPHAS_BLOODLUST_ELIMINATION_HEALTH_FRACTION
             )
             attacker["health"] = max(attacker["health"], minimum_health)
+
+    if (
+        eliminated_now
+        and attacker is not None
+        and attacker is not target
+        and attacker.get("alive", False)
+        and varek_unbound_fury_active(attacker)
+    ):
+        attacker_state = attacker["ability_state"]
+        attacker_state["fury_remaining"] = min(
+            VAREK_FURY_MAX_REMAINING,
+            attacker_state["fury_remaining"] + VAREK_FURY_EXTENSION_PER_ELIMINATION,
+        )
 
     return damage_done, eliminated_now
 
@@ -1880,6 +1970,206 @@ def update_dead_line_weapon(
     if state["dead_line_shots_remaining"] <= 0:
         state["dead_line_active"] = False
 
+    return geometry_changed
+
+
+def try_activate_oni_blade(player):
+    """Draw Varek's Rift-forged katana for a short close-range attack window."""
+    if player.get("character_id") != VAREK["id"]:
+        return False, "ONI BLADE UNAVAILABLE"
+
+    state = player["ability_state"]
+    if state["fury_remaining"] > 0:
+        return False, "ONI BLADE ALREADY DRAWN BY UNBOUND FURY"
+    if state["oni_blade_remaining"] > 0:
+        return False, "ONI BLADE ALREADY ACTIVE"
+    if state["oni_blade_cooldown"] > 0:
+        return False, f"ONI BLADE COOLDOWN {state['oni_blade_cooldown']:.1f}s"
+
+    state["oni_blade_remaining"] = VAREK_ONI_BLADE_DURATION
+    state["oni_blade_cooldown"] = VAREK_ONI_BLADE_COOLDOWN
+    state["blade_attack_cooldown"] = 0.0
+    return True, "ONI BLADE DRAWN"
+
+
+def get_cone_dot_threshold(arc_degrees):
+    """Return the facing-dot threshold for a centered cone with this total arc."""
+    return math.cos(math.radians(arc_degrees / 2))
+
+
+def try_activate_breach_charge(
+    player,
+    aim_angle,
+    obstacles,
+    destructible_objects,
+    actors,
+    bullet_marks,
+):
+    """Blast a forward cone, damaging cover and pushing enemies away."""
+    if player.get("character_id") != VAREK["id"]:
+        return False, "BREACH CHARGE UNAVAILABLE", False
+
+    state = player["ability_state"]
+    if state["breach_cooldown"] > 0:
+        return (
+            False,
+            f"BREACH CHARGE COOLDOWN {state['breach_cooldown']:.1f}s",
+            False,
+        )
+
+    forward = pygame.Vector2(math.cos(aim_angle), math.sin(aim_angle))
+    minimum_dot = get_cone_dot_threshold(VAREK_BREACH_ARC_DEGREES)
+    geometry_changed = False
+    enemies_hit = 0
+    objects_hit = 0
+
+    for actor in actors:
+        if actor is player or actor["team"] == player["team"] or not actor_can_fight(actor):
+            continue
+        offset = actor["position"] - player["position"]
+        distance = offset.length()
+        if distance <= 0 or distance > VAREK_BREACH_RANGE:
+            continue
+        direction = offset / distance
+        if forward.dot(direction) < minimum_dot:
+            continue
+        if not has_line_of_sight(player["position"], actor["position"], obstacles):
+            continue
+
+        damage_actor(actor, VAREK_BREACH_DAMAGE, player)
+        move_player(
+            actor["position"],
+            direction * VAREK_BREACH_PUSH_DISTANCE,
+            obstacles,
+        )
+        enemies_hit += 1
+
+    for destructible in destructible_objects:
+        if destructible["destroyed"]:
+            continue
+        rectangle = destructible["rect"]
+        contact = pygame.Vector2(
+            max(rectangle.left, min(player["position"].x, rectangle.right)),
+            max(rectangle.top, min(player["position"].y, rectangle.bottom)),
+        )
+        offset = contact - player["position"]
+        distance = offset.length()
+        if distance <= 0 or distance > VAREK_BREACH_RANGE:
+            continue
+        direction = offset / distance
+        if forward.dot(direction) < minimum_dot:
+            continue
+        if not has_line_of_sight(
+            player["position"],
+            contact,
+            obstacles,
+            ignored_wall=rectangle,
+        ):
+            continue
+
+        destructible["health"] = max(
+            0,
+            destructible["health"] - VAREK_BREACH_OBJECT_DAMAGE,
+        )
+        objects_hit += 1
+        if destructible["health"] == 0:
+            destructible["destroyed"] = True
+            geometry_changed = True
+            bullet_marks[:] = [
+                mark for mark in bullet_marks if mark.get("wall") is not rectangle
+            ]
+
+    state["breach_cooldown"] = VAREK_BREACH_COOLDOWN
+    state["breach_effect_remaining"] = VAREK_BREACH_EFFECT_DURATION
+    state["breach_angle"] = aim_angle
+    return (
+        True,
+        f"BREACH CHARGE - {enemies_hit} ENEMY / {objects_hit} COVER HIT",
+        geometry_changed,
+    )
+
+
+def try_activate_unbound_fury(player):
+    """Activate Varek's once-per-round pursuit ultimate."""
+    if player.get("character_id") != VAREK["id"]:
+        return False, "UNBOUND FURY UNAVAILABLE"
+
+    state = player["ability_state"]
+    if state["fury_remaining"] > 0:
+        return False, "UNBOUND FURY ALREADY ACTIVE"
+    if state["fury_used"]:
+        return False, "UNBOUND FURY USED THIS ROUND"
+
+    state["fury_remaining"] = VAREK_FURY_DURATION
+    state["fury_used"] = True
+    state["oni_blade_remaining"] = 0.0
+    state["blade_attack_cooldown"] = 0.0
+    return True, "UNBOUND FURY ACTIVE"
+
+
+def update_varek_abilities(player, delta_time):
+    """Advance Varek's katana, Breach Charge, and Unbound Fury timers."""
+    if player.get("character_id") != VAREK["id"]:
+        return
+
+    state = player["ability_state"]
+    state["oni_blade_cooldown"] = max(
+        0.0, state["oni_blade_cooldown"] - delta_time
+    )
+    state["oni_blade_remaining"] = max(
+        0.0, state["oni_blade_remaining"] - delta_time
+    )
+    state["blade_attack_cooldown"] = max(
+        0.0, state["blade_attack_cooldown"] - delta_time
+    )
+    state["blade_animation_timer"] = max(
+        0.0, state["blade_animation_timer"] - delta_time
+    )
+    state["breach_cooldown"] = max(0.0, state["breach_cooldown"] - delta_time)
+    state["breach_effect_remaining"] = max(
+        0.0, state["breach_effect_remaining"] - delta_time
+    )
+    state["fury_remaining"] = max(0.0, state["fury_remaining"] - delta_time)
+
+
+def get_varek_movement_obstacles(player, walls, destructible_objects, normal_obstacles):
+    """During Unbound Fury, let Varek vault crates but never walls or doors."""
+    if not varek_unbound_fury_active(player):
+        return normal_obstacles
+    return walls + [
+        destructible["rect"]
+        for destructible in destructible_objects
+        if not destructible["destroyed"] and destructible["type"] != "crate"
+    ]
+
+
+def perform_varek_blade_attack(
+    player,
+    aim_angle,
+    actors,
+    obstacles,
+    destructible_objects,
+    bullet_marks,
+):
+    """Swing the active Oni Blade and return whether cover geometry changed."""
+    if not varek_blade_active(player):
+        return False
+
+    state = player["ability_state"]
+    if state["blade_attack_cooldown"] > 0:
+        return False
+
+    _, geometry_changed = perform_knife_attack(
+        player,
+        aim_angle,
+        VAREK_ONI_BLADE,
+        actors,
+        obstacles,
+        destructible_objects,
+        bullet_marks,
+    )
+    state["blade_attack_cooldown"] = VAREK_ONI_BLADE_SECONDS_PER_SWING
+    state["blade_animation_timer"] = VAREK_ONI_BLADE_ANIMATION_TIME
     return geometry_changed
 
 
@@ -2934,6 +3224,7 @@ def draw_actor(screen, font, actor, camera):
 
     is_malphas = actor.get("character_id") == MALPHAS["id"]
     is_longshot = actor.get("character_id") == LONGSHOT["id"]
+    is_varek = actor.get("character_id") == VAREK["id"]
     if is_malphas and not actor["downed"] and not actor["eliminated"]:
         fill_color = MALPHAS_BODY_COLOR
         # Keep the blue outer edge so the playable character still reads as
@@ -2941,6 +3232,9 @@ def draw_actor(screen, font, actor, camera):
         edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
     elif is_longshot and not actor["downed"] and not actor["eliminated"]:
         fill_color = LONGSHOT_BODY_COLOR
+        edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
+    elif is_varek and not actor["downed"] and not actor["eliminated"]:
+        fill_color = VAREK_BODY_COLOR
         edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
 
     if actor["eliminated"]:
@@ -3068,6 +3362,43 @@ def draw_actor(screen, font, actor, camera):
             width=5,
         )
         pygame.draw.circle(screen, LONGSHOT_VISOR_COLOR, center_tuple, 5)
+    elif is_varek:
+        # Breaker placeholder: broad plated shoulders, a pale mask, and a
+        # Rift-forged katana carried along the character's dominant side.
+        shoulder_left = center + side * 18 - facing * 5
+        shoulder_right = center - side * 18 - facing * 5
+        pygame.draw.line(
+            screen,
+            VAREK_ARMOR_COLOR,
+            shoulder_left,
+            shoulder_right,
+            width=9,
+        )
+        mask_center = center + facing * 9
+        pygame.draw.circle(
+            screen,
+            VAREK_MASK_COLOR,
+            (round(mask_center.x), round(mask_center.y)),
+            8,
+        )
+        blade_start = center - facing * 7 - side * 13
+        blade_end = center + facing * 36 - side * 13
+        pygame.draw.line(
+            screen,
+            VAREK_BLADE_COLOR,
+            blade_start,
+            blade_end,
+            width=4,
+        )
+        if varek_unbound_fury_active(actor):
+            pulse = 4 + round(3 * math.sin(pygame.time.get_ticks() * 0.014))
+            pygame.draw.circle(
+                screen,
+                VAREK_FURY_COLOR,
+                center_tuple,
+                radius + 8 + pulse,
+                width=3,
+            )
     else:
         arrow_tip = center + facing * 34
         arrow_left = center - facing * 5 + side * 10
@@ -3273,6 +3604,100 @@ def draw_longshot_world_effects(screen, player, actors, camera):
         )
 
 
+def draw_varek_world_effects(screen, player, camera):
+    """Draw Varek's active katana, Breach cone, and Unbound Fury aura."""
+    if player.get("character_id") != VAREK["id"]:
+        return
+
+    state = player["ability_state"]
+    center = pygame.Vector2(player["position"] - camera)
+    center_tuple = (round(center.x), round(center.y))
+
+    if varek_blade_active(player):
+        swing_progress = 0.0
+        if state["blade_animation_timer"] > 0:
+            swing_progress = 1.0 - min(
+                1.0,
+                state["blade_animation_timer"] / VAREK_ONI_BLADE_ANIMATION_TIME,
+            )
+        swing_offset = math.radians(-42 + 84 * swing_progress)
+        blade_angle = player["aim_angle"] + swing_offset
+        direction = pygame.Vector2(math.cos(blade_angle), math.sin(blade_angle))
+        side = pygame.Vector2(-direction.y, direction.x)
+        handle = center + direction * 11
+        tip = center + direction * 72
+        pygame.draw.line(
+            screen,
+            (45, 52, 61),
+            handle - side * 7,
+            handle + side * 7,
+            width=5,
+        )
+        pygame.draw.line(
+            screen,
+            VAREK_BLADE_COLOR,
+            handle,
+            tip,
+            width=7,
+        )
+        pygame.draw.line(
+            screen,
+            (225, 247, 255),
+            handle,
+            tip,
+            width=2,
+        )
+
+    if state["breach_effect_remaining"] > 0:
+        fraction = min(
+            1.0,
+            state["breach_effect_remaining"] / VAREK_BREACH_EFFECT_DURATION,
+        )
+        forward = pygame.Vector2(
+            math.cos(state["breach_angle"]), math.sin(state["breach_angle"])
+        )
+        half_arc = math.radians(VAREK_BREACH_ARC_DEGREES / 2)
+        left = pygame.Vector2(
+            math.cos(state["breach_angle"] - half_arc),
+            math.sin(state["breach_angle"] - half_arc),
+        )
+        right = pygame.Vector2(
+            math.cos(state["breach_angle"] + half_arc),
+            math.sin(state["breach_angle"] + half_arc),
+        )
+        distance = VAREK_BREACH_RANGE * (1.0 - 0.25 * fraction)
+        points = [
+            center_tuple,
+            (round((center + left * distance).x), round((center + left * distance).y)),
+            (round((center + forward * distance).x), round((center + forward * distance).y)),
+            (round((center + right * distance).x), round((center + right * distance).y)),
+        ]
+        effect_layer = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        pygame.draw.polygon(
+            effect_layer,
+            (*VAREK_EFFECT_COLOR, round(75 * fraction)),
+            points,
+        )
+        pygame.draw.lines(
+            effect_layer,
+            (*VAREK_EFFECT_COLOR, round(210 * fraction)),
+            False,
+            points,
+            width=3,
+        )
+        screen.blit(effect_layer, (0, 0))
+
+    if state["fury_remaining"] > 0:
+        pulse = 7 + round(5 * math.sin(pygame.time.get_ticks() * 0.018))
+        pygame.draw.circle(
+            screen,
+            VAREK_FURY_COLOR,
+            center_tuple,
+            ACTOR_RADIUS + 12 + pulse,
+            width=3,
+        )
+
+
 def format_ability_timer(seconds):
     """Return a short HUD label for a cooldown timer."""
     return "READY" if seconds <= 0 else f"{seconds:.1f}s"
@@ -3281,7 +3706,7 @@ def format_ability_timer(seconds):
 def draw_character_panel(screen, font, player, status_message):
     """Show the selected character's unique statistics, abilities, and timers."""
     character_id = player.get("character_id")
-    if character_id not in (MALPHAS["id"], LONGSHOT["id"]):
+    if character_id not in (MALPHAS["id"], LONGSHOT["id"], VAREK["id"]):
         return
 
     state = player["ability_state"]
@@ -3294,7 +3719,12 @@ def draw_character_panel(screen, font, player, status_message):
     panel.fill((10, 13, 18, 220))
     screen.blit(panel, (panel_x, panel_y))
 
-    title_color = MALPHAS_HORN_COLOR if character_id == MALPHAS["id"] else LONGSHOT_VISOR_COLOR
+    if character_id == MALPHAS["id"]:
+        title_color = MALPHAS_HORN_COLOR
+    elif character_id == LONGSHOT["id"]:
+        title_color = LONGSHOT_VISOR_COLOR
+    else:
+        title_color = VAREK_BLADE_COLOR
     title = font.render(
         f"{player['character_name'].upper()} - {player['character_class'].upper()}",
         True,
@@ -3334,7 +3764,7 @@ def draw_character_panel(screen, font, player, status_message):
             f"X  BLOODLUST - {ultimate_status}",
         ]
         status_color = MALPHAS_GLOW_COLOR
-    else:
+    elif character_id == LONGSHOT["id"]:
         signature_status = format_ability_timer(state["resonance_cooldown"])
         if state["track_remaining"] > 0:
             class_status = f"ACTIVE {state['track_remaining']:.1f}s"
@@ -3365,6 +3795,28 @@ def draw_character_panel(screen, font, player, status_message):
             f"X  DEAD LINE       - {ultimate_status}",
         ]
         status_color = LONGSHOT_VISOR_COLOR
+    else:
+        if state["oni_blade_remaining"] > 0:
+            signature_status = f"ACTIVE {state['oni_blade_remaining']:.1f}s"
+        elif state["fury_remaining"] > 0:
+            signature_status = "DRAWN BY FURY"
+        else:
+            signature_status = format_ability_timer(state["oni_blade_cooldown"])
+
+        class_status = format_ability_timer(state["breach_cooldown"])
+        if state["fury_remaining"] > 0:
+            ultimate_status = f"ACTIVE {state['fury_remaining']:.1f}s"
+        elif state["fury_used"]:
+            ultimate_status = "USED THIS ROUND"
+        else:
+            ultimate_status = "READY"
+
+        lines = [
+            f"Q  ONI BLADE      - {signature_status}",
+            f"C  BREACH CHARGE  - {class_status}",
+            f"X  UNBOUND FURY   - {ultimate_status}",
+        ]
+        status_color = VAREK_BLADE_COLOR
 
     for index, line in enumerate(lines):
         rendered = font.render(line, True, TEXT_COLOR)
@@ -4725,13 +5177,20 @@ def draw_character_select(screen, regular_font, large_font, match_state):
                 width=10,
             )
         else:
-            pygame.draw.circle(screen, (72, 54, 66), portrait_center, 52)
+            pygame.draw.circle(screen, VAREK_BODY_COLOR, portrait_center, 52)
+            pygame.draw.circle(screen, VAREK_ARMOR_COLOR, portrait_center, 52, width=8)
+            pygame.draw.rect(
+                screen,
+                VAREK_MASK_COLOR,
+                (portrait_center[0] - 18, portrait_center[1] - 22, 36, 28),
+                border_radius=8,
+            )
             pygame.draw.line(
                 screen,
-                (174, 105, 128),
+                VAREK_BLADE_COLOR,
                 (portrait_center[0] - 46, portrait_center[1] + 48),
-                (portrait_center[0] + 48, portrait_center[1] - 50),
-                width=8,
+                (portrait_center[0] + 52, portrait_center[1] - 52),
+                width=9,
             )
 
         name = large_font.render(
@@ -4762,7 +5221,12 @@ def draw_character_select(screen, regular_font, large_font, match_state):
                 "X Dead Line",
             ]
         else:
-            detail_lines = ["COMING SOON", "Kit not implemented yet"]
+            detail_lines = [
+                "105 HP | Close-range breaker",
+                "Q Oni Blade",
+                "C Breach Charge",
+                "X Unbound Fury",
+            ]
 
         for line_index, line in enumerate(detail_lines):
             line_surface = regular_font.render(
@@ -5167,7 +5631,7 @@ def main():
                     elif event.key == pygame.K_2:
                         character_select_requested = "longshot"
                     elif event.key == pygame.K_3:
-                        character_select_requested = "akari"
+                        character_select_requested = "varek"
                     continue
 
                 if event.key == pygame.K_r:
@@ -5504,6 +5968,7 @@ def main():
                 delta_time,
             )
             update_longshot_abilities(player, delta_time)
+            update_varek_abilities(player, delta_time)
             if teleported:
                 cached_world_polygon = []
                 vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
@@ -5513,6 +5978,38 @@ def main():
                 _, ability_status_message = try_activate_silence(player)
             elif player.get("character_id") == LONGSHOT["id"]:
                 _, ability_status_message = try_activate_track(player)
+            elif player.get("character_id") == VAREK["id"]:
+                breach_mouse_world = (
+                    pygame.Vector2(pygame.mouse.get_pos())
+                    + calculate_camera(player["position"], screen.get_size())
+                )
+                breach_vector = breach_mouse_world - player["position"]
+                breach_angle = (
+                    math.atan2(breach_vector.y, breach_vector.x)
+                    if breach_vector.length_squared() > 0
+                    else player["aim_angle"]
+                )
+                _, ability_status_message, breach_geometry_changed = try_activate_breach_charge(
+                    player,
+                    breach_angle,
+                    active_obstacles,
+                    destructible_objects,
+                    actors,
+                    bullet_marks,
+                )
+                if breach_geometry_changed:
+                    active_obstacles = get_active_obstacle_rects(
+                        walls,
+                        destructible_objects,
+                    )
+                    active_obstacle_signature = tuple(
+                        not destructible["destroyed"]
+                        for destructible in destructible_objects
+                    )
+                    wall_segments = get_wall_segments(active_obstacles)
+                    wall_corners = get_wall_corners(active_obstacles)
+                    cached_world_polygon = []
+                    vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
             ability_status_timer = 2.0
 
         if player_can_act and ultimate_requested:
@@ -5520,6 +6017,8 @@ def main():
                 _, ability_status_message = try_activate_bloodlust(player)
             elif player.get("character_id") == LONGSHOT["id"]:
                 _, ability_status_message = try_activate_dead_line(player)
+            elif player.get("character_id") == VAREK["id"]:
+                _, ability_status_message = try_activate_unbound_fury(player)
             ability_status_timer = 2.0
 
         moving = movement_direction.length_squared() > 0
@@ -5551,13 +6050,25 @@ def main():
             ):
                 sprint_exhausted = False
 
+        fury_speed_multiplier = (
+            VAREK_FURY_SPEED_MULTIPLIER
+            if varek_unbound_fury_active(player)
+            else 1.0
+        )
+        base_character_speed = player["move_speed"] * fury_speed_multiplier
         selected_speed = (
-            player["move_speed"] * player["sprint_multiplier"]
+            base_character_speed * player["sprint_multiplier"]
             if sprinting
-            else player["move_speed"]
+            else base_character_speed
         )
         movement = movement_direction * selected_speed * delta_time
-        move_player(player["position"], movement, active_obstacles)
+        player_movement_obstacles = get_varek_movement_obstacles(
+            player,
+            walls,
+            destructible_objects,
+            active_obstacles,
+        )
+        move_player(player["position"], movement, player_movement_obstacles)
 
         if movement_direction.length_squared() == 0:
             movement_state = "Idle"
@@ -5578,6 +6089,8 @@ def main():
             active_weapon["maximum_sustained_spread"],
         )
         current_spread = base_spread + sustained_spread
+        if varek_blade_active(player):
+            current_spread = 0.0
 
         camera_shake_strength = update_camera_recoil(
             camera_recoil_offset,
@@ -5611,6 +6124,8 @@ def main():
                     player,
                     actors,
                 )
+            elif player.get("character_id") == VAREK["id"]:
+                _, ability_status_message = try_activate_oni_blade(player)
             ability_status_timer = 2.0
 
         for weapon_state in weapon_states:
@@ -5690,6 +6205,30 @@ def main():
         else:
             firing = trigger_held or trigger_just_pressed
 
+        varek_blade_is_active = player_can_act and varek_blade_active(player)
+        if varek_blade_is_active and trigger_held:
+            blade_geometry_changed = perform_varek_blade_attack(
+                player,
+                aim_angle,
+                actors,
+                active_obstacles,
+                destructible_objects,
+                bullet_marks,
+            )
+            if blade_geometry_changed:
+                active_obstacles = get_active_obstacle_rects(
+                    walls,
+                    destructible_objects,
+                )
+                active_obstacle_signature = tuple(
+                    not destructible["destroyed"]
+                    for destructible in destructible_objects
+                )
+                wall_segments = get_wall_segments(active_obstacles)
+                wall_corners = get_wall_corners(active_obstacles)
+                cached_world_polygon = []
+                vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
+
         weapon_has_attack = (
             active_weapon["fire_mode"] == "melee"
             or active_weapon_state["magazine_ammo"] > 0
@@ -5703,6 +6242,7 @@ def main():
             and weapon_has_attack
             and active_weapon_state["shot_cooldown"] <= 0
             and not dead_line_blocks_weapon
+            and not varek_blade_is_active
         )
         if can_fire:
             if active_weapon["fire_mode"] == "melee":
@@ -6012,6 +6552,7 @@ def main():
         )
         draw_malphas_world_effects(screen, player, camera)
         draw_longshot_world_effects(screen, player, actors, camera)
+        draw_varek_world_effects(screen, player, camera)
 
         # Bots and bullets retain exact partial visibility, but only their
         # small bounding surfaces are multiplied by the visibility mask.
@@ -6045,6 +6586,7 @@ def main():
         if (
             active_weapon["fire_mode"] == "melee"
             and actor_can_fight(player)
+            and not varek_blade_active(player)
         ):
             draw_knife(
                 screen,
