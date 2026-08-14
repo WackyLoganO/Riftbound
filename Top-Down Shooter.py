@@ -326,6 +326,16 @@ WARD = {
     "max_stamina": 90,
 }
 
+PARADOX = {
+    "id": "paradox",
+    "name": "Paradox",
+    "class": "Conduit",
+    "max_health": 80,
+    "move_speed": 270,
+    "sprint_multiplier": 1.30,
+    "max_stamina": 80,
+}
+
 CHARACTER_ROSTER = [
     {**MALPHAS, "implemented": True},
     {**LONGSHOT, "implemented": True},
@@ -336,6 +346,7 @@ CHARACTER_ROSTER = [
     {**SABLE, "implemented": True},
     {**AUREL, "implemented": True},
     {**WARD, "implemented": True},
+    {**PARADOX, "implemented": True},
 ]
 
 # Malphas - Phantom
@@ -578,6 +589,34 @@ WARD_CLOTHING_COLOR = (31, 34, 39)
 WARD_DEVICE_COLOR = (112, 119, 126)
 WARD_SHIELD_COLOR = (255, 211, 74)
 WARD_SHIELD_CORE_COLOR = (255, 239, 158)
+
+# Paradox - Conduit
+PARADOX_RIFT_ECHO_CHARGE_TIME = 5.0
+PARADOX_RIFT_ECHO_MOVE_MULTIPLIER = 0.50
+PARADOX_REFLECTION_WARNING_DURATION = 5.0
+PARADOX_BODY_COLOR = (133, 65, 214)
+PARADOX_RIFT_COLOR = (185, 92, 255)
+PARADOX_CORE_COLOR = (224, 181, 255)
+PARADOX_VOID_COLOR = (31, 14, 55)
+PARADOX_WINDOW_COLOR = (87, 201, 230)
+
+PARADOX_ECHO_OPTIONS = (
+    ("silence", "Silence", "Phantom", "Suppress movement sound for 4.5 seconds."),
+    ("track", "Track", "Hunter", "Reveal recent enemy movement trails for 6 seconds."),
+    ("breach", "Breach Charge", "Breaker", "Forward blast: 25 enemy damage, push actors, instantly destroy destructible cover."),
+    ("field_treatment", "Field Treatment", "Guardian", "1 second cast; restore 50% of missing health to nearby living allies."),
+)
+
+PARADOX_ULTIMATE_NAMES = {
+    MALPHAS["id"]: "Bloodlust",
+    LONGSHOT["id"]: "Dead Line",
+    VAREK["id"]: "Unbound Fury",
+    MIRI["id"]: "Nine Lives",
+    HAZE["id"]: "Child's Play",
+    SABLE["id"]: "Wild Hunt",
+    AUREL["id"]: "Explosive Inferno",
+    WARD["id"]: "Personal Aegis",
+}
 
 BACKGROUND_COLOR = (31, 37, 46)
 GRID_COLOR = (42, 49, 60)
@@ -1060,30 +1099,99 @@ def make_character_ability_state(character_id):
             "personal_aegis_health": 0.0,
             "personal_aegis_used": False,
         }
+    if character_id == PARADOX["id"]:
+        # Per-round/action state. Stored copied Q/X live in paradox_memory so
+        # round resets, downs, and revives cannot erase them accidentally.
+        return {
+            "echo_charge_progress": 0.0,
+            "echo_charging": False,
+            "echo_ready": False,
+            "echo_selection_open": False,
+            "echo_flash_remaining": 0.0,
+            "silence_cooldown": 0.0,
+            "silence_remaining": 0.0,
+            "track_cooldown": 0.0,
+            "track_remaining": 0.0,
+            "breach_cooldown": 0.0,
+            "breach_effect_remaining": 0.0,
+            "breach_angle": 0.0,
+            "field_treatment_cooldown": 0.0,
+            "field_treatment_remaining": 0.0,
+            "field_treatment_pending": False,
+            "rift_teleport_selecting": False,
+            "rift_teleport_quadrant": None,
+            "rift_teleport_remaining": 0.0,
+            "rift_teleport_cooldown": 0.0,
+            "reflection_selection_open": False,
+        }
     return {}
 
 
 def get_playable_character(character_id):
     """Return an implemented character definition or None for a locked preview."""
-    if character_id == MALPHAS["id"]:
-        return MALPHAS
-    if character_id == LONGSHOT["id"]:
-        return LONGSHOT
-    if character_id == VAREK["id"]:
-        return VAREK
-    if character_id == MIRI["id"]:
-        return MIRI
-    if character_id == RELAY["id"]:
-        return RELAY
-    if character_id == HAZE["id"]:
-        return HAZE
-    if character_id == SABLE["id"]:
-        return SABLE
-    if character_id == AUREL["id"]:
-        return AUREL
-    if character_id == WARD["id"]:
-        return WARD
+    for character in (
+        MALPHAS, LONGSHOT, VAREK, MIRI, RELAY, HAZE, SABLE, AUREL, WARD, PARADOX
+    ):
+        if character_id == character["id"]:
+            return character
     return None
+
+
+def make_paradox_memory():
+    """Create match-persistent storage for Paradox's copied powers."""
+    return {
+        "stored_echo": None,
+        "echo_used_this_round": False,
+        "stored_ultimate_source": None,
+        "stored_ultimate_name": None,
+        "reflection_used_this_round": False,
+        "active_ultimate_source": None,
+        "ultimate_state": None,
+        "reflection_warning_name": None,
+        "reflection_warning_remaining": 0.0,
+        "reflection_warning_generation": 0,
+    }
+
+
+def get_paradox_memory(actor):
+    """Return Paradox's persistent copy storage, creating it if necessary."""
+    if actor.get("character_id") != PARADOX["id"]:
+        return None
+    memory = actor.get("paradox_memory")
+    if memory is None:
+        memory = make_paradox_memory()
+        actor["paradox_memory"] = memory
+    return memory
+
+
+def reset_paradox_memory_for_round(actor):
+    """Keep stored copies, but clear active copied effects and round-use gates."""
+    memory = get_paradox_memory(actor)
+    if memory is None:
+        return
+    memory["echo_used_this_round"] = False
+    memory["reflection_used_this_round"] = False
+    memory["active_ultimate_source"] = None
+    memory["ultimate_state"] = None
+    memory["reflection_warning_name"] = None
+    memory["reflection_warning_remaining"] = 0.0
+
+
+def get_character_effect_state(actor, source_character_id):
+    """Return native ability state or Paradox's active copied-ultimate state."""
+    if actor.get("character_id") == source_character_id:
+        return actor.get("ability_state", {})
+    if actor.get("character_id") == PARADOX["id"]:
+        memory = actor.get("paradox_memory") or {}
+        if memory.get("active_ultimate_source") == source_character_id:
+            return memory.get("ultimate_state") or {}
+    return None
+
+
+def paradox_active_ultimate_source(actor):
+    if actor.get("character_id") != PARADOX["id"]:
+        return None
+    return (actor.get("paradox_memory") or {}).get("active_ultimate_source")
 
 
 def apply_character_to_actor(actor, character):
@@ -1099,6 +1207,7 @@ def apply_character_to_actor(actor, character):
     actor["max_stamina"] = character.get("max_stamina", MAX_STAMINA)
     actor["health"] = actor["max_health"]
     actor["ability_state"] = make_character_ability_state(character["id"])
+    actor["paradox_memory"] = make_paradox_memory() if character["id"] == PARADOX["id"] else None
     actor["movement_sound_radius"] = 0.0
     actor["heard_position"] = None
     actor["heard_timer"] = 0.0
@@ -1110,6 +1219,20 @@ def apply_character_to_actor(actor, character):
     actor["resonance_echo_remaining"] = 0.0
     actor["resonance_echo_position"] = None
     actor["damaged_recent"] = 0.0
+    if actor.get("character_id") == PARADOX["id"]:
+        paradox_state = actor.get("ability_state", {})
+        paradox_state["echo_charging"] = False
+        paradox_state["echo_selection_open"] = False
+        paradox_state["silence_remaining"] = 0.0
+        paradox_state["track_remaining"] = 0.0
+        paradox_state["field_treatment_remaining"] = 0.0
+        paradox_state["field_treatment_pending"] = False
+        paradox_state["rift_teleport_selecting"] = False
+        paradox_state["rift_teleport_remaining"] = 0.0
+        memory = actor.get("paradox_memory") or {}
+        memory["active_ultimate_source"] = None
+        memory["ultimate_state"] = None
+
     actor["burn_remaining"] = 0.0
     actor["burn_fraction_per_second"] = 0.0
     actor["burn_source"] = None
@@ -1163,6 +1286,7 @@ def make_actor(
         "navigation_path_index": 0,
         "navigation_target": None,
         "ability_state": make_character_ability_state(character_id),
+        "paradox_memory": make_paradox_memory() if character_id == PARADOX["id"] else None,
         "movement_sound_radius": 0.0,
         "heard_position": None,
         "heard_timer": 0.0,
@@ -1235,6 +1359,12 @@ def reset_actor_for_round(actor):
     actor["navigation_path_index"] = 0
     actor["navigation_target"] = None
     actor["ability_state"] = make_character_ability_state(actor["character_id"])
+    if actor.get("character_id") == PARADOX["id"]:
+        if actor.get("paradox_memory") is None:
+            actor["paradox_memory"] = make_paradox_memory()
+        reset_paradox_memory_for_round(actor)
+    else:
+        actor["paradox_memory"] = None
     actor["movement_sound_radius"] = 0.0
     actor["heard_position"] = None
     actor["heard_timer"] = 0.0
@@ -1624,19 +1754,15 @@ def get_weapon_spread(weapon, movement_state):
 
 
 def aurel_inferno_after_active(actor):
-    """Return whether Aurel is in the 15-second post-explosion Inferno state."""
-    return (
-        actor.get("character_id") == AUREL["id"]
-        and actor.get("ability_state", {}).get("inferno_after_remaining", 0.0) > 0
-    )
+    """Return whether native Aurel or Paradox-copy Inferno is in its aftermath."""
+    state = get_character_effect_state(actor, AUREL["id"])
+    return state is not None and state.get("inferno_after_remaining", 0.0) > 0
 
 
 def aurel_inferno_charging(actor):
-    """Return whether Aurel is protected and locked in the three-second windup."""
-    return (
-        actor.get("character_id") == AUREL["id"]
-        and actor.get("ability_state", {}).get("inferno_charge_remaining", 0.0) > 0
-    )
+    """Return whether native Aurel or Paradox-copy Inferno is in its windup."""
+    state = get_character_effect_state(actor, AUREL["id"])
+    return state is not None and state.get("inferno_charge_remaining", 0.0) > 0
 
 
 def get_weapon_damage_multiplier(actor):
@@ -1889,6 +2015,24 @@ def down_or_eliminate_actor(actor):
         ability_state["fire_trail_spawn_timer"] = 0.0
         ability_state["fire_trail_last_position"] = None
 
+    if actor.get("character_id") == PARADOX["id"]:
+        # Unchosen completed Echo remains ready for a same-round revive; active casts
+        # and copied ultimates stop on down, while stored Q/X remain in match memory.
+        ability_state["echo_charging"] = False
+        ability_state["echo_selection_open"] = False
+        ability_state["reflection_selection_open"] = False
+        ability_state["silence_remaining"] = 0.0
+        ability_state["track_remaining"] = 0.0
+        ability_state["breach_effect_remaining"] = 0.0
+        ability_state["field_treatment_remaining"] = 0.0
+        ability_state["field_treatment_pending"] = False
+        ability_state["rift_teleport_selecting"] = False
+        ability_state["rift_teleport_quadrant"] = None
+        ability_state["rift_teleport_remaining"] = 0.0
+        memory = actor.get("paradox_memory") or {}
+        memory["active_ultimate_source"] = None
+        memory["ultimate_state"] = None
+
     actor["burn_remaining"] = 0.0
     actor["burn_fraction_per_second"] = 0.0
     actor["burn_source"] = None
@@ -1912,43 +2056,35 @@ def revive_actor(actor):
 
 
 def malphas_bloodlust_active(actor):
-    """Return whether this actor is Malphas with Bloodlust currently active."""
-    return (
-        actor.get("character_id") == MALPHAS["id"]
-        and actor.get("ability_state", {}).get("bloodlust_remaining", 0.0) > 0
-    )
+    """Return whether native Malphas or Paradox-copy Bloodlust is active."""
+    state = get_character_effect_state(actor, MALPHAS["id"])
+    return state is not None and state.get("bloodlust_remaining", 0.0) > 0
 
 
 def varek_unbound_fury_active(actor):
-    """Return whether Varek currently has Unbound Fury active."""
-    return (
-        actor.get("character_id") == VAREK["id"]
-        and actor.get("ability_state", {}).get("fury_remaining", 0.0) > 0
-    )
+    """Return whether native Varek or Paradox-copy Unbound Fury is active."""
+    state = get_character_effect_state(actor, VAREK["id"])
+    return state is not None and state.get("fury_remaining", 0.0) > 0
 
 
 def varek_blade_active(actor):
-    """Return whether Varek is currently forced into the Rift-forged katana."""
-    if actor.get("character_id") != VAREK["id"]:
+    """Return whether Varek's blade is active natively or through Paradox."""
+    state = get_character_effect_state(actor, VAREK["id"])
+    if state is None:
         return False
-    state = actor.get("ability_state", {})
     return state.get("oni_blade_remaining", 0.0) > 0 or state.get("fury_remaining", 0.0) > 0
 
 
 def sable_wild_hunt_active(actor):
-    """Return whether Sable is currently camouflaged in Wild Hunt."""
-    return (
-        actor.get("character_id") == SABLE["id"]
-        and actor.get("ability_state", {}).get("wild_hunt_remaining", 0.0) > 0
-    )
+    """Return whether native Sable or Paradox-copy Wild Hunt is active."""
+    state = get_character_effect_state(actor, SABLE["id"])
+    return state is not None and state.get("wild_hunt_remaining", 0.0) > 0
 
 
 def ward_personal_aegis_active(actor):
-    """Return whether Ward still has Personal Aegis shield health."""
-    return (
-        actor.get("character_id") == WARD["id"]
-        and actor.get("ability_state", {}).get("personal_aegis_health", 0.0) > 0
-    )
+    """Return whether Ward or a Paradox-copy still has Personal Aegis health."""
+    state = get_character_effect_state(actor, WARD["id"])
+    return state is not None and state.get("personal_aegis_health", 0.0) > 0
 
 
 def get_active_bulwarks(actors):
@@ -2086,7 +2222,7 @@ def damage_actor(target, damage, attacker=None):
     incoming_damage = max(0.0, float(damage))
     shield_absorbed = 0.0
     if ward_personal_aegis_active(target) and incoming_damage > 0:
-        state = target["ability_state"]
+        state = get_character_effect_state(target, WARD["id"])
         shield_absorbed = min(state["personal_aegis_health"], incoming_damage)
         state["personal_aegis_health"] = max(
             0.0, state["personal_aegis_health"] - shield_absorbed
@@ -2103,8 +2239,9 @@ def damage_actor(target, damage, attacker=None):
             SABLE_DAMAGE_EVIDENCE_MEMORY,
         )
         if sable_wild_hunt_active(target):
-            target["ability_state"]["wild_hunt_flicker_remaining"] = max(
-                target["ability_state"].get("wild_hunt_flicker_remaining", 0.0),
+            wild_state = get_character_effect_state(target, SABLE["id"])
+            wild_state["wild_hunt_flicker_remaining"] = max(
+                wild_state.get("wild_hunt_flicker_remaining", 0.0),
                 SABLE_WILD_HUNT_REVEAL_ON_HIT,
             )
     eliminated_before = target["eliminated"]
@@ -2141,7 +2278,7 @@ def damage_actor(target, damage, attacker=None):
         and attacker.get("alive", False)
         and varek_unbound_fury_active(attacker)
     ):
-        attacker_state = attacker["ability_state"]
+        attacker_state = get_character_effect_state(attacker, VAREK["id"])
         attacker_state["fury_remaining"] = min(
             VAREK_FURY_MAX_REMAINING,
             attacker_state["fury_remaining"] + VAREK_FURY_EXTENSION_PER_ELIMINATION,
@@ -2657,17 +2794,17 @@ def update_haze_abilities(player, actors, obstacles, delta_time):
 
 
 def get_haze_false_targets_for_bot(bot, actors, walls):
-    """Return Haze Q/X targets that this enemy bot currently believes are real."""
+    """Return Haze/Paradox deception targets that this enemy bot believes are real."""
     targets = []
     for target in get_haze_hallucination_targets(bot["team"], actors):
         if is_actor_visible(bot["position"], target, walls):
             targets.append(target)
 
     for haze_actor in actors:
-        if haze_actor.get("character_id") != HAZE["id"] or haze_actor["team"] == bot["team"]:
+        if haze_actor["team"] == bot["team"]:
             continue
-        state = haze_actor.get("ability_state", {})
-        if state.get("childs_play_remaining", 0.0) <= 0:
+        state = get_character_effect_state(haze_actor, HAZE["id"])
+        if state is None or state.get("childs_play_remaining", 0.0) <= 0:
             continue
         for illusion in state.get("childs_play_illusions", {}).get(bot["name"], []):
             proxy = {
@@ -3175,7 +3312,7 @@ def sable_visible_to_bot(bot, actor, walls):
     if not is_actor_visible(bot["position"], actor, walls):
         return False
 
-    state = actor.get("ability_state", {})
+    state = get_character_effect_state(actor, SABLE["id"]) or {}
     if state.get("wild_hunt_flicker_remaining", 0.0) > 0:
         return True
 
@@ -3729,19 +3866,17 @@ def miri_feline_lunge_active(actor):
 
 
 def guardian_field_treatment_active(actor):
-    """Return whether any Guardian is currently casting the shared heal."""
-    return (
-        actor.get("character_class") == "Guardian"
-        and actor.get("ability_state", {}).get("field_treatment_remaining", 0.0) > 0
+    """Return whether a Guardian or Paradox-copy is casting Field Treatment."""
+    state = actor.get("ability_state", {})
+    return state.get("field_treatment_remaining", 0.0) > 0 and (
+        actor.get("character_class") == "Guardian" or actor.get("character_id") == PARADOX["id"]
     )
 
 
 def miri_nine_lives_active(actor):
-    """Return whether Miri is currently channeling Nine Lives."""
-    return (
-        actor.get("character_id") == MIRI["id"]
-        and actor.get("ability_state", {}).get("nine_lives_remaining", 0.0) > 0
-    )
+    """Return whether Miri or a Paradox-copy is currently channeling Nine Lives."""
+    state = get_character_effect_state(actor, MIRI["id"])
+    return state is not None and state.get("nine_lives_remaining", 0.0) > 0
 
 
 def try_activate_feline_lunge(player):
@@ -3995,17 +4130,17 @@ def relay_inside_rift(player, rift_state):
 
 
 def relay_teleport_selecting(player):
-    """Return whether Relay is waiting for the player to choose a map quadrant."""
+    """Return whether a Conduit is waiting for a Rift Teleport quadrant."""
     return (
-        player.get("character_id") == RELAY["id"]
+        player.get("character_class") == "Conduit"
         and player.get("ability_state", {}).get("rift_teleport_selecting", False)
     )
 
 
 def relay_teleport_channel_active(player):
-    """Return whether Relay is in the three-second teleport channel."""
+    """Return whether a Conduit is in the three-second Rift Teleport channel."""
     return (
-        player.get("character_id") == RELAY["id"]
+        player.get("character_class") == "Conduit"
         and player.get("ability_state", {}).get("rift_teleport_remaining", 0.0) > 0
     )
 
@@ -4029,25 +4164,24 @@ def try_activate_rift_boost(player):
 
 
 def try_activate_rift_teleport(player, rift_state):
-    """Open Relay's four-quadrant Rift Teleport selector while at the Rift."""
-    if player.get("character_id") != RELAY["id"]:
+    """Open the shared Conduit four-quadrant Rift Teleport selector at the Rift."""
+    if player.get("character_class") != "Conduit":
         return False, "RIFT TELEPORT UNAVAILABLE"
     state = player["ability_state"]
-    if state["rift_teleport_remaining"] > 0:
+    if state.get("rift_teleport_remaining", 0.0) > 0:
         return False, "RIFT TELEPORT ALREADY CHANNELING"
-    if state["rift_teleport_cooldown"] > 0:
+    if state.get("rift_teleport_cooldown", 0.0) > 0:
         return False, f"RIFT TELEPORT COOLDOWN {state['rift_teleport_cooldown']:.1f}s"
     if not relay_inside_rift(player, rift_state):
         return False, "RIFT TELEPORT REQUIRES THE ACTIVE RIFT"
-
     state["rift_teleport_selecting"] = True
     state["rift_teleport_quadrant"] = None
     return True, "RIFT TELEPORT - CHOOSE A QUADRANT (1-4)"
 
 
 def begin_relay_rift_teleport(player, quadrant, rift_state):
-    """Begin the three-second teleport channel toward a chosen map quadrant."""
-    if player.get("character_id") != RELAY["id"]:
+    """Begin the shared Conduit three-second teleport channel."""
+    if player.get("character_class") != "Conduit":
         return False, "RIFT TELEPORT UNAVAILABLE"
     state = player["ability_state"]
     if not state.get("rift_teleport_selecting", False):
@@ -4057,7 +4191,6 @@ def begin_relay_rift_teleport(player, quadrant, rift_state):
         return False, "RIFT TELEPORT CANCELLED - LEFT THE RIFT"
     if quadrant not in ("top_left", "top_right", "bottom_left", "bottom_right"):
         return False, "INVALID RIFT TELEPORT QUADRANT"
-
     state["rift_teleport_selecting"] = False
     state["rift_teleport_quadrant"] = quadrant
     state["rift_teleport_remaining"] = RELAY_RIFT_TELEPORT_CHANNEL
@@ -4876,7 +5009,7 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
 
     forward = target_vector.normalize()
     bot["aim_angle"] = math.atan2(forward.y, forward.x)
-    if target.get("character_id") == SABLE["id"] and not team_has_rift_intel:
+    if sable_wild_hunt_active(target) and not team_has_rift_intel:
         target_in_line_of_sight = sable_visible_to_bot(bot, target, walls)
     else:
         target_in_line_of_sight = is_actor_visible(bot["position"], target, walls)
@@ -5033,6 +5166,828 @@ def apply_camera_effects(
     camera.x = max(0, min(camera.x, maximum_x))
     camera.y = max(0, min(camera.y, maximum_y))
     return camera
+
+
+def paradox_inside_rift(player, rift_state):
+    return (
+        actor_can_fight(player)
+        and player["position"].distance_to(rift_state["position"]) <= RIFT_RADIUS
+    )
+
+
+def paradox_pause_echo_charge(player):
+    if player.get("character_id") == PARADOX["id"]:
+        player.get("ability_state", {})["echo_charging"] = False
+
+
+def try_activate_paradox_echo(player, rift_state):
+    """Start/resume Rift Echo, reopen a completed selection, or use a stored Echo."""
+    if player.get("character_id") != PARADOX["id"]:
+        return False, "RIFT ECHO UNAVAILABLE"
+    memory = get_paradox_memory(player)
+    state = player["ability_state"]
+    if memory.get("stored_echo") is not None:
+        return False, "RIFT ECHO STORED - PRESS Q TO USE IT"
+    if memory.get("echo_used_this_round"):
+        return False, "RIFT ECHO USED THIS ROUND"
+    if state.get("echo_ready"):
+        state["echo_selection_open"] = True
+        return True, "RIFT ECHO - CHOOSE A CLASS ABILITY"
+    if not paradox_inside_rift(player, rift_state):
+        state["echo_charging"] = False
+        return False, "RIFT ECHO REQUIRES THE ACTIVE RIFT"
+    state["echo_charging"] = True
+    return True, f"RIFT ECHO CHARGING {state['echo_charge_progress']:.1f}/{PARADOX_RIFT_ECHO_CHARGE_TIME:.1f}s"
+
+
+def select_paradox_echo(player, echo_key):
+    """Store one of the four non-Conduit class C abilities."""
+    if player.get("character_id") != PARADOX["id"]:
+        return False, "RIFT ECHO UNAVAILABLE"
+    state = player["ability_state"]
+    memory = get_paradox_memory(player)
+    valid = {option[0]: option for option in PARADOX_ECHO_OPTIONS}
+    if not state.get("echo_ready") or not state.get("echo_selection_open"):
+        return False, "RIFT ECHO NOT READY"
+    if echo_key not in valid:
+        return False, "INVALID RIFT ECHO"
+    memory["stored_echo"] = echo_key
+    state["echo_ready"] = False
+    state["echo_selection_open"] = False
+    state["echo_charge_progress"] = 0.0
+    return True, f"RIFT ECHO STORED: {valid[echo_key][1].upper()}"
+
+
+def try_use_paradox_echo(player, aim_angle, obstacles, destructible_objects, actors, bullet_marks):
+    """Use the stored exact shared-class C ability once."""
+    memory = get_paradox_memory(player)
+    if memory is None or memory.get("stored_echo") is None:
+        return False, "NO RIFT ECHO STORED", False
+    echo_key = memory["stored_echo"]
+    old_class = player["character_class"]
+    geometry_changed = False
+    try:
+        if echo_key == "silence":
+            player["character_class"] = "Phantom"
+            success, message = try_activate_silence(player)
+        elif echo_key == "track":
+            player["character_class"] = "Hunter"
+            success, message = try_activate_track(player)
+        elif echo_key == "breach":
+            player["character_class"] = "Breaker"
+            success, message, geometry_changed = try_activate_breach_charge(
+                player, aim_angle, obstacles, destructible_objects, actors, bullet_marks
+            )
+        elif echo_key == "field_treatment":
+            player["character_class"] = "Guardian"
+            success, message = try_activate_field_treatment(player)
+        else:
+            return False, "INVALID RIFT ECHO", False
+    finally:
+        player["character_class"] = old_class
+    if success:
+        memory["stored_echo"] = None
+        memory["echo_used_this_round"] = True
+    return success, message, geometry_changed
+
+
+def paradox_reflection_rift_valid(player, rift_state):
+    """Apply the selected unstable-Rift rules for acquiring Rift Reflection."""
+    if not paradox_inside_rift(player, rift_state):
+        return False
+    owner = rift_state.get("owner")
+    capture_team = rift_state.get("capture_team")
+    if owner is None:
+        # Truly neutral is allowed; an unowned Rift already being captured is not.
+        return capture_team is None
+    if owner != player["team"]:
+        return True
+    enemy_team = "red" if player["team"] == "blue" else "blue"
+    return (
+        rift_state.get("contested", False)
+        or rift_state.get("occupants", {}).get(enemy_team, 0) > 0
+        or capture_team == enemy_team
+    )
+
+
+def get_paradox_reflection_choices(actors):
+    """Return unique non-Conduit character IDs actually present in this match."""
+    present = []
+    seen = set()
+    for actor in actors:
+        character_id = actor.get("character_id")
+        character = get_playable_character(character_id)
+        if character is None or character.get("class") == "Conduit":
+            continue
+        if character_id not in PARADOX_ULTIMATE_NAMES or character_id in seen:
+            continue
+        seen.add(character_id)
+        present.append(character_id)
+    return present
+
+
+def try_open_paradox_reflection(player, actors, rift_state):
+    """Open the match-only ultimate card menu at a valid unstable Rift."""
+    if player.get("character_id") != PARADOX["id"]:
+        return False, "RIFT REFLECTION UNAVAILABLE"
+    memory = get_paradox_memory(player)
+    state = player["ability_state"]
+    if memory.get("stored_ultimate_source") is not None:
+        return False, f"RIFT REFLECTION STORED: {memory['stored_ultimate_name'].upper()}"
+    if memory.get("active_ultimate_source") is not None:
+        return False, "COPIED ULTIMATE ALREADY ACTIVE"
+    if memory.get("reflection_used_this_round"):
+        return False, "RIFT REFLECTION USED THIS ROUND"
+    if not paradox_reflection_rift_valid(player, rift_state):
+        return False, "RIFT REFLECTION REQUIRES A NEUTRAL, ENEMY, OR CHALLENGED RIFT"
+    choices = get_paradox_reflection_choices(actors)
+    if not choices:
+        return False, "NO NON-CONDUIT CHARACTER ULTIMATES ARE PRESENT"
+    paradox_pause_echo_charge(player)
+    state["reflection_selection_open"] = True
+    return True, "RIFT REFLECTION - CHOOSE AN ULTIMATE"
+
+
+def select_paradox_reflection(player, source_character_id, actors, rift_state):
+    """Store one ultimate from a non-Conduit character actually in the match."""
+    if player.get("character_id") != PARADOX["id"]:
+        return False, "RIFT REFLECTION UNAVAILABLE"
+    state = player["ability_state"]
+    memory = get_paradox_memory(player)
+    if not state.get("reflection_selection_open"):
+        return False, "RIFT REFLECTION NOT SELECTING"
+    if not paradox_reflection_rift_valid(player, rift_state):
+        state["reflection_selection_open"] = False
+        return False, "RIFT REFLECTION CANCELLED - LEFT VALID RIFT STATE"
+    choices = get_paradox_reflection_choices(actors)
+    if source_character_id not in choices:
+        return False, "ULTIMATE NOT AVAILABLE IN THIS MATCH"
+    memory["stored_ultimate_source"] = source_character_id
+    memory["stored_ultimate_name"] = PARADOX_ULTIMATE_NAMES[source_character_id]
+    memory["reflection_warning_name"] = memory["stored_ultimate_name"]
+    memory["reflection_warning_remaining"] = PARADOX_REFLECTION_WARNING_DURATION
+    memory["reflection_warning_generation"] = memory.get("reflection_warning_generation", 0) + 1
+    state["reflection_selection_open"] = False
+    return True, f"PARADOX OBTAINED: {memory['stored_ultimate_name'].upper()}"
+
+
+def cancel_paradox_reflection_selection(player):
+    if player.get("character_id") == PARADOX["id"]:
+        player.get("ability_state", {})["reflection_selection_open"] = False
+
+
+def with_paradox_ultimate_identity(player, source_character_id, callback, *args):
+    """Run original ultimate code against a private copied state, then restore Paradox."""
+    memory = get_paradox_memory(player)
+    source_character = get_playable_character(source_character_id)
+    if memory is None or source_character is None:
+        return None
+    if memory.get("ultimate_state") is None:
+        memory["ultimate_state"] = make_character_ability_state(source_character_id)
+    old = (
+        player["character_id"], player["character_name"], player["character_class"], player["ability_state"]
+    )
+    player["character_id"] = source_character_id
+    player["character_name"] = source_character["name"]
+    player["character_class"] = source_character["class"]
+    player["ability_state"] = memory["ultimate_state"]
+    try:
+        return callback(player, *args)
+    finally:
+        player["character_id"], player["character_name"], player["character_class"], player["ability_state"] = old
+
+
+def try_activate_paradox_stored_ultimate(player, actors, obstacles):
+    """Activate the stored X at full original strength; failed contextual casts stay stored."""
+    memory = get_paradox_memory(player)
+    if memory is None or memory.get("stored_ultimate_source") is None:
+        return False, "NO RIFT REFLECTION STORED"
+    source = memory["stored_ultimate_source"]
+    memory["ultimate_state"] = make_character_ability_state(source)
+    if source == MALPHAS["id"]:
+        result = with_paradox_ultimate_identity(player, source, try_activate_bloodlust)
+    elif source == LONGSHOT["id"]:
+        result = with_paradox_ultimate_identity(player, source, try_activate_dead_line)
+    elif source == VAREK["id"]:
+        result = with_paradox_ultimate_identity(player, source, try_activate_unbound_fury)
+    elif source == MIRI["id"]:
+        result = with_paradox_ultimate_identity(player, source, try_activate_nine_lives, actors, obstacles)
+    elif source == HAZE["id"]:
+        result = with_paradox_ultimate_identity(player, source, try_activate_childs_play, actors, obstacles)
+    elif source == SABLE["id"]:
+        result = with_paradox_ultimate_identity(player, source, try_activate_wild_hunt)
+    elif source == AUREL["id"]:
+        result = with_paradox_ultimate_identity(player, source, try_activate_explosive_inferno)
+    elif source == WARD["id"]:
+        result = with_paradox_ultimate_identity(player, source, try_activate_personal_aegis)
+    else:
+        return False, "INVALID COPIED ULTIMATE"
+    success, message = result
+    if success:
+        memory["active_ultimate_source"] = source
+        memory["stored_ultimate_source"] = None
+        memory["stored_ultimate_name"] = None
+        memory["reflection_used_this_round"] = True
+    else:
+        memory["ultimate_state"] = None
+    return success, message
+
+
+def paradox_copied_ultimate_still_active(player):
+    memory = get_paradox_memory(player)
+    if memory is None:
+        return False
+    source = memory.get("active_ultimate_source")
+    state = memory.get("ultimate_state") or {}
+    if source == MALPHAS["id"]:
+        return state.get("bloodlust_remaining", 0.0) > 0
+    if source == LONGSHOT["id"]:
+        return state.get("dead_line_active", False) or state.get("dead_line_requires_release", False)
+    if source == VAREK["id"]:
+        return state.get("fury_remaining", 0.0) > 0
+    if source == MIRI["id"]:
+        return state.get("nine_lives_remaining", 0.0) > 0
+    if source == HAZE["id"]:
+        return state.get("childs_play_remaining", 0.0) > 0
+    if source == SABLE["id"]:
+        return state.get("wild_hunt_remaining", 0.0) > 0
+    if source == AUREL["id"]:
+        return (
+            state.get("inferno_charge_remaining", 0.0) > 0
+            or state.get("inferno_after_remaining", 0.0) > 0
+            or bool(state.get("fire_trail"))
+        )
+    if source == WARD["id"]:
+        return state.get("personal_aegis_health", 0.0) > 0
+    return False
+
+
+def update_paradox_shared_teleport(player, rift_state, obstacles, delta_time):
+    """Advance only the shared Conduit teleport portion for Paradox."""
+    state = player["ability_state"]
+    state["rift_teleport_cooldown"] = max(0.0, state["rift_teleport_cooldown"] - delta_time)
+    message = None
+    teleported = False
+    if state["rift_teleport_selecting"] and not relay_inside_rift(player, rift_state):
+        state["rift_teleport_selecting"] = False
+        state["rift_teleport_quadrant"] = None
+        message = "RIFT TELEPORT CANCELLED - LEFT THE RIFT"
+    if state["rift_teleport_remaining"] > 0:
+        if not relay_inside_rift(player, rift_state):
+            state["rift_teleport_remaining"] = 0.0
+            state["rift_teleport_quadrant"] = None
+            message = "RIFT TELEPORT INTERRUPTED"
+        else:
+            state["rift_teleport_remaining"] = max(0.0, state["rift_teleport_remaining"] - delta_time)
+            if state["rift_teleport_remaining"] <= 0:
+                destination = choose_relay_teleport_destination(state["rift_teleport_quadrant"], obstacles)
+                if destination is None:
+                    message = "RIFT TELEPORT FAILED - NO SAFE LANDING"
+                else:
+                    player["position"].update(destination)
+                    state["rift_teleport_cooldown"] = RELAY_RIFT_TELEPORT_COOLDOWN
+                    teleported = True
+                    message = "RIFT TELEPORT COMPLETE"
+                state["rift_teleport_quadrant"] = None
+    return message, teleported
+
+
+def update_paradox_abilities(player, actors, walls, destructible_objects, bullet_marks, rift_state, delta_time):
+    """Advance Rift Echo, shared copied C timers, shared teleport, and copied X."""
+    if player.get("character_id") != PARADOX["id"]:
+        return None, False, False
+    state = player["ability_state"]
+    memory = get_paradox_memory(player)
+    message = None
+    geometry_changed = False
+    teleported = False
+
+    # Exact copied-C active durations use the same balance constants as originals.
+    state["silence_cooldown"] = max(0.0, state["silence_cooldown"] - delta_time)
+    state["silence_remaining"] = max(0.0, state["silence_remaining"] - delta_time)
+    state["track_cooldown"] = max(0.0, state["track_cooldown"] - delta_time)
+    state["track_remaining"] = max(0.0, state["track_remaining"] - delta_time)
+    state["breach_cooldown"] = max(0.0, state["breach_cooldown"] - delta_time)
+    state["breach_effect_remaining"] = max(0.0, state["breach_effect_remaining"] - delta_time)
+    state["echo_flash_remaining"] = max(0.0, state["echo_flash_remaining"] - delta_time)
+
+    # A completed selection can be reopened after revive in the same round.
+    if not actor_can_fight(player):
+        state["echo_charging"] = False
+        state["echo_selection_open"] = False
+        state["reflection_selection_open"] = False
+    elif state.get("echo_charging"):
+        if paradox_inside_rift(player, rift_state):
+            previous = state["echo_charge_progress"]
+            state["echo_charge_progress"] = min(
+                PARADOX_RIFT_ECHO_CHARGE_TIME,
+                state["echo_charge_progress"] + delta_time,
+            )
+            if previous < PARADOX_RIFT_ECHO_CHARGE_TIME <= state["echo_charge_progress"]:
+                state["echo_charging"] = False
+                state["echo_ready"] = True
+                state["echo_selection_open"] = True
+                state["echo_flash_remaining"] = 0.45
+                message = "RIFT ECHO READY - CHOOSE A CLASS ABILITY"
+        else:
+            state["echo_charging"] = False
+            message = "RIFT ECHO PAUSED"
+
+    if state.get("reflection_selection_open") and not paradox_reflection_rift_valid(player, rift_state):
+        state["reflection_selection_open"] = False
+        message = "RIFT REFLECTION CANCELLED - LEFT VALID RIFT STATE"
+
+    teleport_message, teleported = update_paradox_shared_teleport(
+        player, rift_state, get_active_obstacle_rects(walls, destructible_objects), delta_time
+    )
+    if teleport_message:
+        message = teleport_message
+
+    # Field Treatment is shared mechanically; temporarily expose Guardian class only
+    # while its generic updater runs.
+    if state.get("field_treatment_remaining", 0.0) > 0 or state.get("field_treatment_pending", False):
+        old_class = player["character_class"]
+        player["character_class"] = "Guardian"
+        try:
+            treatment_message = update_guardian_field_treatment(player, actors, delta_time)
+        finally:
+            player["character_class"] = old_class
+        if treatment_message:
+            message = treatment_message
+
+    source = memory.get("active_ultimate_source")
+    if source is not None:
+        if source == MALPHAS["id"]:
+            with_paradox_ultimate_identity(player, source, update_malphas_abilities, actors, get_active_obstacle_rects(walls, destructible_objects), delta_time)
+        elif source == LONGSHOT["id"]:
+            with_paradox_ultimate_identity(player, source, update_longshot_abilities, delta_time)
+        elif source == VAREK["id"]:
+            with_paradox_ultimate_identity(player, source, update_varek_abilities, delta_time)
+        elif source == MIRI["id"]:
+            copied_message = with_paradox_ultimate_identity(player, source, update_miri_abilities, actors, get_active_obstacle_rects(walls, destructible_objects), delta_time)
+            if copied_message:
+                message = copied_message
+        elif source == HAZE["id"]:
+            with_paradox_ultimate_identity(player, source, update_haze_abilities, actors, get_active_obstacle_rects(walls, destructible_objects), delta_time)
+        elif source == SABLE["id"]:
+            with_paradox_ultimate_identity(player, source, update_sable_abilities, delta_time)
+        elif source == AUREL["id"]:
+            copied_message, copied_geometry = with_paradox_ultimate_identity(
+                player, source, update_aurel_abilities,
+                actors, walls, destructible_objects, bullet_marks, delta_time
+            )
+            geometry_changed = geometry_changed or copied_geometry
+            if copied_message:
+                message = copied_message
+        elif source == WARD["id"]:
+            with_paradox_ultimate_identity(player, source, update_ward_abilities, delta_time)
+
+        if not paradox_copied_ultimate_still_active(player):
+            memory["active_ultimate_source"] = None
+            memory["ultimate_state"] = None
+
+    memory["reflection_warning_remaining"] = max(
+        0.0, memory.get("reflection_warning_remaining", 0.0) - delta_time
+    )
+    if memory["reflection_warning_remaining"] <= 0:
+        memory["reflection_warning_name"] = None
+    return message, teleported, geometry_changed
+
+
+def update_paradox_dead_line_weapon(player, trigger_held, aim_angle, walls, destructible_objects, actors, delta_time):
+    memory = get_paradox_memory(player)
+    if memory is None or memory.get("active_ultimate_source") != LONGSHOT["id"]:
+        return False
+    return with_paradox_ultimate_identity(
+        player, LONGSHOT["id"], update_dead_line_weapon,
+        trigger_held, aim_angle, walls, destructible_objects, actors, delta_time
+    )
+
+
+def perform_paradox_copied_melee(player, aim_angle, actors, obstacles, destructible_objects, bullet_marks):
+    memory = get_paradox_memory(player)
+    if memory is None:
+        return False
+    source = memory.get("active_ultimate_source")
+    if source == VAREK["id"]:
+        return with_paradox_ultimate_identity(
+            player, source, perform_varek_blade_attack,
+            aim_angle, actors, obstacles, destructible_objects, bullet_marks
+        )
+    if source == SABLE["id"]:
+        return with_paradox_ultimate_identity(
+            player, source, perform_sable_hunting_knife_attack,
+            aim_angle, actors, obstacles, destructible_objects, bullet_marks
+        )
+    return False
+
+
+def draw_paradox_source_portrait(screen, source_id, center, rift_version=False, scale=1.0):
+    """Draw a compact recognizable source portrait for Rift Reflection cards."""
+    cx, cy = int(center[0]), int(center[1])
+    r = max(12, round(34 * scale))
+    if rift_version:
+        body = PARADOX_BODY_COLOR
+        primary = PARADOX_RIFT_COLOR
+        secondary = PARADOX_CORE_COLOR
+        dark = PARADOX_VOID_COLOR
+    else:
+        body = {
+            MALPHAS["id"]: MALPHAS_BODY_COLOR,
+            LONGSHOT["id"]: LONGSHOT_BODY_COLOR,
+            VAREK["id"]: VAREK_BODY_COLOR,
+            MIRI["id"]: MIRI_BODY_COLOR,
+            HAZE["id"]: HAZE_BODY_COLOR,
+            SABLE["id"]: SABLE_BODY_COLOR,
+            AUREL["id"]: AUREL_BODY_COLOR,
+            WARD["id"]: WARD_CLOTHING_COLOR,
+        }.get(source_id, PARADOX_BODY_COLOR)
+        primary = {
+            MALPHAS["id"]: MALPHAS_GLOW_COLOR,
+            LONGSHOT["id"]: LONGSHOT_VISOR_COLOR,
+            VAREK["id"]: VAREK_BLADE_COLOR,
+            MIRI["id"]: MIRI_HEAL_COLOR,
+            HAZE["id"]: HAZE_PURPLE_COLOR,
+            SABLE["id"]: SABLE_WARPAINT_COLOR,
+            AUREL["id"]: AUREL_GOLD_COLOR,
+            WARD["id"]: WARD_SHIELD_COLOR,
+        }.get(source_id, PARADOX_RIFT_COLOR)
+        secondary = {
+            MALPHAS["id"]: MALPHAS_HORN_COLOR,
+            LONGSHOT["id"]: LONGSHOT_RIFLE_COLOR,
+            VAREK["id"]: VAREK_MASK_COLOR,
+            MIRI["id"]: MIRI_COAT_COLOR,
+            HAZE["id"]: HAZE_GREEN_COLOR,
+            SABLE["id"]: SABLE_HAIR_COLOR,
+            AUREL["id"]: AUREL_FIRE_COLOR,
+            WARD["id"]: WARD_COAT_COLOR,
+        }.get(source_id, PARADOX_CORE_COLOR)
+        dark = HAZE_SHADOW_COLOR
+
+    pygame.draw.circle(screen, body, (cx, cy), r)
+    if source_id == MALPHAS["id"]:
+        pygame.draw.polygon(screen, secondary, ((cx-r//2,cy-r//2),(cx-r,cy-r),(cx-r//2,cy-r//6)))
+        pygame.draw.polygon(screen, secondary, ((cx+r//2,cy-r//2),(cx+r,cy-r),(cx+r//2,cy-r//6)))
+        pygame.draw.circle(screen, primary, (cx, cy), max(4, r//4))
+    elif source_id == LONGSHOT["id"]:
+        pygame.draw.line(screen, primary, (cx-r//2,cy-r//4),(cx+r//2,cy-r//4), width=max(3,r//7))
+        pygame.draw.line(screen, secondary, (cx-r//4,cy+r//3),(cx+r+r//2,cy-r//2), width=max(2,r//9))
+    elif source_id == VAREK["id"]:
+        pygame.draw.circle(screen, secondary, (cx,cy-r//4), max(4,r//4))
+        pygame.draw.line(screen, primary, (cx-r,cy+r),(cx+r,cy-r), width=max(3,r//8))
+    elif source_id == MIRI["id"]:
+        pygame.draw.polygon(screen, secondary, ((cx-r//2,cy-r//2),(cx-r//2,cy-r-r//2),(cx,cy-r//2)))
+        pygame.draw.polygon(screen, secondary, ((cx+r//2,cy-r//2),(cx+r//2,cy-r-r//2),(cx,cy-r//2)))
+        pygame.draw.circle(screen, primary, (cx,cy+r//5), max(4,r//5))
+    elif source_id == HAZE["id"]:
+        pygame.draw.polygon(screen, secondary, ((cx,cy-r),(cx-r,cy+r),(cx+r,cy+r)))
+        pygame.draw.circle(screen, dark, (cx,cy-r//3), max(5,r//3))
+        pygame.draw.circle(screen, primary, (cx,cy+r//5), max(3,r//6))
+    elif source_id == SABLE["id"]:
+        pygame.draw.circle(screen, secondary, (cx,cy-r//3), max(7,r//2))
+        pygame.draw.line(screen, primary, (cx-r//2,cy-r//8),(cx-r//8,cy-r//8), width=max(2,r//10))
+        pygame.draw.line(screen, primary, (cx+r//8,cy-r//8),(cx+r//2,cy-r//8), width=max(2,r//10))
+    elif source_id == AUREL["id"]:
+        pygame.draw.arc(screen, primary, (cx-r,cy-r,r*2,r*2), math.radians(20), math.radians(160), width=max(3,r//8))
+        pygame.draw.circle(screen, secondary, (cx,cy+r//4), max(4,r//5))
+    elif source_id == WARD["id"]:
+        pygame.draw.arc(screen, secondary, (cx-r,cy-r,r*2,r*2), math.radians(190), math.radians(350), width=max(4,r//4))
+        pygame.draw.circle(screen, primary, (cx,cy), max(4,r//4))
+        pygame.draw.circle(screen, primary, (cx,cy), r+r//4, width=max(2,r//10))
+
+
+def draw_paradox_copied_silhouette(screen, center, facing, side, radius, source_id):
+    """Give active copied ultimates the source character's recognizable Rift silhouette."""
+    c = PARADOX_RIFT_COLOR
+    core = PARADOX_CORE_COLOR
+    void = PARADOX_VOID_COLOR
+    ct = (round(center.x), round(center.y))
+    if source_id == MALPHAS["id"]:
+        for sign in (-1, 1):
+            base = center + facing * 3 + side * (13 * sign)
+            pygame.draw.polygon(screen, core, (base-facing*5-side*(5*sign), base+facing*4+side*(4*sign), center+facing*25+side*(22*sign)))
+        pygame.draw.circle(screen, c, ct, 10)
+    elif source_id == LONGSHOT["id"]:
+        pygame.draw.line(screen, core, center+facing*9-side*12, center+facing*9+side*12, width=6)
+        pygame.draw.line(screen, c, center-facing*5-side*8, center+facing*43-side*8, width=5)
+    elif source_id == VAREK["id"]:
+        pygame.draw.circle(screen, core, (round((center+facing*9).x),round((center+facing*9).y)), 8)
+        pygame.draw.line(screen, c, center-facing*7-side*13, center+facing*38-side*13, width=5)
+    elif source_id == MIRI["id"]:
+        ef=center+facing*16
+        for sign in (-1,1):
+            ear=ef+side*(15*sign)
+            pygame.draw.polygon(screen, core, (ear-facing*8-side*(7*sign), ear+side*(6*sign), ear+facing*19))
+        pygame.draw.line(screen, c, center-facing*7+side*15, center+facing*18+side*7, width=7)
+        pygame.draw.line(screen, c, center-facing*7-side*15, center+facing*18-side*7, width=7)
+    elif source_id == HAZE["id"]:
+        back=center-facing*15
+        pygame.draw.polygon(screen, c, (center+facing*12,back+side*20,center-facing*29,back-side*20))
+        hood=center+facing*10
+        pygame.draw.circle(screen,c,(round(hood.x),round(hood.y)),17)
+        pygame.draw.circle(screen,void,(round((hood+facing*3).x),round((hood+facing*3).y)),11)
+    elif source_id == SABLE["id"]:
+        hair=center+facing*10
+        pygame.draw.circle(screen,c,(round(hair.x),round(hair.y)),14)
+        pc=center+facing*13
+        pygame.draw.line(screen,core,pc+side*5-facing*2,pc+side*12-facing*2,width=3)
+        pygame.draw.line(screen,core,pc-side*5-facing*2,pc-side*12-facing*2,width=3)
+        pygame.draw.line(screen,c,center-facing*8-side*14,center+facing*35-side*14,width=4)
+    elif source_id == AUREL["id"]:
+        pygame.draw.line(screen, core, center-facing*12+side*13, center-facing*34+side*18, width=5)
+        pygame.draw.line(screen, core, center-facing*12-side*13, center-facing*34-side*18, width=5)
+        pygame.draw.circle(screen,c,(round((center+facing*8).x),round((center+facing*8).y)),13)
+        pygame.draw.circle(screen,core,ct,5)
+    elif source_id == WARD["id"]:
+        pygame.draw.line(screen,c,center-facing*5+side*16,center+facing*19+side*8,width=8)
+        pygame.draw.line(screen,c,center-facing*5-side*16,center+facing*19-side*8,width=8)
+        dc=center-facing*7+side*18
+        pygame.draw.circle(screen,core,(round(dc.x),round(dc.y)),7)
+
+
+def make_paradox_warning_sound():
+    """Create a short generated warning tone when an audio mixer is available."""
+    try:
+        mixer_info = pygame.mixer.get_init()
+        if not mixer_info:
+            return None
+        frequency, sample_format, channels = mixer_info
+        if abs(sample_format) != 16:
+            return None
+        duration = 0.28
+        sample_count = max(1, int(frequency * duration))
+        raw = bytearray()
+        for index in range(sample_count):
+            t = index / frequency
+            envelope = max(0.0, 1.0 - t / duration)
+            tone = math.sin(math.tau * 520.0 * t) + 0.55 * math.sin(math.tau * 780.0 * t)
+            value = int(max(-1.0, min(1.0, tone * 0.28 * envelope)) * 32767)
+            sample = int(value).to_bytes(2, byteorder="little", signed=True)
+            raw.extend(sample * channels)
+        return pygame.mixer.Sound(buffer=bytes(raw))
+    except (pygame.error, AttributeError, ValueError):
+        return None
+
+
+def update_paradox_warning_audio(actors, local_team, sound, played_tokens):
+    """Play each newly acquired enemy Reflection warning once."""
+    if sound is None:
+        return
+    for actor in actors:
+        if actor.get("team") == local_team or actor.get("character_id") != PARADOX["id"]:
+            continue
+        memory = actor.get("paradox_memory") or {}
+        if memory.get("reflection_warning_remaining", 0.0) <= 0:
+            continue
+        token = (id(actor), memory.get("reflection_warning_generation", 0))
+        if token in played_tokens:
+            continue
+        sound.play()
+        played_tokens.add(token)
+
+
+def paradox_echo_menu_rects(screen):
+    width, height = 330, 210
+    gap = 28
+    total_width = width * 2 + gap
+    left = (screen.get_width() - total_width) // 2
+    top = (screen.get_height() - (height * 2 + gap)) // 2 + 30
+    return [
+        pygame.Rect(left + (index % 2) * (width + gap), top + (index // 2) * (height + gap), width, height)
+        for index in range(4)
+    ]
+
+
+def paradox_reflection_menu_rects(screen, count):
+    columns = min(4, max(1, count))
+    rows = math.ceil(count / columns)
+    width, height, gap = 310, 260, 22
+    total_width = columns * width + (columns - 1) * gap
+    total_height = rows * height + (rows - 1) * gap
+    left = (screen.get_width() - total_width) // 2
+    top = max(110, (screen.get_height() - total_height) // 2 + 28)
+    return [
+        pygame.Rect(left + (index % columns) * (width + gap), top + (index // columns) * (height + gap), width, height)
+        for index in range(count)
+    ]
+
+
+def paradox_ultimate_description(source_id):
+    if source_id == MALPHAS["id"]:
+        return [f"Bloodlust | {MALPHAS_BLOODLUST_DURATION:.0f}s", f"Radius {MALPHAS_BLOODLUST_RADIUS}", f"Drain {MALPHAS_BLOODLUST_DRAIN_PER_SECOND:.0f}/s | Heal {MALPHAS_BLOODLUST_HEAL_FRACTION*100:.0f}%"]
+    if source_id == LONGSHOT["id"]:
+        return [f"Dead Line | {LONGSHOT_DEAD_LINE_SHOTS} shots", f"{LONGSHOT_DEAD_LINE_DAMAGE} damage", f"Aim {LONGSHOT_DEAD_LINE_AIM_TIME:.2f}s | Range {LONGSHOT_DEAD_LINE_RANGE}"]
+    if source_id == VAREK["id"]:
+        return [f"Unbound Fury | {VAREK_FURY_DURATION:.0f}s", f"+{(VAREK_FURY_SPEED_MULTIPLIER-1)*100:.0f}% movement", f"True elims extend {VAREK_FURY_EXTENSION_PER_ELIMINATION:.1f}s"]
+    if source_id == MIRI["id"]:
+        return ["Nine Lives", f"Channel {MIRI_NINE_LIVES_CHANNEL_TIME:.0f}s | Range {MIRI_NINE_LIVES_RANGE}", f"Resurrect ally at {MIRI_NINE_LIVES_REVIVE_HEALTH} HP"]
+    if source_id == HAZE["id"]:
+        return [f"Child's Play | {HAZE_CHILDS_PLAY_DURATION:.0f}s", f"{HAZE_CHILDS_PLAY_ILLUSIONS_PER_ENEMY} illusions per enemy", "False living-team targets"]
+    if source_id == SABLE["id"]:
+        return [f"Wild Hunt | {SABLE_WILD_HUNT_DURATION:.0f}s", f"Knife {SABLE_WILD_HUNT_KNIFE_DAMAGE} dmg", f"+{(SABLE_WILD_HUNT_SPEED_MULTIPLIER-1)*100:.0f}% move | camouflage"]
+    if source_id == AUREL["id"]:
+        return ["Explosive Inferno", f"Charge {AUREL_INFERNO_CHARGE_TIME:.1f}s | Radius {AUREL_INFERNO_RADIUS}", f"{AUREL_INFERNO_INITIAL_DAMAGE} hit + {AUREL_INFERNO_BURN_MAX_HEALTH_PER_SECOND*100:.0f}% max HP/s burn"]
+    if source_id == WARD["id"]:
+        return ["Personal Aegis", f"{WARD_AEGIS_HEALTH} shield HP", f"{(1-WARD_AEGIS_KNOCKBACK_MULTIPLIER)*100:.0f}% knockback reduction"]
+    return ["Unknown ultimate"]
+
+
+def draw_paradox_selection_menus(screen, regular_font, large_font, player, actors, rift_state):
+    if player.get("character_id") != PARADOX["id"]:
+        return
+    state = player["ability_state"]
+    if not state.get("echo_selection_open") and not state.get("reflection_selection_open"):
+        return
+    overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+    overlay.fill((9, 5, 18, 228))
+    screen.blit(overlay, (0, 0))
+    mouse = pygame.mouse.get_pos()
+
+    if state.get("echo_selection_open"):
+        title = large_font.render("RIFT ECHO - CHOOSE A CLASS ABILITY", True, PARADOX_CORE_COLOR)
+        screen.blit(title, title.get_rect(center=(screen.get_width() // 2, 72)))
+        for option, rect in zip(PARADOX_ECHO_OPTIONS, paradox_echo_menu_rects(screen)):
+            key, name, class_name, description = option
+            hovered = rect.collidepoint(mouse)
+            pygame.draw.rect(screen, (42, 25, 65) if hovered else (26, 18, 40), rect, border_radius=12)
+            pygame.draw.rect(screen, PARADOX_RIFT_COLOR, rect, width=3, border_radius=12)
+            name_surface = large_font.render(name.upper(), True, TEXT_COLOR)
+            screen.blit(name_surface, name_surface.get_rect(center=(rect.centerx, rect.top + 48)))
+            class_surface = regular_font.render(class_name.upper(), True, PARADOX_CORE_COLOR)
+            screen.blit(class_surface, class_surface.get_rect(center=(rect.centerx, rect.top + 88)))
+            if hovered:
+                wrapped = [description]
+                detail = regular_font.render(wrapped[0], True, TEXT_COLOR)
+                screen.blit(detail, detail.get_rect(center=(rect.centerx, rect.top + 132)))
+                stats = {
+                    "silence": f"Duration {MALPHAS_SILENCE_DURATION:.1f}s",
+                    "track": f"Duration {LONGSHOT_TRACK_DURATION:.1f}s | Trail life {LONGSHOT_TRACK_EVENT_LIFETIME:.1f}s",
+                    "breach": f"Range {BREAKER_BREACH_RANGE} | Damage {BREAKER_BREACH_DAMAGE} | Push {BREAKER_BREACH_PUSH_DISTANCE}",
+                    "field_treatment": f"Radius {GUARDIAN_FIELD_TREATMENT_RADIUS} | Heal {GUARDIAN_FIELD_TREATMENT_MISSING_HEALTH_FRACTION*100:.0f}% missing HP",
+                }[key]
+                stat_surface = regular_font.render(stats, True, PARADOX_RIFT_COLOR)
+                screen.blit(stat_surface, stat_surface.get_rect(center=(rect.centerx, rect.top + 166)))
+        note = regular_font.render("Time continues. This selection cannot be cancelled.", True, (198, 187, 219))
+        screen.blit(note, note.get_rect(center=(screen.get_width() // 2, screen.get_height() - 54)))
+        return
+
+    choices = get_paradox_reflection_choices(actors)
+    title = large_font.render("RIFT REFLECTION - CHOOSE AN ULTIMATE", True, PARADOX_CORE_COLOR)
+    screen.blit(title, title.get_rect(center=(screen.get_width() // 2, 62)))
+    if not choices:
+        message = large_font.render("NO ELIGIBLE NON-CONDUIT CHARACTERS IN THIS MATCH", True, PARADOX_RIFT_COLOR)
+        screen.blit(message, message.get_rect(center=(screen.get_width() // 2, screen.get_height() // 2)))
+        return
+    rects = paradox_reflection_menu_rects(screen, len(choices))
+    for source_id, rect in zip(choices, rects):
+        character = get_playable_character(source_id)
+        hovered = rect.collidepoint(mouse)
+        pygame.draw.rect(screen, (46, 26, 70) if hovered else (25, 18, 39), rect, border_radius=12)
+        pygame.draw.rect(screen, PARADOX_RIFT_COLOR, rect, width=3, border_radius=12)
+        # Compact source-character portrait marker, then exact current mechanics on hover.
+        draw_paradox_source_portrait(screen, source_id, (rect.centerx, rect.top + 62), rift_version=False, scale=1.0)
+        char_surface = regular_font.render(character["name"].upper(), True, TEXT_COLOR)
+        ult_surface = large_font.render(PARADOX_ULTIMATE_NAMES[source_id].upper(), True, PARADOX_CORE_COLOR)
+        screen.blit(char_surface, char_surface.get_rect(center=(rect.centerx, rect.top + 116)))
+        screen.blit(ult_surface, ult_surface.get_rect(center=(rect.centerx, rect.top + 154)))
+        if hovered:
+            for index, line in enumerate(paradox_ultimate_description(source_id)):
+                detail = regular_font.render(line, True, TEXT_COLOR if index == 0 else (205, 192, 224))
+                screen.blit(detail, detail.get_rect(center=(rect.centerx, rect.top + 194 + index * 22)))
+    note = regular_font.render("ESC cancels without spending X. You must remain in the valid Rift state.", True, (198, 187, 219))
+    screen.blit(note, note.get_rect(center=(screen.get_width() // 2, screen.get_height() - 44)))
+
+
+def handle_paradox_selection_click(player, actors, rift_state, click_position, screen):
+    if player.get("character_id") != PARADOX["id"]:
+        return False, None
+    state = player["ability_state"]
+    if state.get("echo_selection_open"):
+        for option, rect in zip(PARADOX_ECHO_OPTIONS, paradox_echo_menu_rects(screen)):
+            if rect.collidepoint(click_position):
+                success, message = select_paradox_echo(player, option[0])
+                return success, message
+        return True, None
+    if state.get("reflection_selection_open"):
+        choices = get_paradox_reflection_choices(actors)
+        for source_id, rect in zip(choices, paradox_reflection_menu_rects(screen, len(choices))):
+            if rect.collidepoint(click_position):
+                success, message = select_paradox_reflection(player, source_id, actors, rift_state)
+                return success, message
+        return True, None
+    return False, None
+
+
+def draw_paradox_world_effects(screen, player, camera):
+    if player.get("character_id") != PARADOX["id"]:
+        return
+    state = player["ability_state"]
+    center = pygame.Vector2(player["position"] - camera)
+    center_tuple = (round(center.x), round(center.y))
+    if state.get("echo_charging"):
+        progress = min(1.0, state.get("echo_charge_progress", 0.0) / PARADOX_RIFT_ECHO_CHARGE_TIME)
+        radius = round(34 + 22 * progress)
+        layer = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        pygame.draw.circle(layer, (*PARADOX_RIFT_COLOR, round(45 + 100 * progress)), center_tuple, radius)
+        pygame.draw.circle(layer, (*PARADOX_CORE_COLOR, 220), center_tuple, radius, width=3)
+        screen.blit(layer, (0, 0))
+    if state.get("echo_flash_remaining", 0.0) > 0:
+        fraction = state["echo_flash_remaining"] / 0.45
+        layer = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        pygame.draw.circle(layer, (*PARADOX_CORE_COLOR, round(180 * fraction)), center_tuple, round(85 * (1.0 - 0.45 * fraction)), width=6)
+        screen.blit(layer, (0, 0))
+    if state.get("breach_effect_remaining", 0.0) > 0:
+        fraction = min(1.0, state["breach_effect_remaining"] / BREAKER_BREACH_EFFECT_DURATION)
+        half_arc = math.radians(BREAKER_BREACH_ARC_DEGREES / 2)
+        directions = [
+            pygame.Vector2(math.cos(state["breach_angle"] + offset), math.sin(state["breach_angle"] + offset))
+            for offset in (-half_arc, 0.0, half_arc)
+        ]
+        distance = BREAKER_BREACH_RANGE * (1.0 - 0.25 * fraction)
+        points = [center_tuple] + [
+            (round((center + direction * distance).x), round((center + direction * distance).y))
+            for direction in directions
+        ]
+        layer = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        pygame.draw.polygon(layer, (*PARADOX_RIFT_COLOR, round(70 * fraction)), points)
+        pygame.draw.lines(layer, (*PARADOX_CORE_COLOR, round(220 * fraction)), False, points, width=3)
+        screen.blit(layer, (0, 0))
+    if guardian_field_treatment_active(player):
+        progress = 1.0 - min(1.0, state["field_treatment_remaining"] / GUARDIAN_FIELD_TREATMENT_CAST_TIME)
+        pygame.draw.circle(screen, PARADOX_RIFT_COLOR, center_tuple, round(35 + GUARDIAN_FIELD_TREATMENT_RADIUS * progress), width=3)
+
+
+def draw_paradox_copied_ultimate_effects(screen, font, player, actors, camera):
+    """Reuse original world-effect renderers against Paradox's copied X state."""
+    memory = get_paradox_memory(player)
+    if memory is None or memory.get("active_ultimate_source") is None:
+        return
+    source = memory["active_ultimate_source"]
+    # Each original renderer reads the source character's state. The temporary
+    # identity keeps timings exact; a purple overlay marks it as a Rift copy.
+    renderer = None
+    args = ()
+    if source == MALPHAS["id"]:
+        renderer, args = draw_malphas_world_effects, (screen, player, camera)
+    elif source == LONGSHOT["id"]:
+        renderer, args = draw_longshot_world_effects, (screen, player, actors, camera)
+    elif source == VAREK["id"]:
+        renderer, args = draw_varek_world_effects, (screen, player, camera)
+    elif source == MIRI["id"]:
+        renderer, args = draw_miri_world_effects, (screen, player, camera)
+    elif source == HAZE["id"]:
+        renderer, args = draw_haze_world_effects, (screen, font, player, camera)
+    elif source == SABLE["id"]:
+        renderer, args = draw_sable_world_effects, (screen, font, player, actors, camera)
+    elif source == AUREL["id"]:
+        renderer, args = draw_aurel_world_effects, (screen, player, camera)
+    elif source == WARD["id"]:
+        # Personal Aegis is primarily drawn by draw_actor; no Bulwark is copied.
+        renderer = None
+    if renderer is not None:
+        def call(_player):
+            adjusted = list(args)
+            for index, value in enumerate(adjusted):
+                if value is player:
+                    adjusted[index] = _player
+            return renderer(*adjusted)
+        with_paradox_ultimate_identity(player, source, call)
+
+    # Rift copies retain original mechanics but their presentation is contaminated
+    # by Paradox's own purple dimensional material.
+    center = pygame.Vector2(player["position"] - camera)
+    center_tuple = (round(center.x), round(center.y))
+    pulse = 2 + round(2 * math.sin(pygame.time.get_ticks() * 0.012))
+    if source == MALPHAS["id"]:
+        pygame.draw.circle(screen, PARADOX_RIFT_COLOR, center_tuple, MALPHAS_BLOODLUST_RADIUS, width=3)
+    elif source == MIRI["id"]:
+        pygame.draw.circle(screen, PARADOX_RIFT_COLOR, center_tuple, MIRI_NINE_LIVES_RANGE + 8 + pulse, width=3)
+    elif source == HAZE["id"]:
+        pygame.draw.circle(screen, PARADOX_RIFT_COLOR, center_tuple, ACTOR_RADIUS + 10 + pulse, width=3)
+    elif source == SABLE["id"]:
+        for index in range(5):
+            angle = pygame.time.get_ticks() * 0.0015 + index * math.tau / 5
+            particle = center + pygame.Vector2(math.cos(angle), math.sin(angle)) * (ACTOR_RADIUS + 14 + index * 2)
+            pygame.draw.circle(screen, PARADOX_CORE_COLOR, (round(particle.x), round(particle.y)), 3)
+    elif source == AUREL["id"]:
+        pygame.draw.circle(screen, PARADOX_RIFT_COLOR, center_tuple, ACTOR_RADIUS + 12 + pulse, width=3)
+
+
+def draw_paradox_enemy_reflection_warning(screen, font, actors, local_team):
+    """Future-ready enemy HUD warning; current prototype only lets the human select Paradox."""
+    for actor in actors:
+        if actor.get("team") == local_team or actor.get("character_id") != PARADOX["id"]:
+            continue
+        memory = actor.get("paradox_memory") or {}
+        if memory.get("reflection_warning_remaining", 0.0) <= 0 or not memory.get("reflection_warning_name"):
+            continue
+        surface = font.render(
+            f"PARADOX OBTAINED: {memory['reflection_warning_name'].upper()}",
+            True,
+            PARADOX_CORE_COLOR,
+        )
+        screen.blit(surface, surface.get_rect(center=(screen.get_width() // 2, 36)))
+        break
 
 
 def draw_grid(screen, camera):
@@ -5300,6 +6255,7 @@ def draw_actor(screen, font, actor, camera):
     is_sable = actor.get("character_id") == SABLE["id"]
     is_aurel = actor.get("character_id") == AUREL["id"]
     is_ward = actor.get("character_id") == WARD["id"]
+    is_paradox = actor.get("character_id") == PARADOX["id"]
     if is_malphas and not actor["downed"] and not actor["eliminated"]:
         fill_color = MALPHAS_BODY_COLOR
         # Keep the blue outer edge so the playable character still reads as
@@ -5328,6 +6284,9 @@ def draw_actor(screen, font, actor, camera):
         edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
     elif is_ward and not actor["downed"] and not actor["eliminated"]:
         fill_color = WARD_BODY_COLOR
+        edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
+    elif is_paradox and not actor["downed"] and not actor["eliminated"]:
+        fill_color = PARADOX_BODY_COLOR
         edge_color = PLAYER_EDGE_COLOR if actor["team"] == "blue" else edge_color
 
     if actor["eliminated"]:
@@ -5681,6 +6640,35 @@ def draw_actor(screen, font, actor, camera):
     bar_height = 8
     bar_x = round(center.x - bar_width / 2)
     bar_y = round(center.y - ACTOR_RADIUS - 20)
+
+    if is_paradox:
+        # Faceless Rift body: bright core plus moving-looking windows into other realities.
+        pygame.draw.circle(screen, PARADOX_VOID_COLOR, center_tuple, radius - 8)
+        pygame.draw.circle(screen, PARADOX_RIFT_COLOR, center_tuple, radius - 8, width=5)
+        window_a = center + facing * 6 + side * 8
+        window_b = center - facing * 8 - side * 9
+        pygame.draw.circle(screen, PARADOX_WINDOW_COLOR, (round(window_a.x), round(window_a.y)), 6)
+        pygame.draw.circle(screen, PARADOX_CORE_COLOR, (round(window_b.x), round(window_b.y)), 4)
+        # While a copied ultimate is active, source-character-shaped Rift marks make
+        # the transformation readable without changing collision or gameplay data.
+        copied = paradox_active_ultimate_source(actor)
+        if copied is not None:
+            pygame.draw.circle(screen, PARADOX_CORE_COLOR, center_tuple, radius + 7, width=4)
+            draw_paradox_copied_silhouette(screen, center, facing, side, radius, copied)
+            if copied == WARD["id"] and ward_personal_aegis_active(actor):
+                aegis_state = get_character_effect_state(actor, WARD["id"]) or {}
+                shield_fraction = aegis_state.get("personal_aegis_health", 0.0) / WARD_AEGIS_HEALTH
+                pulse = 2 + round(2 * math.sin(pygame.time.get_ticks() * 0.014))
+                pygame.draw.circle(screen, PARADOX_RIFT_COLOR, center_tuple, radius + 8 + pulse, width=3)
+                pygame.draw.arc(
+                    screen, PARADOX_CORE_COLOR,
+                    pygame.Rect(center.x-radius-13, center.y-radius-13, (radius+13)*2, (radius+13)*2),
+                    -math.pi/2, -math.pi/2 + math.tau * shield_fraction, width=4,
+                )
+            source_name = PARADOX_ULTIMATE_NAMES.get(copied, "RIFT COPY")
+            copy_label = font.render(source_name.upper(), True, PARADOX_CORE_COLOR)
+            screen.blit(copy_label, copy_label.get_rect(center=(center.x, center.y - radius - 22)))
+
     health_fraction = actor["health"] / actor["max_health"]
     pygame.draw.rect(screen, (26, 29, 36), (bar_x, bar_y, bar_width, bar_height))
     pygame.draw.rect(
@@ -5838,14 +6826,18 @@ def draw_longshot_world_effects(screen, player, actors, camera):
 
 def draw_hunter_track_effects(screen, player, actors, camera):
     """Draw the shared Hunter Track markers for Longshot or Sable."""
-    if player.get("character_class") != "Hunter":
-        return
     state = player.get("ability_state", {})
     if state.get("track_remaining", 0.0) <= 0:
         return
+    if player.get("character_class") != "Hunter" and player.get("character_id") != PARADOX["id"]:
+        return
 
-    track_color = SABLE_TRACK_COLOR if player.get("character_id") == SABLE["id"] else LONGSHOT_TRACK_COLOR
-    fire_color = SABLE_WARPAINT_COLOR if player.get("character_id") == SABLE["id"] else LONGSHOT_VISOR_COLOR
+    if player.get("character_id") == PARADOX["id"]:
+        track_color = PARADOX_RIFT_COLOR
+        fire_color = PARADOX_CORE_COLOR
+    else:
+        track_color = SABLE_TRACK_COLOR if player.get("character_id") == SABLE["id"] else LONGSHOT_TRACK_COLOR
+        fire_color = SABLE_WARPAINT_COLOR if player.get("character_id") == SABLE["id"] else LONGSHOT_VISOR_COLOR
     for actor in actors:
         if actor["team"] == player["team"]:
             continue
@@ -6427,18 +7419,20 @@ def make_haze_child_visual_actor(illusion, haze_team):
 
 
 def draw_haze_enemy_perception(screen, font, local_player, actors, camera, obstacles):
-    """Draw the enemy-facing versions of Hallucination and Child's Play."""
+    """Draw enemy-facing Haze or Paradox-copied Child's Play perception."""
     enemy_hazes = [
         actor
         for actor in actors
-        if actor.get("character_id") == HAZE["id"]
-        and actor["team"] != local_player["team"]
+        if actor["team"] != local_player["team"]
+        and get_character_effect_state(actor, HAZE["id"]) is not None
     ]
     if not enemy_hazes:
         return
 
-    # Q has no enemy-facing tell: an opposing player sees the decoy as Haze.
+    # Hallucination Q belongs only to native Haze; Paradox copies the ultimate only.
     for haze_actor in enemy_hazes:
+        if haze_actor.get("character_id") != HAZE["id"]:
+            continue
         decoy = haze_actor.get("ability_state", {}).get("hallucination")
         if decoy is None:
             continue
@@ -6452,19 +7446,24 @@ def draw_haze_enemy_perception(screen, font, local_player, actors, camera, obsta
         (
             actor
             for actor in enemy_hazes
-            if actor.get("ability_state", {}).get("childs_play_remaining", 0.0) > 0
+            if (get_character_effect_state(actor, HAZE["id"]) or {}).get(
+                "childs_play_remaining", 0.0
+            ) > 0
         ),
         None,
     )
     if active_enemy_haze is None:
         return
 
-    # Child's Play keeps the real map geometry but makes the world feel dreamlike.
+    copied_by_paradox = active_enemy_haze.get("character_id") == PARADOX["id"]
+    active_state = get_character_effect_state(active_enemy_haze, HAZE["id"]) or {}
+
+    # Child's Play keeps real geometry but makes the world feel dreamlike.
     tint = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-    tint.fill((62, 20, 78, 24))
+    tint.fill((70, 24, 104, 28) if copied_by_paradox else (62, 20, 78, 24))
     screen.blit(tint, (0, 0))
 
-    illusion_list = active_enemy_haze["ability_state"].get("childs_play_illusions", {}).get(
+    illusion_list = active_state.get("childs_play_illusions", {}).get(
         local_player["name"], []
     )
     for index, illusion in enumerate(illusion_list):
@@ -6474,10 +7473,12 @@ def draw_haze_enemy_perception(screen, font, local_player, actors, camera, obsta
         draw_actor(screen, font, proxy, camera)
         center = pygame.Vector2(illusion["position"] - camera)
         overlay = pygame.Surface((76, 76), pygame.SRCALPHA)
-        color = HAZE_GREEN_COLOR if index % 2 == 0 else HAZE_PURPLE_COLOR
-        pygame.draw.circle(overlay, (*color, 38), (38, 38), 34)
+        if copied_by_paradox:
+            color = PARADOX_RIFT_COLOR
+        else:
+            color = HAZE_GREEN_COLOR if index % 2 == 0 else HAZE_PURPLE_COLOR
+        pygame.draw.circle(overlay, (*color, 48 if copied_by_paradox else 38), (38, 38), 34)
         screen.blit(overlay, (round(center.x - 38), round(center.y - 38)))
-
 
 def draw_character_panel(screen, font, player, status_message):
     """Show the selected character's unique statistics, abilities, and timers."""
@@ -6492,6 +7493,7 @@ def draw_character_panel(screen, font, player, status_message):
         SABLE["id"],
         AUREL["id"],
         WARD["id"],
+        PARADOX["id"],
     ):
         return
 
@@ -6521,8 +7523,10 @@ def draw_character_panel(screen, font, player, status_message):
         title_color = SABLE_TRACK_COLOR
     elif character_id == AUREL["id"]:
         title_color = AUREL_FIRE_GOLD_COLOR
-    else:
+    elif character_id == WARD["id"]:
         title_color = WARD_SHIELD_COLOR
+    else:
+        title_color = PARADOX_CORE_COLOR
     title = font.render(
         f"{player['character_name'].upper()} - {player['character_class'].upper()}",
         True,
@@ -6737,7 +7741,7 @@ def draw_character_panel(screen, font, player, status_message):
             f"X  EXPLOSIVE INFERNO - {ultimate_status}",
         ]
         status_color = AUREL_FIRE_GOLD_COLOR
-    else:
+    elif character_id == WARD["id"]:
         barrier = state.get("bulwark")
         if barrier is not None and barrier.get("health", 0) > 0:
             signature_status = f"{barrier['health']:.0f}/{barrier['max_health']:.0f} HP"
@@ -6759,6 +7763,44 @@ def draw_character_panel(screen, font, player, status_message):
             f"X  PERSONAL AEGIS  - {ultimate_status}",
         ]
         status_color = WARD_SHIELD_COLOR
+    else:
+        memory = get_paradox_memory(player)
+        stored_echo = memory.get("stored_echo")
+        echo_names = {option[0]: option[1] for option in PARADOX_ECHO_OPTIONS}
+        if stored_echo:
+            signature_status = f"STORED: {echo_names[stored_echo].upper()}"
+        elif state.get("echo_ready"):
+            signature_status = "CHOOSE ABILITY"
+        elif state.get("echo_charging"):
+            signature_status = f"CHARGE {state['echo_charge_progress']:.1f}/{PARADOX_RIFT_ECHO_CHARGE_TIME:.1f}s"
+        elif memory.get("echo_used_this_round"):
+            signature_status = "USED THIS ROUND"
+        elif state.get("echo_charge_progress", 0.0) > 0:
+            signature_status = f"PAUSED {state['echo_charge_progress']:.1f}/{PARADOX_RIFT_ECHO_CHARGE_TIME:.1f}s"
+        else:
+            signature_status = "READY AT RIFT"
+        if relay_teleport_channel_active(player):
+            class_status = f"CHANNEL {state['rift_teleport_remaining']:.1f}s"
+        elif relay_teleport_selecting(player):
+            class_status = "CHOOSE QUADRANT"
+        else:
+            class_status = format_ability_timer(state["rift_teleport_cooldown"])
+        if memory.get("stored_ultimate_name"):
+            ultimate_status = f"STORED: {memory['stored_ultimate_name'].upper()}"
+        elif memory.get("active_ultimate_source"):
+            ultimate_status = f"ACTIVE: {PARADOX_ULTIMATE_NAMES[memory['active_ultimate_source']].upper()}"
+        elif state.get("reflection_selection_open"):
+            ultimate_status = "CHOOSING"
+        elif memory.get("reflection_used_this_round"):
+            ultimate_status = "USED THIS ROUND"
+        else:
+            ultimate_status = "READY AT UNSTABLE RIFT"
+        lines = [
+            f"Q  RIFT ECHO       - {signature_status}",
+            f"C  RIFT TELEPORT   - {class_status}",
+            f"X  RIFT REFLECTION - {ultimate_status}",
+        ]
+        status_color = PARADOX_RIFT_COLOR
 
     for index, line in enumerate(lines):
         rendered = font.render(line, True, TEXT_COLOR)
@@ -8298,7 +9340,7 @@ def draw_character_select(screen, regular_font, large_font, match_state):
                 7,
             )
 
-        else:
+        elif character["id"] == "ward":
             # Ward: white-coated shielding scientist with a bright yellow emitter.
             pygame.draw.circle(screen, WARD_CLOTHING_COLOR, portrait_center, 50)
             pygame.draw.arc(
@@ -8326,6 +9368,14 @@ def draw_character_select(screen, regular_font, large_font, match_state):
             pygame.draw.circle(screen, WARD_DEVICE_COLOR, portrait_center, 17)
             pygame.draw.circle(screen, WARD_SHIELD_COLOR, portrait_center, 10)
             pygame.draw.circle(screen, WARD_SHIELD_COLOR, portrait_center, 60, width=4)
+        else:
+            # Paradox: faceless humanoid made entirely of unstable Rift matter.
+            pygame.draw.circle(screen, PARADOX_BODY_COLOR, portrait_center, 52)
+            pygame.draw.circle(screen, PARADOX_VOID_COLOR, portrait_center, 42)
+            pygame.draw.circle(screen, PARADOX_RIFT_COLOR, portrait_center, 42, width=6)
+            pygame.draw.circle(screen, PARADOX_WINDOW_COLOR, (portrait_center[0] - 13, portrait_center[1] + 4), 8)
+            pygame.draw.circle(screen, PARADOX_CORE_COLOR, (portrait_center[0] + 15, portrait_center[1] - 12), 6)
+            pygame.draw.circle(screen, PARADOX_RIFT_COLOR, portrait_center, 62, width=3)
 
         name = large_font.render(
             character["name"].upper(),
@@ -8396,12 +9446,19 @@ def draw_character_select(screen, regular_font, large_font, match_state):
                 "C Breach Charge",
                 "X Explosive Inferno",
             ]
-        else:
+        elif character["id"] == "ward":
             detail_lines = [
                 "100 HP | Fortification Guardian",
                 "Q Bulwark",
                 "C Field Treatment",
                 "X Personal Aegis",
+            ]
+        else:
+            detail_lines = [
+                "80 HP | Rift wildcard",
+                "Q Rift Echo",
+                "C Rift Teleport",
+                "X Rift Reflection",
             ]
 
         for line_index, line in enumerate(detail_lines):
@@ -8433,7 +9490,7 @@ def draw_character_select(screen, regular_font, large_font, match_state):
         )
     else:
         instruction = regular_font.render(
-            "Click a character or press 1-9. If time expires, Malphas is selected automatically.",
+            "Click a character or press 1-9/0. If time expires, Malphas is selected automatically.",
             True,
             (176, 190, 207),
         )
@@ -8629,6 +9686,7 @@ def begin_new_match(
     for actor in actors:
         actor["credits"] = STARTING_CREDITS
         actor["last_buy_round"] = 0
+        actor["paradox_memory"] = None
         reset_actor_loadout(actor)
     match_state["phase"] = "character_select"
     match_state["timer"] = CHARACTER_SELECT_DURATION
@@ -8690,9 +9748,11 @@ def finish_round(
 
 def main():
     pygame.init()
+    paradox_warning_sound = make_paradox_warning_sound()
+    paradox_warning_audio_tokens = set()
 
     screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-    pygame.display.set_caption("Riftbound - Version 0.8 Characters - Ward Guardian")
+    pygame.display.set_caption("Riftbound - Version 0.8 Characters - Paradox Conduit")
     pygame.mouse.set_visible(True)
 
     clock = pygame.time.Clock()
@@ -8788,7 +9848,14 @@ def main():
                 game_running = False
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    if ui_state == "main_menu":
+                    if (
+                        ui_state == "game"
+                        and not paused
+                        and player.get("character_id") == PARADOX["id"]
+                        and player.get("ability_state", {}).get("reflection_selection_open", False)
+                    ):
+                        cancel_paradox_reflection_selection(player)
+                    elif ui_state == "main_menu":
                         game_running = False
                     else:
                         paused = not paused
@@ -8821,6 +9888,8 @@ def main():
                         character_select_requested = "aurel"
                     elif event.key == pygame.K_9:
                         character_select_requested = "ward"
+                    elif event.key == pygame.K_0:
+                        character_select_requested = "paradox"
                     continue
 
                 if match_state["phase"] == "playing" and relay_teleport_selecting(player):
@@ -8864,6 +9933,25 @@ def main():
                     restart_requested = True
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 ui_click_position = event.pos
+                paradox_menu_handled = False
+                if (
+                    ui_state == "game"
+                    and not paused
+                    and match_state["phase"] == "playing"
+                    and player.get("character_id") == PARADOX["id"]
+                    and (
+                        player.get("ability_state", {}).get("echo_selection_open", False)
+                        or player.get("ability_state", {}).get("reflection_selection_open", False)
+                    )
+                ):
+                    paradox_menu_handled, paradox_menu_message = handle_paradox_selection_click(
+                        player, actors, rift_state, event.pos, screen
+                    )
+                    if paradox_menu_message:
+                        ability_status_message = paradox_menu_message
+                        ability_status_timer = 2.0
+                if paradox_menu_handled:
+                    continue
                 if (
                     ui_state == "game"
                     and not paused
@@ -8973,8 +10061,15 @@ def main():
             character_select_requested = None
             trigger_just_pressed = False
 
+        paradox_selection_open = (
+            player.get("character_id") == PARADOX["id"]
+            and (
+                player.get("ability_state", {}).get("echo_selection_open", False)
+                or player.get("ability_state", {}).get("reflection_selection_open", False)
+            )
+        )
         pygame.mouse.set_visible(
-            paused or match_state["phase"] == "character_select"
+            paused or match_state["phase"] == "character_select" or paradox_selection_open
         )
 
         if not paused and match_state["phase"] == "character_select":
@@ -9236,15 +10331,31 @@ def main():
                 wall_corners = get_wall_corners(active_obstacles)
                 cached_world_polygon = []
                 vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
-            if teleported or relay_teleported:
+            paradox_update_message, paradox_teleported, paradox_geometry_changed = update_paradox_abilities(
+                player, actors, walls, destructible_objects, bullet_marks, rift_state, delta_time
+            )
+            if paradox_update_message:
+                ability_status_message = paradox_update_message
+                ability_status_timer = 2.0
+            if paradox_geometry_changed:
+                active_obstacles = get_active_obstacle_rects(walls, destructible_objects)
+                active_obstacle_signature = tuple(
+                    not destructible["destroyed"] for destructible in destructible_objects
+                )
+                wall_segments = get_wall_segments(active_obstacles)
+                wall_corners = get_wall_corners(active_obstacles)
+                cached_world_polygon = []
+                vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
+            if teleported or relay_teleported or paradox_teleported:
                 cached_world_polygon = []
                 vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
 
         if (
             player_can_act
             and relay_teleport_quadrant_requested is not None
-            and player.get("character_id") == RELAY["id"]
+            and player.get("character_class") == "Conduit"
         ):
+            paradox_pause_echo_charge(player)
             _, ability_status_message = begin_relay_rift_teleport(
                 player, relay_teleport_quadrant_requested, rift_state
             )
@@ -9257,7 +10368,8 @@ def main():
                 _, ability_status_message = try_activate_track(player)
             elif player.get("character_class") == "Guardian":
                 _, ability_status_message = try_activate_field_treatment(player)
-            elif player.get("character_id") == RELAY["id"]:
+            elif player.get("character_class") == "Conduit":
+                paradox_pause_echo_charge(player)
                 _, ability_status_message = try_activate_rift_teleport(player, rift_state)
             elif player.get("character_class") == "Breaker":
                 breach_mouse_world = (
@@ -9320,9 +10432,25 @@ def main():
                 _, ability_status_message = try_activate_explosive_inferno(player)
             elif player.get("character_id") == WARD["id"]:
                 _, ability_status_message = try_activate_personal_aegis(player)
+            elif player.get("character_id") == PARADOX["id"]:
+                paradox_pause_echo_charge(player)
+                memory = get_paradox_memory(player)
+                if memory.get("stored_ultimate_source") is not None:
+                    _, ability_status_message = try_activate_paradox_stored_ultimate(
+                        player, actors, active_obstacles
+                    )
+                else:
+                    _, ability_status_message = try_open_paradox_reflection(
+                        player, actors, rift_state
+                    )
             ability_status_timer = 2.0
 
         if aurel_inferno_charging(player):
+            movement_direction.update(0, 0)
+        if (
+            player.get("character_id") == PARADOX["id"]
+            and player.get("ability_state", {}).get("reflection_selection_open", False)
+        ):
             movement_direction.update(0, 0)
 
         moving = movement_direction.length_squared() > 0
@@ -9369,8 +10497,16 @@ def main():
             if sable_wild_hunt_active(player)
             else 1.0
         )
+        paradox_echo_move_multiplier = (
+            PARADOX_RIFT_ECHO_MOVE_MULTIPLIER
+            if (
+                player.get("character_id") == PARADOX["id"]
+                and player.get("ability_state", {}).get("echo_charging", False)
+            )
+            else 1.0
+        )
         base_character_speed = (
-            player["move_speed"] * fury_speed_multiplier * treatment_move_multiplier * wild_hunt_speed_multiplier
+            player["move_speed"] * fury_speed_multiplier * treatment_move_multiplier * wild_hunt_speed_multiplier * paradox_echo_move_multiplier
         )
         selected_speed = (
             base_character_speed * player["sprint_multiplier"]
@@ -9465,6 +10601,23 @@ def main():
                     aim_angle,
                     active_obstacles,
                 )
+            elif player.get("character_id") == PARADOX["id"]:
+                memory = get_paradox_memory(player)
+                if memory.get("stored_echo") is not None:
+                    _, ability_status_message, echo_geometry_changed = try_use_paradox_echo(
+                        player, aim_angle, active_obstacles, destructible_objects, actors, bullet_marks
+                    )
+                    if echo_geometry_changed:
+                        active_obstacles = get_active_obstacle_rects(walls, destructible_objects)
+                        active_obstacle_signature = tuple(
+                            not destructible["destroyed"] for destructible in destructible_objects
+                        )
+                        wall_segments = get_wall_segments(active_obstacles)
+                        wall_corners = get_wall_corners(active_obstacles)
+                        cached_world_polygon = []
+                        vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
+                else:
+                    _, ability_status_message = try_activate_paradox_echo(player, rift_state)
             ability_status_timer = 2.0
 
         for weapon_state in weapon_states:
@@ -9488,6 +10641,13 @@ def main():
         )
         sable_blocks_weapon = sable_wild_hunt_active(player)
         aurel_blocks_weapon = aurel_inferno_charging(player)
+        paradox_menu_blocks_weapon = (
+            player.get("character_id") == PARADOX["id"]
+            and (
+                player.get("ability_state", {}).get("echo_selection_open", False)
+                or player.get("ability_state", {}).get("reflection_selection_open", False)
+            )
+        )
         if (
             active_weapon["fire_mode"] != "melee"
             and reload_requested
@@ -9496,6 +10656,7 @@ def main():
             and not relay_blocks_weapon
             and not sable_blocks_weapon
             and not aurel_blocks_weapon
+            and not paradox_menu_blocks_weapon
         ):
             magazine_has_space = (
                 active_weapon_state["magazine_ammo"]
@@ -9522,23 +10683,22 @@ def main():
                 active_weapon_state["reloading"] = False
                 active_weapon_state["reload_timer"] = 0.0
 
+        native_dead_line_state = get_character_effect_state(player, LONGSHOT["id"])
         dead_line_blocks_weapon = (
-            player.get("character_id") == LONGSHOT["id"]
+            native_dead_line_state is not None
             and (
-                player["ability_state"].get("dead_line_active", False)
-                or player["ability_state"].get("dead_line_requires_release", False)
+                native_dead_line_state.get("dead_line_active", False)
+                or native_dead_line_state.get("dead_line_requires_release", False)
             )
         )
         dead_line_geometry_changed = False
         if player_can_act and player.get("character_id") == LONGSHOT["id"]:
             dead_line_geometry_changed = update_dead_line_weapon(
-                player,
-                trigger_held,
-                aim_angle,
-                walls,
-                destructible_objects,
-                actors,
-                delta_time,
+                player, trigger_held, aim_angle, walls, destructible_objects, actors, delta_time
+            )
+        elif player_can_act and paradox_active_ultimate_source(player) == LONGSHOT["id"]:
+            dead_line_geometry_changed = update_paradox_dead_line_weapon(
+                player, trigger_held, aim_angle, walls, destructible_objects, actors, delta_time
             )
             if dead_line_geometry_changed:
                 active_obstacles = get_active_obstacle_rects(
@@ -9570,9 +10730,14 @@ def main():
                 active_obstacles,
             )
         if sable_hunt_is_active and trigger_held:
-            sable_geometry_changed = perform_sable_hunting_knife_attack(
-                player, aim_angle, actors, active_obstacles, destructible_objects, bullet_marks
-            )
+            if player.get("character_id") == PARADOX["id"]:
+                sable_geometry_changed = perform_paradox_copied_melee(
+                    player, aim_angle, actors, active_obstacles, destructible_objects, bullet_marks
+                )
+            else:
+                sable_geometry_changed = perform_sable_hunting_knife_attack(
+                    player, aim_angle, actors, active_obstacles, destructible_objects, bullet_marks
+                )
             if sable_geometry_changed:
                 active_obstacles = get_active_obstacle_rects(walls, destructible_objects)
                 active_obstacle_signature = tuple(not destructible["destroyed"] for destructible in destructible_objects)
@@ -9581,14 +10746,19 @@ def main():
                 cached_world_polygon = []
                 vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
         if varek_blade_is_active and trigger_held:
-            blade_geometry_changed = perform_varek_blade_attack(
-                player,
-                aim_angle,
-                actors,
-                active_obstacles,
-                destructible_objects,
-                bullet_marks,
-            )
+            if player.get("character_id") == PARADOX["id"]:
+                blade_geometry_changed = perform_paradox_copied_melee(
+                    player, aim_angle, actors, active_obstacles, destructible_objects, bullet_marks
+                )
+            else:
+                blade_geometry_changed = perform_varek_blade_attack(
+                    player,
+                    aim_angle,
+                    actors,
+                    active_obstacles,
+                    destructible_objects,
+                    bullet_marks,
+                )
             if blade_geometry_changed:
                 active_obstacles = get_active_obstacle_rects(
                     walls,
@@ -9621,6 +10791,7 @@ def main():
             and not relay_blocks_weapon
             and not sable_blocks_weapon
             and not aurel_blocks_weapon
+            and not paradox_menu_blocks_weapon
         )
         if can_fire:
             if active_weapon["fire_mode"] == "melee":
@@ -9694,6 +10865,7 @@ def main():
             and not relay_blocks_weapon
             and not sable_blocks_weapon
             and not aurel_blocks_weapon
+            and not paradox_menu_blocks_weapon
         ):
             active_weapon_state["reloading"] = True
             active_weapon_state["reload_timer"] = active_weapon["reload_time"]
@@ -9943,6 +11115,8 @@ def main():
         draw_sable_world_effects(screen, debug_font, player, actors, camera)
         draw_aurel_world_effects(screen, player, camera)
         draw_ward_world_effects(screen, debug_font, player, actors, camera)
+        draw_paradox_world_effects(screen, player, camera)
+        draw_paradox_copied_ultimate_effects(screen, debug_font, player, actors, camera)
 
         # Bots and bullets retain exact partial visibility, but only their
         # small bounding surfaces are multiplied by the visibility mask.
@@ -10069,6 +11243,7 @@ def main():
             and not miri_nine_lives_active(player)
             and not relay_blocks_weapon
             and not aurel_blocks_weapon
+            and not paradox_menu_blocks_weapon
         ):
             draw_crosshair(screen, pygame.mouse.get_pos(), current_spread)
         draw_buy_phase(
@@ -10094,6 +11269,8 @@ def main():
             match_state,
         )
         draw_relay_teleport_selector(screen, ammunition_font, player)
+        draw_paradox_selection_menus(screen, debug_font, ammunition_font, player, actors, rift_state)
+        draw_paradox_enemy_reflection_warning(screen, debug_font, actors, player["team"])
         if paused:
             draw_pause_menu(
                 screen,
@@ -10102,6 +11279,7 @@ def main():
                 title_font,
             )
 
+        update_paradox_warning_audio(actors, player["team"], paradox_warning_sound, paradox_warning_audio_tokens)
         pygame.display.flip()
 
     pygame.mouse.set_visible(True)
