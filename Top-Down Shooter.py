@@ -1,6 +1,7 @@
 import heapq
 import math
 import random
+from pathlib import Path
 
 import pygame
 
@@ -159,11 +160,11 @@ VISION_SHADOW_COLOR = (10, 12, 18, 175)
 
 # -----------------------------------------------------------------------------
 # RIFT HUNT 0.6 SETTINGS
-# The player joins two blue bots against three red bots.
+# The player joins four blue bots against five red bots.
 # -----------------------------------------------------------------------------
 ACTOR_MAX_HEALTH = 100
 ACTOR_RADIUS = PLAYER_SIZE // 2
-TEAM_SIZE = 3
+TEAM_SIZE = 5
 ROUNDS_TO_WIN = 5
 ROUND_END_DELAY = 3.0
 REVIVE_DURATION = 2.0
@@ -352,10 +353,10 @@ CHARACTER_ROSTER = [
 # Malphas - Phantom
 MALPHAS_HELLSTEP_RANGE = 650
 MALPHAS_HELLSTEP_DELAY = 0.65
-MALPHAS_HELLSTEP_COOLDOWN = 8.0
+MALPHAS_HELLSTEP_COOLDOWN = 3.0
 
-MALPHAS_SILENCE_DURATION = 4.5
-MALPHAS_SILENCE_COOLDOWN = 12.0
+MALPHAS_SILENCE_DURATION = 10.0
+MALPHAS_SILENCE_COOLDOWN = 0.0
 MALPHAS_WALK_SOUND_RADIUS = 180
 MALPHAS_RUN_SOUND_RADIUS = 430
 MALPHAS_SOUND_MEMORY = 1.5
@@ -373,19 +374,19 @@ MALPHAS_EFFECT_COLOR = (227, 67, 92)
 
 # Longshot - Hunter
 LONGSHOT_RESONANCE_RADIUS = 900
-LONGSHOT_RESONANCE_COOLDOWN = 12.0
+LONGSHOT_RESONANCE_COOLDOWN = 15.0
 LONGSHOT_RESONANCE_ECHO_DURATION = 2.4
 LONGSHOT_RESONANCE_PULSE_DURATION = 0.75
 LONGSHOT_MOVE_ACTIVITY_MEMORY = 0.35
 LONGSHOT_FIRE_ACTIVITY_MEMORY = 0.55
 
-LONGSHOT_TRACK_DURATION = 6.0
-LONGSHOT_TRACK_COOLDOWN = 14.0
-LONGSHOT_TRACK_EVENT_LIFETIME = 5.0
+LONGSHOT_TRACK_DURATION = 3.0
+LONGSHOT_TRACK_COOLDOWN = 0.0
+LONGSHOT_TRACK_EVENT_LIFETIME = 3.0
 LONGSHOT_TRACK_SAMPLE_INTERVAL = 0.30
 LONGSHOT_TRACK_MAX_EVENTS_PER_ACTOR = 24
 
-LONGSHOT_DEAD_LINE_SHOTS = 2
+LONGSHOT_DEAD_LINE_SHOTS = 3
 LONGSHOT_DEAD_LINE_DAMAGE = 150
 LONGSHOT_DEAD_LINE_OBJECT_DAMAGE = 180
 LONGSHOT_DEAD_LINE_AIM_TIME = 0.65
@@ -403,7 +404,7 @@ LONGSHOT_TRACK_COLOR = (125, 224, 255)
 
 # Varek - Breaker
 VAREK_ONI_BLADE_DURATION = 5.0
-VAREK_ONI_BLADE_COOLDOWN = 10.0
+VAREK_ONI_BLADE_COOLDOWN = 20.0
 VAREK_ONI_BLADE_DAMAGE = 70
 VAREK_ONI_BLADE_RANGE = 140
 VAREK_ONI_BLADE_ARC_DEGREES = 100
@@ -412,16 +413,17 @@ VAREK_ONI_BLADE_ANIMATION_TIME = 0.20
 
 # Shared Breaker class ability. Breach Charge instantly destroys destructible
 # cover in its cone, damages only enemies, and physically pushes both teams.
-BREAKER_BREACH_COOLDOWN = 11.0
+BREAKER_BREACH_COOLDOWN = 0.0
 BREAKER_BREACH_RANGE = 280
 BREAKER_BREACH_ARC_DEGREES = 70
 BREAKER_BREACH_DAMAGE = 25
+BREAKER_BREACH_DAMAGE_FRACTION = 0.25
 BREAKER_BREACH_PUSH_DISTANCE = 150
 BREAKER_BREACH_EFFECT_DURATION = 0.28
 
 VAREK_FURY_DURATION = 8.0
 VAREK_FURY_SPEED_MULTIPLIER = 1.30
-VAREK_FURY_EXTENSION_PER_ELIMINATION = 1.5
+VAREK_FURY_EXTENSION_PER_ELIMINATION = 5.0
 VAREK_FURY_MAX_REMAINING = 12.0
 
 VAREK_ONI_BLADE = {
@@ -443,7 +445,7 @@ VAREK_FURY_COLOR = (217, 91, 67)
 
 # Miri - Guardian
 MIRI_FELINE_LUNGE_DURATION = 6.0
-MIRI_FELINE_LUNGE_COOLDOWN = 8.0
+MIRI_FELINE_LUNGE_COOLDOWN = 15.0
 MIRI_CLAW_DAMAGE = 35
 MIRI_CLAW_RANGE = 100
 MIRI_CLAW_ARC_DEGREES = 90
@@ -452,8 +454,9 @@ MIRI_CLAW_ANIMATION_TIME = 0.16
 
 GUARDIAN_FIELD_TREATMENT_RADIUS = 180
 GUARDIAN_FIELD_TREATMENT_CAST_TIME = 1.0
-GUARDIAN_FIELD_TREATMENT_COOLDOWN = 12.0
+GUARDIAN_FIELD_TREATMENT_COOLDOWN = 0.0
 GUARDIAN_FIELD_TREATMENT_MISSING_HEALTH_FRACTION = 0.50
+GUARDIAN_FIELD_TREATMENT_SELF_MISSING_HEALTH_FRACTION = 0.40
 GUARDIAN_FIELD_TREATMENT_MOVE_MULTIPLIER = 0.60
 
 MIRI_NINE_LIVES_RANGE = 100
@@ -470,12 +473,12 @@ MIRI_EFFECT_COLOR = (118, 255, 168)
 
 # Relay - Conduit
 RELAY_RIFT_BOOST_CHARGE_TIME = 3.0
-RELAY_RIFT_BOOST_PROJECTILES = 20
+RELAY_RIFT_BOOST_PROJECTILES = 25
 RELAY_RIFT_BOOST_DAMAGE_MULTIPLIER = 1.20
-RELAY_RIFT_BOOST_COOLDOWN = 10.0
+RELAY_RIFT_BOOST_COOLDOWN = 5.0
 
-RELAY_RIFT_TELEPORT_CHANNEL = 3.0
-RELAY_RIFT_TELEPORT_COOLDOWN = 15.0
+RELAY_RIFT_TELEPORT_CHANNEL = 0.0
+RELAY_RIFT_TELEPORT_COOLDOWN = 0.0
 RELAY_RIFT_TELEPORT_SAFE_MARGIN = 110
 RELAY_RIFT_TELEPORT_ATTEMPTS = 160
 
@@ -489,7 +492,7 @@ RELAY_BOOST_BULLET_COLOR = (190, 112, 255)
 
 # Haze - Phantom
 HAZE_HALLUCINATION_DURATION = 15.0
-HAZE_HALLUCINATION_COOLDOWN = 10.0
+HAZE_HALLUCINATION_COOLDOWN = 20.0
 HAZE_HALLUCINATION_SPEED = 250.0
 HAZE_HALLUCINATION_FADE_TIME = 1.25
 HAZE_CHILDS_PLAY_DURATION = 15.0
@@ -506,7 +509,7 @@ HAZE_GREEN_COLOR = (126, 255, 71)
 # Sable - Hunter
 SABLE_SCENT_RADIUS = 850
 SABLE_SCENT_DURATION = 3.0
-SABLE_SCENT_COOLDOWN = 10.0
+SABLE_SCENT_COOLDOWN = 20.0
 SABLE_SCENT_HEALTH_THRESHOLD = 0.70
 SABLE_DAMAGE_EVIDENCE_MEMORY = 2.5
 
@@ -536,7 +539,7 @@ SABLE_KNIFE_COLOR = (214, 221, 210)
 
 
 # Aurel - Breaker
-AUREL_CINDERBOLT_COOLDOWN = 10.0
+AUREL_CINDERBOLT_COOLDOWN = 15.0
 AUREL_CINDERBOLT_SPEED = 1050.0
 AUREL_CINDERBOLT_PROJECTILE_RADIUS = 12
 AUREL_CINDERBOLT_EXPLOSION_RADIUS = 130
@@ -591,7 +594,7 @@ WARD_SHIELD_COLOR = (255, 211, 74)
 WARD_SHIELD_CORE_COLOR = (255, 239, 158)
 
 # Paradox - Conduit
-PARADOX_RIFT_ECHO_CHARGE_TIME = 5.0
+PARADOX_RIFT_ECHO_CHARGE_TIME = 3.0
 PARADOX_RIFT_ECHO_MOVE_MULTIPLIER = 0.50
 PARADOX_REFLECTION_WARNING_DURATION = 5.0
 PARADOX_BODY_COLOR = (133, 65, 214)
@@ -600,11 +603,30 @@ PARADOX_CORE_COLOR = (224, 181, 255)
 PARADOX_VOID_COLOR = (31, 14, 55)
 PARADOX_WINDOW_COLOR = (87, 201, 230)
 
+# Ability-resource rules. Q uses refresh to these exact maxima each round.
+# Every native class C refreshes to one use each round. Ultimates are earned
+# from combined kill + death events and persist until successfully spent.
+Q_USES_PER_ROUND = {
+    MALPHAS["id"]: 3,
+    LONGSHOT["id"]: 3,
+    VAREK["id"]: 2,
+    MIRI["id"]: 2,
+    RELAY["id"]: 3,
+    HAZE["id"]: 2,
+    SABLE["id"]: 2,
+    AUREL["id"]: 3,
+    WARD["id"]: 2,
+    PARADOX["id"]: 1,
+}
+CLASS_ABILITY_USES_PER_ROUND = 1
+ULTIMATE_EVENTS_REQUIRED = 10
+PARADOX_ULTIMATE_EVENTS_REQUIRED = 8
+
 PARADOX_ECHO_OPTIONS = (
-    ("silence", "Silence", "Phantom", "Suppress movement sound for 4.5 seconds."),
-    ("track", "Track", "Hunter", "Reveal recent enemy movement trails for 6 seconds."),
-    ("breach", "Breach Charge", "Breaker", "Forward blast: 25 enemy damage, push actors, instantly destroy destructible cover."),
-    ("field_treatment", "Field Treatment", "Guardian", "1 second cast; restore 50% of missing health to nearby living allies."),
+    ("silence", "Silence", "Phantom", "Suppress walking and sprinting sound for 10 seconds."),
+    ("track", "Track", "Hunter", "Reveal precise recent movement, gunshot, and ability trails for 3 seconds."),
+    ("breach", "Breach Charge", "Breaker", "Forward blast: 25% remaining enemy HP, push actors, instantly destroy destructible cover."),
+    ("field_treatment", "Field Treatment", "Guardian", "1 second cast; restore 50% missing HP to allies and 40% missing HP to self."),
 )
 
 PARADOX_ULTIMATE_NAMES = {
@@ -617,6 +639,102 @@ PARADOX_ULTIMATE_NAMES = {
     AUREL["id"]: "Explosive Inferno",
     WARD["id"]: "Personal Aegis",
 }
+
+
+# -----------------------------------------------------------------------------
+# PRESENTATION 0.9 SETTINGS
+# -----------------------------------------------------------------------------
+# Each 5v5 team receives exactly one member of every class, but the order is
+# shuffled. The human may choose only between the two characters in the class
+# assigned to their slot. Bots follow the same two-character restriction.
+CLASS_CHARACTER_OPTIONS = {
+    "Phantom": (MALPHAS["id"], HAZE["id"]),
+    "Hunter": (LONGSHOT["id"], SABLE["id"]),
+    "Breaker": (VAREK["id"], AUREL["id"]),
+    "Guardian": (MIRI["id"], WARD["id"]),
+    "Conduit": (RELAY["id"], PARADOX["id"]),
+}
+CLASS_ORDER = tuple(CLASS_CHARACTER_OPTIONS)
+BOT_CHARACTER_LOCK_MIN = 2.0
+BOT_CHARACTER_LOCK_MAX = 13.0
+
+# Artwork and audio are intentionally external-file friendly. Drop replacements
+# into these locations and the prototype will use them on the next launch.
+ASSET_ROOT = Path(__file__).resolve().with_name("assets")
+CHARACTER_ART_DIRECTORY = ASSET_ROOT / "characters"
+AUDIO_ASSET_DIRECTORY = ASSET_ROOT / "audio"
+
+# Full-body art is used on character select. Portrait art is used for the
+# head-and-shoulders in-game representation. Fallback vector art is generated
+# automatically when files are missing.
+CHARACTER_ART_FILENAMES = {
+    character["id"]: {
+        "portrait": f"{character['id']}_portrait.png",
+        "full": f"{character['id']}_full.png",
+    }
+    for character in CHARACTER_ROSTER
+}
+
+PRESENTATION_SETTINGS_DEFAULTS = {
+    "master_volume": 0.80,
+    "music_volume": 0.45,
+    "sfx_volume": 0.75,
+    "show_fps": False,
+}
+
+# Dialogue is placeholder text and deliberately lives in one data table so the
+# writing can be replaced later without touching combat logic.
+CHARACTER_DIALOGUE = {
+    "malphas": ("Keep moving. I will make the opening.", "The Rift is watching."),
+    "longshot": ("Give me a lane and I will use it.", "Movement leaves answers."),
+    "varek": ("Point me at the problem.", "Cover only buys them time."),
+    "miri": ("Stay close. I can keep us standing.", "Try not to make me do all the rescuing."),
+    "relay": ("Rift connection stable.", "Objective path calculated."),
+    "haze": ("They will see what I want them to see.", "Which one of me did you find?"),
+    "sable": ("Tracks do not lie.", "Do not let them disappear into cover."),
+    "aurel": ("A controlled flame is still a flame.", "I would prefer not to burn the entire room."),
+    "ward": ("Stay behind the shield line.", "I have accounted for the dangerous angle."),
+    "paradox": ("I know how this works now.", "This place is less impossible than before."),
+}
+
+TUTORIAL_PAGES = (
+    (
+        "MOVEMENT & COMBAT",
+        (
+            "WASD - Move     SHIFT - Sprint     Mouse - Aim",
+            "Left Click - Fire / melee     R - Reload",
+            "1-4 - Weapon slots     G - Drop purchased weapon     F - Pick up friendly drop",
+            "Movement increases weapon spread, so short controlled bursts are safer at range.",
+        ),
+    ),
+    (
+        "ABILITIES",
+        (
+            "Q - Character signature ability",
+            "C - Class ability",
+            "X - Ultimate once its kill + death meter is charged",
+            "Every character has different Q/X use rules. C refreshes once per round.",
+        ),
+    ),
+    (
+        "RIFT HUNT",
+        (
+            "One of three Rifts activates each round.",
+            "Hold the area to capture it, then protect control until the 60 second hold completes.",
+            "The normal team-elimination win condition still exists.",
+            "Rift control also provides information pulses and Team Rift Energy.",
+        ),
+    ),
+    (
+        "MATCH FLOW",
+        (
+            "Each team has one randomly assigned player in every class.",
+            "Choose between the two characters in your assigned class and press LOCK IN.",
+            "After everyone locks (or the timer expires), the Buy Phase opens.",
+            "Matches are 5v5. First team to five rounds wins.",
+        ),
+    ),
+)
 
 BACKGROUND_COLOR = (31, 37, 46)
 GRID_COLOR = (42, 49, 60)
@@ -686,11 +804,23 @@ DOOR_EDGE_COLOR = (237, 188, 96)
 HIDDEN_DOOR_COLOR = (62, 47, 39)
 HIDDEN_DOOR_EDGE_COLOR = (111, 80, 57)
 
-BLUE_SPAWNS = [(260, 240), (260, 1100), (260, 1960)]
-RED_SPAWNS = [(2940, 240), (2940, 1100), (2940, 1960)]
+BLUE_SPAWNS = [
+    (260, 220),
+    (260, 650),
+    (260, 1100),
+    (260, 1550),
+    (260, 1980),
+]
+RED_SPAWNS = [
+    (2940, 220),
+    (2940, 650),
+    (2940, 1100),
+    (2940, 1550),
+    (2940, 1980),
+]
 
-# Each lane is a simple route around the laboratory walls. This is intentionally
-# understandable waypoint AI; proper navigation can replace it later.
+# Five readable lanes give each 5v5 bot a stable route before its collision-aware
+# A* fallback takes over near the Rift, enemies, revives, or blocked cover.
 BOT_ROUTES = [
     [
         (300, 190),
@@ -701,6 +831,15 @@ BOT_ROUTES = [
         (2850, 300),
     ],
     [
+        (300, 650),
+        (720, 650),
+        (1050, 780),
+        (1650, 850),
+        (2050, 760),
+        (2550, 650),
+        (2850, 650),
+    ],
+    [
         (300, 1100),
         (800, 950),
         (1200, 900),
@@ -708,6 +847,15 @@ BOT_ROUTES = [
         (2050, 1050),
         (2450, 1050),
         (2850, 1100),
+    ],
+    [
+        (300, 1550),
+        (780, 1480),
+        (1250, 1450),
+        (1650, 1620),
+        (2100, 1540),
+        (2550, 1550),
+        (2850, 1550),
     ],
     [
         (300, 1960),
@@ -1136,6 +1284,129 @@ def get_playable_character(character_id):
             return character
     return None
 
+def get_q_round_max(actor_or_character_id):
+    """Return the exact Q-use maximum that refreshes at each round start."""
+    character_id = (
+        actor_or_character_id.get("character_id")
+        if isinstance(actor_or_character_id, dict)
+        else actor_or_character_id
+    )
+    return Q_USES_PER_ROUND.get(character_id, 0)
+
+
+def get_native_class_round_uses(actor):
+    """Every implemented native class C refreshes to one use per round."""
+    return (
+        CLASS_ABILITY_USES_PER_ROUND
+        if actor.get("character_class") in ("Phantom", "Hunter", "Breaker", "Guardian", "Conduit")
+        else 0
+    )
+
+
+def get_ultimate_event_threshold(actor):
+    """Paradox earns X every eight combined events; everyone else uses ten."""
+    stored = actor.get("ultimate_event_threshold")
+    if stored:
+        return stored
+    character_id = actor.get("character_id")
+    if character_id == PARADOX["id"]:
+        return PARADOX_ULTIMATE_EVENTS_REQUIRED
+    if get_playable_character(character_id) is not None:
+        return ULTIMATE_EVENTS_REQUIRED
+    return 0
+
+
+def initialize_match_ability_resources(actor):
+    """Reset all match-level ability resources after choosing a character."""
+    actor["q_uses_remaining"] = get_q_round_max(actor)
+    actor["c_uses_remaining"] = get_native_class_round_uses(actor)
+    actor["ultimate_progress"] = 0
+    actor["ultimate_ready"] = False
+    actor["ultimate_event_threshold"] = (
+        PARADOX_ULTIMATE_EVENTS_REQUIRED
+        if actor.get("character_id") == PARADOX["id"]
+        else ULTIMATE_EVENTS_REQUIRED
+        if get_playable_character(actor.get("character_id")) is not None
+        else 0
+    )
+    actor["kills"] = 0
+    actor["deaths"] = 0
+
+
+def reset_round_ability_resources(actor):
+    """Refresh Q/C only; earned X progress/readiness persists across rounds."""
+    actor["q_uses_remaining"] = get_q_round_max(actor)
+    actor["c_uses_remaining"] = get_native_class_round_uses(actor)
+
+
+def q_use_available(actor):
+    return actor.get("q_uses_remaining", 0) > 0
+
+
+def spend_q_use(actor):
+    if not q_use_available(actor):
+        return False
+    actor["q_uses_remaining"] -= 1
+    record_track_event(actor, "ability")
+    return True
+
+
+def class_use_available(actor):
+    return actor.get("c_uses_remaining", 0) > 0
+
+
+def spend_class_use(actor):
+    if not class_use_available(actor):
+        return False
+    actor["c_uses_remaining"] -= 1
+    record_track_event(actor, "ability")
+    return True
+
+
+def ultimate_charge_ready(actor):
+    return bool(actor.get("ultimate_ready", False))
+
+
+def ultimate_progress_message(actor, ability_name):
+    threshold = get_ultimate_event_threshold(actor)
+    progress = min(actor.get("ultimate_progress", 0), threshold)
+    return f"{ability_name} NEEDS {threshold - progress} MORE KILL/DEATH EVENT(S)"
+
+
+def spend_ultimate_charge(actor):
+    """Consume one stored earned X and start a fresh kill+death meter."""
+    if not ultimate_charge_ready(actor):
+        return False
+    actor["ultimate_ready"] = False
+    actor["ultimate_progress"] = 0
+    record_track_event(actor, "ability")
+    return True
+
+
+def record_ultimate_event(actor, event_kind):
+    """Count a lethal defeat as a death for the victim and a kill for its attacker."""
+    if actor is None:
+        return False
+    if event_kind == "kill":
+        actor["kills"] = actor.get("kills", 0) + 1
+    elif event_kind == "death":
+        actor["deaths"] = actor.get("deaths", 0) + 1
+    else:
+        return False
+
+    threshold = get_ultimate_event_threshold(actor)
+    if threshold <= 0 or ultimate_charge_ready(actor):
+        return False
+    actor["ultimate_progress"] = min(
+        threshold,
+        actor.get("ultimate_progress", 0) + 1,
+    )
+    if actor["ultimate_progress"] >= threshold:
+        actor["ultimate_ready"] = True
+        return True
+    return False
+
+
 
 def make_paradox_memory():
     """Create match-persistent storage for Paradox's copied powers."""
@@ -1194,20 +1465,20 @@ def paradox_active_ultimate_source(actor):
     return (actor.get("paradox_memory") or {}).get("active_ultimate_source")
 
 
+
 def apply_character_to_actor(actor, character):
-    """Apply a selected character's statistics and fresh per-round ability state."""
+    """Apply a selected character and reset its match-level ability resources."""
     actor["character_id"] = character["id"]
     actor["character_name"] = character["name"]
     actor["character_class"] = character["class"]
     actor["max_health"] = character.get("max_health", ACTOR_MAX_HEALTH)
     actor["move_speed"] = character.get("move_speed", PLAYER_SPEED)
-    actor["sprint_multiplier"] = character.get(
-        "sprint_multiplier", SPRINT_MULTIPLIER
-    )
+    actor["sprint_multiplier"] = character.get("sprint_multiplier", SPRINT_MULTIPLIER)
     actor["max_stamina"] = character.get("max_stamina", MAX_STAMINA)
     actor["health"] = actor["max_health"]
     actor["ability_state"] = make_character_ability_state(character["id"])
     actor["paradox_memory"] = make_paradox_memory() if character["id"] == PARADOX["id"] else None
+    initialize_match_ability_resources(actor)
     actor["movement_sound_radius"] = 0.0
     actor["heard_position"] = None
     actor["heard_timer"] = 0.0
@@ -1219,23 +1490,10 @@ def apply_character_to_actor(actor, character):
     actor["resonance_echo_remaining"] = 0.0
     actor["resonance_echo_position"] = None
     actor["damaged_recent"] = 0.0
-    if actor.get("character_id") == PARADOX["id"]:
-        paradox_state = actor.get("ability_state", {})
-        paradox_state["echo_charging"] = False
-        paradox_state["echo_selection_open"] = False
-        paradox_state["silence_remaining"] = 0.0
-        paradox_state["track_remaining"] = 0.0
-        paradox_state["field_treatment_remaining"] = 0.0
-        paradox_state["field_treatment_pending"] = False
-        paradox_state["rift_teleport_selecting"] = False
-        paradox_state["rift_teleport_remaining"] = 0.0
-        memory = actor.get("paradox_memory") or {}
-        memory["active_ultimate_source"] = None
-        memory["ultimate_state"] = None
-
     actor["burn_remaining"] = 0.0
     actor["burn_fraction_per_second"] = 0.0
     actor["burn_source"] = None
+
 
 
 def make_actor(
@@ -1246,11 +1504,11 @@ def make_actor(
     route=None,
     character=None,
 ):
-    """Create one player or bot with round, combat, revival, and character state."""
+    """Create one player or bot with round, combat, revival, and ability-resource state."""
     character = character or {}
     character_id = character.get("id")
     max_health = character.get("max_health", ACTOR_MAX_HEALTH)
-    return {
+    actor = {
         "name": name,
         "team": team,
         "is_player": is_player,
@@ -1302,10 +1560,12 @@ def make_actor(
         "burn_fraction_per_second": 0.0,
         "burn_source": None,
     }
+    initialize_match_ability_resources(actor)
+    return actor
 
 
 def make_match_actors():
-    """Create the human player, two blue bots, and three red bots."""
+    """Create the human player, four blue bots, and five red bots for 5v5."""
     actors = [
         make_actor(
             "YOU",
@@ -1339,8 +1599,22 @@ def make_match_actors():
     return actors
 
 
+
 def reset_actor_for_round(actor):
-    """Restore one actor to its original spawn and first-life state."""
+    """Restore one actor while refreshing Q/C and preserving earned X resources."""
+    old_state = actor.get("ability_state", {})
+    # Active Dead Line/Fury end with the round and therefore spend their already-started X.
+    if actor.get("character_id") == LONGSHOT["id"] and old_state.get("dead_line_active", False):
+        spend_ultimate_charge(actor)
+    if actor.get("character_id") == VAREK["id"] and old_state.get("fury_remaining", 0.0) > 0:
+        spend_ultimate_charge(actor)
+
+    relay_boost_stored = (
+        actor.get("character_id") == RELAY["id"]
+        and old_state.get("rift_boost_charged", False)
+        and old_state.get("rift_boost_bullets_remaining", 0) <= 0
+    )
+
     actor["position"].update(actor["spawn_position"])
     actor["health"] = actor["max_health"]
     actor["alive"] = True
@@ -1359,6 +1633,10 @@ def reset_actor_for_round(actor):
     actor["navigation_path_index"] = 0
     actor["navigation_target"] = None
     actor["ability_state"] = make_character_ability_state(actor["character_id"])
+    reset_round_ability_resources(actor)
+    if relay_boost_stored:
+        actor["ability_state"]["rift_boost_charged"] = True
+        actor["ability_state"]["rift_boost_charge_progress"] = RELAY_RIFT_BOOST_CHARGE_TIME
     if actor.get("character_id") == PARADOX["id"]:
         if actor.get("paradox_memory") is None:
             actor["paradox_memory"] = make_paradox_memory()
@@ -1945,8 +2223,9 @@ def clear_bullet_marks(bullet_marks):
     bullet_marks.clear()
 
 
+
 def down_or_eliminate_actor(actor):
-    """Down an actor once; a second lethal defeat eliminates them for the round."""
+    """Down once, eliminate on the second lethal defeat, and stop active abilities."""
     actor["times_downed"] += 1
     actor["health"] = 0
     actor["alive"] = False
@@ -1954,8 +2233,6 @@ def down_or_eliminate_actor(actor):
     actor["revive_source"] = None
     actor["movement_sound_radius"] = 0.0
 
-    # Active character powers stop when the character is downed. Cooldowns and
-    # once-per-round ultimate flags remain, so being downed is not a free reset.
     ability_state = actor.get("ability_state", {})
     if "hellstep_windup" in ability_state:
         ability_state["hellstep_windup"] = 0.0
@@ -1963,35 +2240,55 @@ def down_or_eliminate_actor(actor):
         ability_state["silence_remaining"] = 0.0
         ability_state["bloodlust_remaining"] = 0.0
     if "dead_line_active" in ability_state:
+        if ability_state.get("dead_line_active", False):
+            spend_ultimate_charge(actor)
+            ability_state["dead_line_used"] = True
         ability_state["resonance_pulse_remaining"] = 0.0
         ability_state["track_remaining"] = 0.0
         ability_state["dead_line_active"] = False
         ability_state["dead_line_charge"] = 0.0
         ability_state["dead_line_recovery"] = 0.0
         ability_state["dead_line_requires_release"] = False
+        ability_state["dead_line_shots_remaining"] = 0
     if "oni_blade_remaining" in ability_state:
+        if ability_state.get("oni_blade_remaining", 0.0) > 0 and ability_state.get("oni_blade_cooldown_pending", False):
+            ability_state["oni_blade_cooldown_pending"] = False
+            ability_state["oni_blade_cooldown"] = VAREK_ONI_BLADE_COOLDOWN
+        if ability_state.get("fury_remaining", 0.0) > 0:
+            spend_ultimate_charge(actor)
+            ability_state["fury_used"] = True
         ability_state["oni_blade_remaining"] = 0.0
         ability_state["blade_attack_cooldown"] = 0.0
         ability_state["blade_animation_timer"] = 0.0
         ability_state["breach_effect_remaining"] = 0.0
         ability_state["fury_remaining"] = 0.0
     if "feline_lunge_remaining" in ability_state:
+        if ability_state.get("feline_lunge_remaining", 0.0) > 0 and ability_state.get("feline_lunge_cooldown_pending", False):
+            ability_state["feline_lunge_cooldown_pending"] = False
+            ability_state["feline_lunge_cooldown"] = MIRI_FELINE_LUNGE_COOLDOWN
         ability_state["feline_lunge_remaining"] = 0.0
         ability_state["claw_attack_cooldown"] = 0.0
         ability_state["claw_animation_timer"] = 0.0
         ability_state["field_treatment_remaining"] = 0.0
         ability_state["field_treatment_pending"] = False
+        # Interrupted Nine Lives keeps the earned X charge.
         ability_state["nine_lives_remaining"] = 0.0
         ability_state["nine_lives_target"] = None
         ability_state["nine_lives_start_position"] = None
     if "rift_boost_charge_progress" in ability_state:
         ability_state["rift_boost_charge_progress"] = 0.0
+        if ability_state.get("rift_boost_bullets_remaining", 0) > 0:
+            ability_state["rift_boost_bullets_remaining"] = 0
+            ability_state["rift_boost_cooldown"] = RELAY_RIFT_BOOST_COOLDOWN
+        # A fully stored, not-yet-activated Rift Boost survives downing.
         ability_state["rift_teleport_selecting"] = False
         ability_state["rift_teleport_quadrant"] = None
         ability_state["rift_teleport_remaining"] = 0.0
         ability_state["rift_overclock_active"] = False
     if "hallucination_cooldown" in ability_state:
         ability_state["silence_remaining"] = 0.0
+        if ability_state.get("hallucination") is not None:
+            ability_state["hallucination_cooldown"] = HAZE_HALLUCINATION_COOLDOWN
         ability_state["hallucination"] = None
         ability_state["hallucination_fades"] = []
         ability_state["childs_play_remaining"] = 0.0
@@ -2005,9 +2302,12 @@ def down_or_eliminate_actor(actor):
         ability_state["hunt_attack_cooldown"] = 0.0
         ability_state["hunt_attack_animation_timer"] = 0.0
     if "cinderbolt_cooldown" in ability_state:
+        # Cinderbolt Q is only spent on explosion, so a projectile erased by downing
+        # does not consume a use. Its already-started cooldown remains.
         ability_state["cinderbolts"] = []
         ability_state["cinderbolt_explosions"] = []
         ability_state["breach_effect_remaining"] = 0.0
+        # Interrupted pre-detonation Inferno retains the earned X for another try.
         ability_state["inferno_charge_remaining"] = 0.0
         ability_state["inferno_after_remaining"] = 0.0
         ability_state["inferno_explosion_effect_remaining"] = 0.0
@@ -2016,11 +2316,12 @@ def down_or_eliminate_actor(actor):
         ability_state["fire_trail_last_position"] = None
 
     if actor.get("character_id") == PARADOX["id"]:
-        # Unchosen completed Echo remains ready for a same-round revive; active casts
-        # and copied ultimates stop on down, while stored Q/X remain in match memory.
         ability_state["echo_charging"] = False
         ability_state["echo_selection_open"] = False
+        ability_state["echo_charge_progress"] = 0.0
+        ability_state["echo_ready"] = False
         ability_state["reflection_selection_open"] = False
+        ability_state["reflection_charge_remaining"] = 0.0
         ability_state["silence_remaining"] = 0.0
         ability_state["track_remaining"] = 0.0
         ability_state["breach_effect_remaining"] = 0.0
@@ -2030,6 +2331,14 @@ def down_or_eliminate_actor(actor):
         ability_state["rift_teleport_quadrant"] = None
         ability_state["rift_teleport_remaining"] = 0.0
         memory = actor.get("paradox_memory") or {}
+        active_source = memory.get("active_ultimate_source")
+        if active_source in (LONGSHOT["id"], VAREK["id"]):
+            spend_ultimate_charge(actor)
+        # Nine Lives / pre-detonation Inferno are refundable. The Paradox updater
+        # restores them to stored X if their earned charge is still present.
+        if active_source in (MIRI["id"], AUREL["id"]) and ultimate_charge_ready(actor):
+            memory["stored_ultimate_source"] = active_source
+            memory["stored_ultimate_name"] = PARADOX_ULTIMATE_NAMES.get(active_source)
         memory["active_ultimate_source"] = None
         memory["ultimate_state"] = None
 
@@ -2100,8 +2409,9 @@ def get_active_bulwarks(actors):
     return bulwarks
 
 
+
 def destroy_ward_bulwark(barrier):
-    """Remove a deployed Bulwark from its owner's state."""
+    """Remove a deployed Bulwark and start Ward's 15-second Q cooldown."""
     if barrier is None:
         return False
     barrier["health"] = 0.0
@@ -2110,6 +2420,7 @@ def destroy_ward_bulwark(barrier):
         state = owner.get("ability_state", {})
         if state.get("bulwark") is barrier:
             state["bulwark"] = None
+            state["bulwark_cooldown"] = WARD_BULWARK_COOLDOWN
     return True
 
 
@@ -2145,11 +2456,16 @@ def get_bulwark_hit_by_projectile(position, radius, actors):
     return None
 
 
+
 def try_activate_bulwark(player, target_position, aim_angle, obstacles):
-    """Deploy Ward's one-at-a-time 200 HP projectile barrier."""
+    """Deploy one of Ward's two per-round Bulwarks; cooldown starts on destruction."""
     if player.get("character_id") != WARD["id"]:
         return False, "BULWARK UNAVAILABLE"
     state = player["ability_state"]
+    if not q_use_available(player):
+        return False, "BULWARK - NO USES LEFT THIS ROUND"
+    if state.get("bulwark") is not None:
+        return False, "BULWARK ALREADY DEPLOYED"
     if state["bulwark_cooldown"] > 0:
         return False, f"BULWARK COOLDOWN {state['bulwark_cooldown']:.1f}s"
 
@@ -2174,9 +2490,6 @@ def try_activate_bulwark(player, target_position, aim_angle, obstacles):
     if any(rectangle.colliderect(obstacle) for obstacle in obstacles):
         return False, "BULWARK TARGET BLOCKED"
 
-    previous = state.get("bulwark")
-    if previous is not None:
-        destroy_ward_bulwark(previous)
     state["bulwark"] = {
         "owner": player,
         "team": player["team"],
@@ -2185,19 +2498,24 @@ def try_activate_bulwark(player, target_position, aim_angle, obstacles):
         "health": float(WARD_BULWARK_HEALTH),
         "max_health": float(WARD_BULWARK_HEALTH),
     }
-    state["bulwark_cooldown"] = WARD_BULWARK_COOLDOWN
+    state["bulwark_cooldown"] = 0.0
+    spend_q_use(player)
     return True, "BULWARK DEPLOYED"
 
 
+
 def try_activate_personal_aegis(player):
-    """Give Ward a once-per-round 100 point all-damage personal shield."""
+    """Activate Ward's earned Personal Aegis and spend the stored X immediately."""
     if player.get("character_id") != WARD["id"]:
         return False, "PERSONAL AEGIS UNAVAILABLE"
     state = player["ability_state"]
-    if state["personal_aegis_used"]:
-        return False, "PERSONAL AEGIS ALREADY USED THIS ROUND"
+    if state.get("personal_aegis_health", 0.0) > 0:
+        return False, "PERSONAL AEGIS ALREADY ACTIVE"
+    if not ultimate_charge_ready(player):
+        return False, ultimate_progress_message(player, "PERSONAL AEGIS")
     state["personal_aegis_health"] = float(WARD_AEGIS_HEALTH)
     state["personal_aegis_used"] = True
+    spend_ultimate_charge(player)
     return True, "PERSONAL AEGIS ACTIVE"
 
 
@@ -2212,8 +2530,9 @@ def update_ward_abilities(player, delta_time):
         state["bulwark"] = None
 
 
+
 def damage_actor(target, damage, attacker=None):
-    """Damage an actor, letting Ward's Aegis absorb every damage type first."""
+    """Damage an actor, including earned-ultimate kill/death event tracking."""
     if not target["alive"] or target["downed"] or target["eliminated"]:
         return 0.0, False
     if aurel_inferno_charging(target):
@@ -2224,9 +2543,7 @@ def damage_actor(target, damage, attacker=None):
     if ward_personal_aegis_active(target) and incoming_damage > 0:
         state = get_character_effect_state(target, WARD["id"])
         shield_absorbed = min(state["personal_aegis_health"], incoming_damage)
-        state["personal_aegis_health"] = max(
-            0.0, state["personal_aegis_health"] - shield_absorbed
-        )
+        state["personal_aegis_health"] = max(0.0, state["personal_aegis_health"] - shield_absorbed)
         incoming_damage -= shield_absorbed
 
     health_damage = min(float(target["health"]), incoming_damage)
@@ -2234,20 +2551,25 @@ def damage_actor(target, damage, attacker=None):
     damage_done = shield_absorbed + health_damage
 
     if damage_done > 0:
-        target["damaged_recent"] = max(
-            target.get("damaged_recent", 0.0),
-            SABLE_DAMAGE_EVIDENCE_MEMORY,
-        )
+        target["damaged_recent"] = max(target.get("damaged_recent", 0.0), SABLE_DAMAGE_EVIDENCE_MEMORY)
         if sable_wild_hunt_active(target):
             wild_state = get_character_effect_state(target, SABLE["id"])
             wild_state["wild_hunt_flicker_remaining"] = max(
                 wild_state.get("wild_hunt_flicker_remaining", 0.0),
                 SABLE_WILD_HUNT_REVEAL_ON_HIT,
             )
-    eliminated_before = target["eliminated"]
 
-    if target["health"] <= 0:
+    eliminated_before = target["eliminated"]
+    lethal_defeat = target["health"] <= 0
+    if lethal_defeat:
         down_or_eliminate_actor(target)
+        record_ultimate_event(target, "death")
+        if (
+            attacker is not None
+            and attacker is not target
+            and attacker.get("team") != target.get("team")
+        ):
+            record_ultimate_event(attacker, "kill")
 
     eliminated_now = target["eliminated"] and not eliminated_before
 
@@ -2260,15 +2582,10 @@ def damage_actor(target, damage, attacker=None):
     ):
         attacker["health"] = min(
             attacker["max_health"],
-            attacker["health"]
-            + damage_done * MALPHAS_BLOODLUST_HEAL_FRACTION,
+            attacker["health"] + damage_done * MALPHAS_BLOODLUST_HEAL_FRACTION,
         )
-
         if eliminated_now:
-            minimum_health = (
-                attacker["max_health"]
-                * MALPHAS_BLOODLUST_ELIMINATION_HEALTH_FRACTION
-            )
+            minimum_health = attacker["max_health"] * MALPHAS_BLOODLUST_ELIMINATION_HEALTH_FRACTION
             attacker["health"] = max(attacker["health"], minimum_health)
 
     if (
@@ -2354,65 +2671,63 @@ def actor_position_is_clear(position, obstacles):
     return not any(body.colliderect(obstacle) for obstacle in obstacles)
 
 
+
 def try_activate_hellstep(player, target_position, obstacles):
-    """Mark a visible, clear point and begin Malphas's delayed teleport."""
+    """Mark a visible point; a Q use and cooldown are spent only on successful teleport."""
     if player.get("character_id") != MALPHAS["id"]:
         return False, "HELLSTEP UNAVAILABLE"
-
     state = player["ability_state"]
+    if not q_use_available(player):
+        return False, "HELLSTEP - NO USES LEFT THIS ROUND"
     if state["hellstep_windup"] > 0:
         return False, "HELLSTEP ALREADY CHARGING"
     if state["hellstep_cooldown"] > 0:
         return False, f"HELLSTEP COOLDOWN {state['hellstep_cooldown']:.1f}s"
-
     target = pygame.Vector2(target_position)
-    distance = player["position"].distance_to(target)
-    if distance > MALPHAS_HELLSTEP_RANGE:
+    if player["position"].distance_to(target) > MALPHAS_HELLSTEP_RANGE:
         return False, "HELLSTEP TARGET TOO FAR"
     if not has_line_of_sight(player["position"], target, obstacles):
         return False, "HELLSTEP NEEDS LINE OF SIGHT"
     if not actor_position_is_clear(target, obstacles):
         return False, "HELLSTEP TARGET BLOCKED"
-
     state["hellstep_target"] = target
     state["hellstep_windup"] = MALPHAS_HELLSTEP_DELAY
-    state["hellstep_cooldown"] = MALPHAS_HELLSTEP_COOLDOWN
     return True, "HELLSTEP MARKED"
 
 
+
 def try_activate_silence(player):
-    """Activate the shared Phantom class ability that suppresses movement sound."""
+    """Use the Phantom C once this round for ten seconds of silent movement."""
     if player.get("character_class") != "Phantom":
         return False, "SILENCE UNAVAILABLE"
-
     state = player["ability_state"]
     if "silence_remaining" not in state:
         return False, "SILENCE UNAVAILABLE"
     if state["silence_remaining"] > 0:
         return False, "SILENCE ALREADY ACTIVE"
-    if state["silence_cooldown"] > 0:
-        return False, f"SILENCE COOLDOWN {state['silence_cooldown']:.1f}s"
-
+    if not class_use_available(player):
+        return False, "SILENCE USED THIS ROUND"
     state["silence_remaining"] = MALPHAS_SILENCE_DURATION
-    state["silence_cooldown"] = MALPHAS_SILENCE_COOLDOWN
+    state["silence_cooldown"] = 0.0
+    spend_class_use(player)
     if player.get("character_id") == HAZE["id"]:
         add_haze_spray_mark(player)
     return True, "SILENCE ACTIVE"
 
 
+
 def try_activate_bloodlust(player):
-    """Activate Malphas's once-per-round Bloodlust ultimate."""
+    """Activate an earned Bloodlust charge; the charge is spent when it begins."""
     if player.get("character_id") != MALPHAS["id"]:
         return False, "BLOODLUST UNAVAILABLE"
-
     state = player["ability_state"]
     if state["bloodlust_remaining"] > 0:
         return False, "BLOODLUST ALREADY ACTIVE"
-    if state["bloodlust_used"]:
-        return False, "BLOODLUST USED THIS ROUND"
-
+    if not ultimate_charge_ready(player):
+        return False, ultimate_progress_message(player, "BLOODLUST")
     state["bloodlust_remaining"] = MALPHAS_BLOODLUST_DURATION
     state["bloodlust_used"] = True
+    spend_ultimate_charge(player)
     return True, "BLOODLUST ACTIVE"
 
 
@@ -2444,6 +2759,8 @@ def update_malphas_abilities(player, actors, obstacles, delta_time):
             target = pygame.Vector2(state["hellstep_target"])
             if actor_position_is_clear(target, obstacles):
                 player["position"].update(target)
+                spend_q_use(player)
+                state["hellstep_cooldown"] = MALPHAS_HELLSTEP_COOLDOWN
                 teleported = True
             state["hellstep_target"] = None
 
@@ -2501,8 +2818,9 @@ def haze_hallucination_active(actor):
     )
 
 
+
 def finish_haze_hallucination(player):
-    """Turn Haze's active Q duplicate into a short visual fade."""
+    """Fade Haze's duplicate and begin the Q cooldown when it actually disappears."""
     state = player.get("ability_state", {})
     decoy = state.get("hallucination")
     if decoy is None:
@@ -2513,20 +2831,21 @@ def finish_haze_hallucination(player):
     state.setdefault("hallucination_fades", []).append(faded)
     state["hallucination_fades"] = state["hallucination_fades"][-3:]
     state["hallucination"] = None
+    state["hallucination_cooldown"] = HAZE_HALLUCINATION_COOLDOWN
+
 
 
 def try_activate_hallucination(player):
-    """Create Haze's forward-walking duplicate at his current position."""
+    """Deploy one of Haze's two per-round Hallucinations."""
     if player.get("character_id") != HAZE["id"]:
         return False, "HALLUCINATION UNAVAILABLE"
-
     state = player["ability_state"]
+    if not q_use_available(player):
+        return False, "HALLUCINATION - NO USES LEFT THIS ROUND"
+    if state.get("hallucination") is not None:
+        return False, "HALLUCINATION ALREADY ACTIVE"
     if state["hallucination_cooldown"] > 0:
         return False, f"HALLUCINATION COOLDOWN {state['hallucination_cooldown']:.1f}s"
-
-    if state.get("hallucination") is not None:
-        finish_haze_hallucination(player)
-
     state["hallucination"] = {
         "position": pygame.Vector2(player["position"]),
         "health": float(player["max_health"]),
@@ -2535,7 +2854,7 @@ def try_activate_hallucination(player):
         "aim_angle": float(player.get("aim_angle", 0.0)),
         "stopped": False,
     }
-    state["hallucination_cooldown"] = HAZE_HALLUCINATION_COOLDOWN
+    spend_q_use(player)
     add_haze_spray_mark(player)
     return True, "HALLUCINATION DEPLOYED"
 
@@ -2719,22 +3038,22 @@ def sync_haze_childs_play_illusions(player, actors, obstacles, delta_time):
         illusion_sets[victim["name"]] = current
 
 
+
 def try_activate_childs_play(player, actors, obstacles):
-    """Distort every living enemy's perception with false living-team copies."""
+    """Activate an earned Child's Play charge; unused earned charges persist across rounds."""
     if player.get("character_id") != HAZE["id"]:
         return False, "CHILD'S PLAY UNAVAILABLE"
-
     state = player["ability_state"]
     if state["childs_play_remaining"] > 0:
         return False, "CHILD'S PLAY ALREADY ACTIVE"
-    if state["childs_play_used"]:
-        return False, "CHILD'S PLAY USED THIS ROUND"
-
+    if not ultimate_charge_ready(player):
+        return False, ultimate_progress_message(player, "CHILD'S PLAY")
     state["childs_play_remaining"] = HAZE_CHILDS_PLAY_DURATION
     state["childs_play_used"] = True
     state["childs_play_illusions"] = {}
     sync_haze_childs_play_illusions(player, actors, obstacles, 0.0)
     add_haze_spray_mark(player)
+    spend_ultimate_charge(player)
     return True, "CHILD'S PLAY ACTIVE"
 
 
@@ -2902,20 +3221,19 @@ def update_actor_activity_tracking(actors, delta_time):
         actor["activity_last_position"] = pygame.Vector2(actor["position"])
 
 
+
 def try_activate_resonance_sweep(player, actors):
-    """Reveal snapshots of moving or firing enemies inside Longshot's scan radius."""
+    """Spend one of Longshot's three per-round Resonance Sweeps."""
     if player.get("character_id") != LONGSHOT["id"]:
         return False, "RESONANCE SWEEP UNAVAILABLE"
-
     state = player["ability_state"]
+    if not q_use_available(player):
+        return False, "RESONANCE SWEEP - NO USES LEFT THIS ROUND"
     if state["resonance_cooldown"] > 0:
         return False, f"RESONANCE COOLDOWN {state['resonance_cooldown']:.1f}s"
-
     echoes = 0
     for actor in actors:
-        if actor is player or actor["team"] == player["team"]:
-            continue
-        if not actor_can_fight(actor):
+        if actor is player or actor["team"] == player["team"] or not actor_can_fight(actor):
             continue
         if player["position"].distance_to(actor["position"]) > LONGSHOT_RESONANCE_RADIUS:
             continue
@@ -2924,47 +3242,47 @@ def try_activate_resonance_sweep(player, actors):
         actor["resonance_echo_position"] = pygame.Vector2(actor["position"])
         actor["resonance_echo_remaining"] = LONGSHOT_RESONANCE_ECHO_DURATION
         echoes += 1
-
+    spend_q_use(player)
     state["resonance_cooldown"] = LONGSHOT_RESONANCE_COOLDOWN
     state["resonance_pulse_remaining"] = LONGSHOT_RESONANCE_PULSE_DURATION
     return True, f"RESONANCE SWEEP - {echoes} ECHO{'ES' if echoes != 1 else ''}"
 
 
+
 def try_activate_track(player):
-    """Activate the shared Hunter class ability that exposes recent enemy trails."""
+    """Use the Hunter C once this round to expose three seconds of precise trails."""
     if player.get("character_class") != "Hunter":
         return False, "TRACK UNAVAILABLE"
-
     state = player["ability_state"]
     if "track_remaining" not in state:
         return False, "TRACK UNAVAILABLE"
     if state["track_remaining"] > 0:
         return False, "TRACK ALREADY ACTIVE"
-    if state["track_cooldown"] > 0:
-        return False, f"TRACK COOLDOWN {state['track_cooldown']:.1f}s"
-
+    if not class_use_available(player):
+        return False, "TRACK USED THIS ROUND"
     state["track_remaining"] = LONGSHOT_TRACK_DURATION
-    state["track_cooldown"] = LONGSHOT_TRACK_COOLDOWN
+    state["track_cooldown"] = 0.0
+    spend_class_use(player)
     return True, "TRACK ACTIVE"
 
 
+
 def try_activate_dead_line(player):
-    """Enter Longshot's two-shot supernatural sniper ultimate mode."""
+    """Enter the earned three-shot Dead Line mode without spending X until the third shot."""
     if player.get("character_id") != LONGSHOT["id"]:
         return False, "DEAD LINE UNAVAILABLE"
-
     state = player["ability_state"]
     if state["dead_line_active"]:
         return False, "DEAD LINE ALREADY ACTIVE"
-    if state["dead_line_used"]:
-        return False, "DEAD LINE USED THIS ROUND"
-
+    if not ultimate_charge_ready(player):
+        return False, ultimate_progress_message(player, "DEAD LINE")
     state["dead_line_active"] = True
-    state["dead_line_used"] = True
+    state["dead_line_used"] = False
     state["dead_line_shots_remaining"] = LONGSHOT_DEAD_LINE_SHOTS
     state["dead_line_charge"] = 0.0
     state["dead_line_recovery"] = 0.0
     state["dead_line_requires_release"] = True
+    record_track_event(player, "ability")
     return True, "DEAD LINE - RELEASE FIRE, THEN HOLD TO AIM"
 
 
@@ -3164,6 +3482,8 @@ def update_dead_line_weapon(
     state["dead_line_requires_release"] = True
     if state["dead_line_shots_remaining"] <= 0:
         state["dead_line_active"] = False
+        state["dead_line_used"] = True
+        spend_ultimate_charge(player)
 
     return geometry_changed
 
@@ -3205,17 +3525,18 @@ def sable_compass_label(vector):
     return names[int((angle + 22.5) // 45.0) % 8]
 
 
+
 def try_activate_scent_of_blood(player, actors, obstacles):
-    """Sense wounded enemies only when Sable has recent evidence of their passage."""
+    """Spend one of Sable's two per-round Scent uses, even when it finds no prey."""
     if player.get("character_id") != SABLE["id"]:
         return False, "SCENT OF BLOOD UNAVAILABLE"
-
     state = player["ability_state"]
+    if not q_use_available(player):
+        return False, "SCENT OF BLOOD - NO USES LEFT THIS ROUND"
     if state["scent_remaining"] > 0:
         return False, "SCENT OF BLOOD ALREADY ACTIVE"
     if state["scent_cooldown"] > 0:
         return False, f"SCENT COOLDOWN {state['scent_cooldown']:.1f}s"
-
     targets = []
     for actor in actors:
         if actor is player or actor["team"] == player["team"] or not actor_can_fight(actor):
@@ -3228,29 +3549,29 @@ def try_activate_scent_of_blood(player, actors, obstacles):
         if not sable_scent_evidence_exists(player, actor, obstacles):
             continue
         targets.append(actor)
-
     state["scent_targets"] = targets
     state["scent_remaining"] = SABLE_SCENT_DURATION
     state["scent_cooldown"] = SABLE_SCENT_COOLDOWN
+    spend_q_use(player)
     return True, f"SCENT OF BLOOD - {len(targets)} PREY FOUND"
 
 
+
 def try_activate_wild_hunt(player):
-    """Begin Sable's once-per-round camouflage and hunting-knife ultimate."""
+    """Activate one earned Wild Hunt charge."""
     if player.get("character_id") != SABLE["id"]:
         return False, "WILD HUNT UNAVAILABLE"
-
     state = player["ability_state"]
     if state["wild_hunt_remaining"] > 0:
         return False, "WILD HUNT ALREADY ACTIVE"
-    if state["wild_hunt_used"]:
-        return False, "WILD HUNT USED THIS ROUND"
-
+    if not ultimate_charge_ready(player):
+        return False, ultimate_progress_message(player, "WILD HUNT")
     state["wild_hunt_remaining"] = SABLE_WILD_HUNT_DURATION
     state["wild_hunt_used"] = True
     state["wild_hunt_flicker_remaining"] = 0.0
     state["hunt_attack_cooldown"] = 0.0
     state["hunt_attack_animation_timer"] = 0.0
+    spend_ultimate_charge(player)
     return True, "WILD HUNT ACTIVE"
 
 
@@ -3401,27 +3722,28 @@ def aurel_apply_cinderbolt_explosion(
     return geometry_changed
 
 
+
 def try_activate_cinderbolt(player, aim_angle):
-    """Launch Aurel's visible ranged fireball."""
+    """Launch Cinderbolt; cooldown starts now, but the Q use is spent on explosion."""
     if player.get("character_id") != AUREL["id"]:
         return False, "CINDERBOLT UNAVAILABLE"
     if aurel_inferno_charging(player):
         return False, "INFERNO CHARGING"
-
     state = player["ability_state"]
+    if not q_use_available(player):
+        return False, "CINDERBOLT - NO USES LEFT THIS ROUND"
     if state["cinderbolt_cooldown"] > 0:
         return False, f"CINDERBOLT COOLDOWN {state['cinderbolt_cooldown']:.1f}s"
-
     direction = pygame.Vector2(math.cos(aim_angle), math.sin(aim_angle))
     muzzle_distance = ACTOR_RADIUS + AUREL_CINDERBOLT_PROJECTILE_RADIUS + 10
-    state["cinderbolts"].append(
-        {
-            "position": pygame.Vector2(player["position"]) + direction * muzzle_distance,
-            "velocity": direction * AUREL_CINDERBOLT_SPEED,
-            "distance_traveled": 0.0,
-        }
-    )
+    state["cinderbolts"].append({
+        "position": pygame.Vector2(player["position"]) + direction * muzzle_distance,
+        "velocity": direction * AUREL_CINDERBOLT_SPEED,
+        "distance_traveled": 0.0,
+        "spends_q_use": True,
+    })
     state["cinderbolt_cooldown"] = AUREL_CINDERBOLT_COOLDOWN
+    record_track_event(player, "ability")
     return True, "CINDERBOLT LAUNCHED"
 
 
@@ -3478,6 +3800,9 @@ def update_aurel_cinderbolts(
                     "position": pygame.Vector2(explosion_position),
                     "remaining": AUREL_CINDERBOLT_EXPLOSION_VISUAL_TIME,
                 })
+                if bolt.get("spends_q_use", False):
+                    spend_q_use(player)
+                    bolt["spends_q_use"] = False
                 exploded = True
                 break
         if not exploded:
@@ -3486,20 +3811,20 @@ def update_aurel_cinderbolts(
     return geometry_changed
 
 
+
 def try_activate_explosive_inferno(player):
-    """Begin Aurel's once-per-round invulnerable three-second ultimate windup."""
+    """Begin earned Inferno; X is not spent unless the explosion actually occurs."""
     if player.get("character_id") != AUREL["id"]:
         return False, "EXPLOSIVE INFERNO UNAVAILABLE"
-
     state = player["ability_state"]
     if state["inferno_charge_remaining"] > 0 or state["inferno_after_remaining"] > 0:
         return False, "EXPLOSIVE INFERNO ALREADY ACTIVE"
-    if state["inferno_used"]:
-        return False, "EXPLOSIVE INFERNO USED THIS ROUND"
-
+    if not ultimate_charge_ready(player):
+        return False, ultimate_progress_message(player, "EXPLOSIVE INFERNO")
     state["inferno_charge_remaining"] = AUREL_INFERNO_CHARGE_TIME
-    state["inferno_used"] = True
+    state["inferno_used"] = False
     state["fire_trail_last_position"] = pygame.Vector2(player["position"])
+    record_track_event(player, "ability")
     return True, "EXPLOSIVE INFERNO CHARGING"
 
 
@@ -3545,6 +3870,8 @@ def aurel_detonate_inferno(
         if offset.length_squared() > 0:
             push_actor_safely(actor, offset.normalize(), AUREL_INFERNO_PUSH_DISTANCE, push_obstacles, actors)
     state["inferno_after_remaining"] = AUREL_INFERNO_AFTEREFFECT_DURATION
+    state["inferno_used"] = True
+    spend_ultimate_charge(player)
     state["inferno_explosion_effect_remaining"] = AUREL_INFERNO_EXPLOSION_VISUAL_TIME
     state["fire_trail_spawn_timer"] = 0.0
     state["fire_trail_last_position"] = pygame.Vector2(player["position"])
@@ -3663,22 +3990,24 @@ def update_aurel_abilities(
     return message, geometry_changed
 
 
+
 def try_activate_oni_blade(player):
-    """Draw Varek's Rift-forged katana for a short close-range attack window."""
+    """Draw one of Varek's two per-round Oni Blades; cooldown begins when it disappears."""
     if player.get("character_id") != VAREK["id"]:
         return False, "ONI BLADE UNAVAILABLE"
-
     state = player["ability_state"]
+    if not q_use_available(player):
+        return False, "ONI BLADE - NO USES LEFT THIS ROUND"
     if state["fury_remaining"] > 0:
         return False, "ONI BLADE ALREADY DRAWN BY UNBOUND FURY"
     if state["oni_blade_remaining"] > 0:
         return False, "ONI BLADE ALREADY ACTIVE"
     if state["oni_blade_cooldown"] > 0:
         return False, f"ONI BLADE COOLDOWN {state['oni_blade_cooldown']:.1f}s"
-
     state["oni_blade_remaining"] = VAREK_ONI_BLADE_DURATION
-    state["oni_blade_cooldown"] = VAREK_ONI_BLADE_COOLDOWN
+    state["oni_blade_cooldown_pending"] = True
     state["blade_attack_cooldown"] = 0.0
+    spend_q_use(player)
     return True, "ONI BLADE DRAWN"
 
 
@@ -3687,10 +4016,11 @@ def get_cone_dot_threshold(arc_degrees):
     return math.cos(math.radians(arc_degrees / 2))
 
 
+
 def try_activate_breach_charge(
     player, aim_angle, obstacles, destructible_objects, actors, bullet_marks,
 ):
-    """Shared Breaker C: destroy all destructible cover, damage enemies, push both teams."""
+    """Use the one-per-round Breaker C: 25% remaining-health damage, push, and cover destruction."""
     if player.get("character_class") != "Breaker":
         return False, "BREACH CHARGE UNAVAILABLE", False
     if aurel_inferno_charging(player):
@@ -3698,8 +4028,9 @@ def try_activate_breach_charge(
     state = player["ability_state"]
     if "breach_cooldown" not in state:
         return False, "BREACH CHARGE UNAVAILABLE", False
-    if state["breach_cooldown"] > 0:
-        return False, f"BREACH CHARGE COOLDOWN {state['breach_cooldown']:.1f}s", False
+    if not class_use_available(player):
+        return False, "BREACH CHARGE USED THIS ROUND", False
+    spend_class_use(player)
     forward = pygame.Vector2(math.cos(aim_angle), math.sin(aim_angle))
     minimum_dot = get_cone_dot_threshold(BREAKER_BREACH_ARC_DEGREES)
     geometry_changed = False
@@ -3715,7 +4046,7 @@ def try_activate_breach_charge(
         if forward.dot(direction) < minimum_dot or not has_line_of_sight(player["position"], actor["position"], obstacles):
             continue
         if actor["team"] != player["team"]:
-            damage_actor(actor, BREAKER_BREACH_DAMAGE, player)
+            damage_actor(actor, actor["health"] * BREAKER_BREACH_DAMAGE_FRACTION, player)
             enemies_hit += 1
         else:
             allies_pushed += 1
@@ -3757,53 +4088,51 @@ def try_activate_breach_charge(
             continue
         destroy_ward_bulwark(barrier)
         objects_destroyed += 1
-    state["breach_cooldown"] = BREAKER_BREACH_COOLDOWN
+    state["breach_cooldown"] = 0.0
     state["breach_effect_remaining"] = BREAKER_BREACH_EFFECT_DURATION
     state["breach_angle"] = aim_angle
     return True, f"BREACH CHARGE - {enemies_hit} ENEMY / {allies_pushed} ALLY PUSHED / {objects_destroyed} COVER DESTROYED", geometry_changed
 
 
+
 def try_activate_unbound_fury(player):
-    """Activate Varek's once-per-round pursuit ultimate."""
+    """Activate earned Fury; its X charge is spent only when Fury ends or is lost."""
     if player.get("character_id") != VAREK["id"]:
         return False, "UNBOUND FURY UNAVAILABLE"
-
     state = player["ability_state"]
     if state["fury_remaining"] > 0:
         return False, "UNBOUND FURY ALREADY ACTIVE"
-    if state["fury_used"]:
-        return False, "UNBOUND FURY USED THIS ROUND"
-
+    if not ultimate_charge_ready(player):
+        return False, ultimate_progress_message(player, "UNBOUND FURY")
     state["fury_remaining"] = VAREK_FURY_DURATION
-    state["fury_used"] = True
+    state["fury_used"] = False
     state["oni_blade_remaining"] = 0.0
     state["blade_attack_cooldown"] = 0.0
+    record_track_event(player, "ability")
     return True, "UNBOUND FURY ACTIVE"
 
 
+
 def update_varek_abilities(player, delta_time):
-    """Advance Varek's katana, Breach Charge, and Unbound Fury timers."""
+    """Advance Varek timers and start Oni cooldown / spend Fury at their actual endpoints."""
     if player.get("character_id") != VAREK["id"]:
         return
-
     state = player["ability_state"]
-    state["oni_blade_cooldown"] = max(
-        0.0, state["oni_blade_cooldown"] - delta_time
-    )
-    state["oni_blade_remaining"] = max(
-        0.0, state["oni_blade_remaining"] - delta_time
-    )
-    state["blade_attack_cooldown"] = max(
-        0.0, state["blade_attack_cooldown"] - delta_time
-    )
-    state["blade_animation_timer"] = max(
-        0.0, state["blade_animation_timer"] - delta_time
-    )
-    state["breach_cooldown"] = max(0.0, state["breach_cooldown"] - delta_time)
-    state["breach_effect_remaining"] = max(
-        0.0, state["breach_effect_remaining"] - delta_time
-    )
-    state["fury_remaining"] = max(0.0, state["fury_remaining"] - delta_time)
+    state["oni_blade_cooldown"] = max(0.0, state["oni_blade_cooldown"] - delta_time)
+    previous_oni = state["oni_blade_remaining"]
+    state["oni_blade_remaining"] = max(0.0, previous_oni - delta_time)
+    if state.get("oni_blade_cooldown_pending", False) and state["oni_blade_remaining"] <= 0:
+        state["oni_blade_cooldown_pending"] = False
+        state["oni_blade_cooldown"] = VAREK_ONI_BLADE_COOLDOWN
+    state["blade_attack_cooldown"] = max(0.0, state["blade_attack_cooldown"] - delta_time)
+    state["blade_animation_timer"] = max(0.0, state["blade_animation_timer"] - delta_time)
+    state["breach_cooldown"] = 0.0
+    state["breach_effect_remaining"] = max(0.0, state["breach_effect_remaining"] - delta_time)
+    previous_fury = state["fury_remaining"]
+    state["fury_remaining"] = max(0.0, previous_fury - delta_time)
+    if previous_fury > 0 and state["fury_remaining"] <= 0:
+        state["fury_used"] = True
+        spend_ultimate_charge(player)
 
 
 def get_character_movement_obstacles(player, walls, destructible_objects, normal_obstacles, actors=None):
@@ -3879,41 +4208,43 @@ def miri_nine_lives_active(actor):
     return state is not None and state.get("nine_lives_remaining", 0.0) > 0
 
 
+
 def try_activate_feline_lunge(player):
-    """Draw Miri's claws and allow her to vault low crate cover temporarily."""
+    """Use one of Miri's two per-round Lunges; cooldown begins when Lunge ends."""
     if player.get("character_id") != MIRI["id"]:
         return False, "FELINE LUNGE UNAVAILABLE"
-
     state = player["ability_state"]
+    if not q_use_available(player):
+        return False, "FELINE LUNGE - NO USES LEFT THIS ROUND"
     if state["nine_lives_remaining"] > 0:
         return False, "NINE LIVES CHANNEL IN PROGRESS"
     if state["feline_lunge_remaining"] > 0:
         return False, "FELINE LUNGE ALREADY ACTIVE"
     if state["feline_lunge_cooldown"] > 0:
         return False, f"FELINE LUNGE COOLDOWN {state['feline_lunge_cooldown']:.1f}s"
-
     state["feline_lunge_remaining"] = MIRI_FELINE_LUNGE_DURATION
-    state["feline_lunge_cooldown"] = MIRI_FELINE_LUNGE_COOLDOWN
+    state["feline_lunge_cooldown_pending"] = True
     state["claw_attack_cooldown"] = 0.0
+    spend_q_use(player)
     return True, "FELINE LUNGE ACTIVE"
 
 
+
 def try_activate_field_treatment(player):
-    """Begin the shared Guardian one-second nearby-ally healing cast."""
+    """Begin the one-use-per-round Guardian C healing cast."""
     if player.get("character_class") != "Guardian":
         return False, "FIELD TREATMENT UNAVAILABLE"
-
     state = player["ability_state"]
     if player.get("character_id") == MIRI["id"] and state.get("nine_lives_remaining", 0.0) > 0:
         return False, "NINE LIVES CHANNEL IN PROGRESS"
     if state["field_treatment_remaining"] > 0:
         return False, "FIELD TREATMENT ALREADY CASTING"
-    if state["field_treatment_cooldown"] > 0:
-        return False, f"FIELD TREATMENT COOLDOWN {state['field_treatment_cooldown']:.1f}s"
-
+    if not class_use_available(player):
+        return False, "FIELD TREATMENT USED THIS ROUND"
     state["field_treatment_remaining"] = GUARDIAN_FIELD_TREATMENT_CAST_TIME
     state["field_treatment_pending"] = True
-    state["field_treatment_cooldown"] = GUARDIAN_FIELD_TREATMENT_COOLDOWN
+    state["field_treatment_cooldown"] = 0.0
+    spend_class_use(player)
     return True, "FIELD TREATMENT CASTING"
 
 
@@ -3937,27 +4268,26 @@ def find_miri_nine_lives_target(player, actors, obstacles):
     return min(candidates, key=lambda item: item[0])[1]
 
 
+
 def try_activate_nine_lives(player, actors, obstacles):
-    """Start Miri's four-second channel beside a fully eliminated teammate."""
+    """Start earned Nine Lives; X is spent only when resurrection succeeds."""
     if player.get("character_id") != MIRI["id"]:
         return False, "NINE LIVES UNAVAILABLE"
-
     state = player["ability_state"]
     if state["nine_lives_remaining"] > 0:
         return False, "NINE LIVES ALREADY CHANNELING"
-    if state["nine_lives_used"]:
-        return False, "NINE LIVES USED THIS ROUND"
-
+    if not ultimate_charge_ready(player):
+        return False, ultimate_progress_message(player, "NINE LIVES")
     target = find_miri_nine_lives_target(player, actors, obstacles)
     if target is None:
         return False, "NO ELIMINATED ALLY IN RANGE"
-
     state["feline_lunge_remaining"] = 0.0
     state["field_treatment_remaining"] = 0.0
     state["field_treatment_pending"] = False
     state["nine_lives_remaining"] = MIRI_NINE_LIVES_CHANNEL_TIME
     state["nine_lives_target"] = target
     state["nine_lives_start_position"] = pygame.Vector2(player["position"])
+    record_track_event(player, "ability")
     return True, f"NINE LIVES - REVIVING {target['name']}"
 
 
@@ -3985,32 +4315,33 @@ def resurrect_actor_with_nine_lives(target):
     # they are eliminated immediately instead of receiving another normal down.
 
 
+
 def update_guardian_field_treatment(player, actors, delta_time):
-    """Advance the fixed Guardian C for both Miri and Ward."""
+    """Finish Field Treatment: allies get 50% missing HP and the caster gets 40%."""
     if player.get("character_class") != "Guardian":
         return None
     state = player["ability_state"]
-    state["field_treatment_cooldown"] = max(
-        0.0, state["field_treatment_cooldown"] - delta_time
-    )
+    state["field_treatment_cooldown"] = 0.0
     if not actor_can_fight(player) and state["field_treatment_remaining"] > 0:
         state["field_treatment_remaining"] = 0.0
         state["field_treatment_pending"] = False
         return None
     if state["field_treatment_remaining"] <= 0:
         return None
-
     previous = state["field_treatment_remaining"]
     state["field_treatment_remaining"] = max(0.0, previous - delta_time)
     if state["field_treatment_remaining"] > 0 or not state["field_treatment_pending"]:
         return None
-
     state["field_treatment_pending"] = False
     healed_count = 0
+    missing_self = max(0.0, player["max_health"] - player["health"])
+    if missing_self > 0:
+        player["health"] = min(
+            player["max_health"],
+            player["health"] + missing_self * GUARDIAN_FIELD_TREATMENT_SELF_MISSING_HEALTH_FRACTION,
+        )
     for actor in actors:
-        if actor is player or actor["team"] != player["team"]:
-            continue
-        if not actor_can_fight(actor):
+        if actor is player or actor["team"] != player["team"] or not actor_can_fight(actor):
             continue
         if player["position"].distance_to(actor["position"]) > GUARDIAN_FIELD_TREATMENT_RADIUS:
             continue
@@ -4020,56 +4351,41 @@ def update_guardian_field_treatment(player, actors, delta_time):
             continue
         actor["health"] = min(actor["max_health"], actor["health"] + heal_amount)
         healed_count += 1
-    return (
-        f"FIELD TREATMENT HEALED {healed_count} ALLY"
-        if healed_count == 1
-        else f"FIELD TREATMENT HEALED {healed_count} ALLIES"
-    )
+    return f"FIELD TREATMENT HEALED SELF + {healed_count} ALLY" if healed_count == 1 else f"FIELD TREATMENT HEALED SELF + {healed_count} ALLIES"
+
 
 
 def update_miri_abilities(player, actors, obstacles, delta_time):
-    """Advance Miri's unique mobility and resurrection abilities."""
+    """Advance Miri's Lunge endpoint cooldown and refundable Nine Lives channel."""
     if player.get("character_id") != MIRI["id"]:
         return None
-
     state = player["ability_state"]
-    state["feline_lunge_cooldown"] = max(
-        0.0, state["feline_lunge_cooldown"] - delta_time
-    )
-    state["feline_lunge_remaining"] = max(
-        0.0, state["feline_lunge_remaining"] - delta_time
-    )
-    state["claw_attack_cooldown"] = max(
-        0.0, state["claw_attack_cooldown"] - delta_time
-    )
-    state["claw_animation_timer"] = max(
-        0.0, state["claw_animation_timer"] - delta_time
-    )
-
+    state["feline_lunge_cooldown"] = max(0.0, state["feline_lunge_cooldown"] - delta_time)
+    previous_lunge = state["feline_lunge_remaining"]
+    state["feline_lunge_remaining"] = max(0.0, previous_lunge - delta_time)
+    if state.get("feline_lunge_cooldown_pending", False) and state["feline_lunge_remaining"] <= 0:
+        state["feline_lunge_cooldown_pending"] = False
+        state["feline_lunge_cooldown"] = MIRI_FELINE_LUNGE_COOLDOWN
+    state["claw_attack_cooldown"] = max(0.0, state["claw_attack_cooldown"] - delta_time)
+    state["claw_animation_timer"] = max(0.0, state["claw_animation_timer"] - delta_time)
     if state["nine_lives_remaining"] > 0:
         target = state["nine_lives_target"]
         start_position = state["nine_lives_start_position"]
         valid_target = (
-            target is not None
-            and target.get("eliminated", False)
+            target is not None and target.get("eliminated", False)
             and not target.get("resurrected_this_round", False)
             and player["position"].distance_to(target["position"]) <= MIRI_NINE_LIVES_RANGE
             and has_line_of_sight(player["position"], target["position"], obstacles)
         )
-        moved_too_far = (
-            start_position is None
-            or player["position"].distance_to(start_position) > MIRI_NINE_LIVES_MOVE_CANCEL_DISTANCE
-        )
+        moved_too_far = start_position is None or player["position"].distance_to(start_position) > MIRI_NINE_LIVES_MOVE_CANCEL_DISTANCE
         if not valid_target or moved_too_far:
             cancel_nine_lives(player)
-            return "NINE LIVES INTERRUPTED"
-
-        state["nine_lives_remaining"] = max(
-            0.0, state["nine_lives_remaining"] - delta_time
-        )
+            return "NINE LIVES INTERRUPTED - ULTIMATE RETAINED"
+        state["nine_lives_remaining"] = max(0.0, state["nine_lives_remaining"] - delta_time)
         if state["nine_lives_remaining"] <= 0:
             resurrect_actor_with_nine_lives(target)
             state["nine_lives_used"] = True
+            spend_ultimate_charge(player)
             state["nine_lives_target"] = None
             state["nine_lives_start_position"] = None
             return f"{target['name']} RETURNED TO THE FIGHT"
@@ -4138,49 +4454,55 @@ def relay_teleport_selecting(player):
 
 
 def relay_teleport_channel_active(player):
-    """Return whether a Conduit is in the three-second Rift Teleport channel."""
+    """Return whether a Conduit has a teleport queued for immediate resolution."""
     return (
         player.get("character_class") == "Conduit"
         and player.get("ability_state", {}).get("rift_teleport_remaining", 0.0) > 0
     )
 
 
+
 def try_activate_rift_boost(player):
-    """Consume Relay's stored Rift charge and empower the next 20 projectiles."""
+    """Spend one of Relay's three per-round Q uses to activate a stored Rift charge."""
     if player.get("character_id") != RELAY["id"]:
         return False, "RIFT BOOST UNAVAILABLE"
     state = player["ability_state"]
+    if not q_use_available(player):
+        return False, "RIFT BOOST - NO USES LEFT THIS ROUND"
     if state["rift_boost_bullets_remaining"] > 0:
         return False, f"RIFT BOOST {state['rift_boost_bullets_remaining']} PROJECTILES LEFT"
     if state["rift_boost_cooldown"] > 0:
         return False, f"RIFT BOOST COOLDOWN {state['rift_boost_cooldown']:.1f}s"
     if not state["rift_boost_charged"]:
         return False, "RIFT BOOST NEEDS 3s OF RIFT CHARGE"
-
     state["rift_boost_charged"] = False
     state["rift_boost_charge_progress"] = 0.0
     state["rift_boost_bullets_remaining"] = RELAY_RIFT_BOOST_PROJECTILES
+    spend_q_use(player)
     return True, f"RIFT BOOST ACTIVE - {RELAY_RIFT_BOOST_PROJECTILES} PROJECTILES"
 
 
+
 def try_activate_rift_teleport(player, rift_state):
-    """Open the shared Conduit four-quadrant Rift Teleport selector at the Rift."""
+    """Spend the one-per-round Conduit C and open the mouse quadrant cards."""
     if player.get("character_class") != "Conduit":
         return False, "RIFT TELEPORT UNAVAILABLE"
     state = player["ability_state"]
-    if state.get("rift_teleport_remaining", 0.0) > 0:
-        return False, "RIFT TELEPORT ALREADY CHANNELING"
-    if state.get("rift_teleport_cooldown", 0.0) > 0:
-        return False, f"RIFT TELEPORT COOLDOWN {state['rift_teleport_cooldown']:.1f}s"
+    if state.get("rift_teleport_selecting", False):
+        return False, "RIFT TELEPORT ALREADY SELECTING"
+    if not class_use_available(player):
+        return False, "RIFT TELEPORT USED THIS ROUND"
     if not relay_inside_rift(player, rift_state):
         return False, "RIFT TELEPORT REQUIRES THE ACTIVE RIFT"
     state["rift_teleport_selecting"] = True
     state["rift_teleport_quadrant"] = None
-    return True, "RIFT TELEPORT - CHOOSE A QUADRANT (1-4)"
+    spend_class_use(player)
+    return True, "RIFT TELEPORT - CHOOSE A QUADRANT"
+
 
 
 def begin_relay_rift_teleport(player, quadrant, rift_state):
-    """Begin the shared Conduit three-second teleport channel."""
+    """Accept a quadrant card; teleport resolves on the next simulation update with no channel."""
     if player.get("character_class") != "Conduit":
         return False, "RIFT TELEPORT UNAVAILABLE"
     state = player["ability_state"]
@@ -4193,8 +4515,8 @@ def begin_relay_rift_teleport(player, quadrant, rift_state):
         return False, "INVALID RIFT TELEPORT QUADRANT"
     state["rift_teleport_selecting"] = False
     state["rift_teleport_quadrant"] = quadrant
-    state["rift_teleport_remaining"] = RELAY_RIFT_TELEPORT_CHANNEL
-    return True, f"RIFT TELEPORT CHANNELING - {quadrant.replace('_', ' ').upper()}"
+    state["rift_teleport_remaining"] = 0.000001
+    return True, f"RIFT TELEPORT LOCKED - {quadrant.replace('_', ' ').upper()}"
 
 
 def get_relay_quadrant_bounds(quadrant):
@@ -4224,24 +4546,25 @@ def choose_relay_teleport_destination(quadrant, obstacles):
     return None
 
 
+
 def try_activate_rift_overclock(player, rift_state):
-    """Overclock a friendly-owned Rift so its 60-second hold timer runs 1.5x."""
+    """Activate earned Rift Overclock at a friendly uncontested Rift; X spends on press."""
     if player.get("character_id") != RELAY["id"]:
         return False, "RIFT OVERCLOCK UNAVAILABLE"
     state = player["ability_state"]
     if state["rift_overclock_active"]:
         return False, "RIFT OVERCLOCK ALREADY ACTIVE"
-    if state["rift_overclock_used"]:
-        return False, "RIFT OVERCLOCK USED THIS ROUND"
+    if not ultimate_charge_ready(player):
+        return False, ultimate_progress_message(player, "RIFT OVERCLOCK")
     if rift_state["owner"] != player["team"]:
         return False, "YOUR TEAM MUST CONTROL THE RIFT"
     if rift_state["contested"]:
         return False, "RIFT OVERCLOCK CANNOT START WHILE CONTESTED"
     if not relay_inside_rift(player, rift_state):
         return False, "RIFT OVERCLOCK REQUIRES THE ACTIVE RIFT"
-
     state["rift_overclock_active"] = True
     state["rift_overclock_used"] = True
+    spend_ultimate_charge(player)
     enemy_team = "red" if player["team"] == "blue" else "blue"
     rift_state["overclock_alert_team"] = enemy_team
     rift_state["overclock_alert_remaining"] = 4.0
@@ -4265,6 +4588,7 @@ def update_relay_abilities(player, rift_state, obstacles, delta_time):
     can_charge = (
         relay_inside_rift(player, rift_state)
         and state["rift_boost_cooldown"] <= 0
+        and q_use_available(player)
         and not state["rift_boost_charged"]
         and state["rift_boost_bullets_remaining"] <= 0
     )
@@ -4301,7 +4625,7 @@ def update_relay_abilities(player, rift_state, obstacles, delta_time):
                     message = "RIFT TELEPORT FAILED - NO SAFE LANDING"
                 else:
                     player["position"].update(destination)
-                    state["rift_teleport_cooldown"] = RELAY_RIFT_TELEPORT_COOLDOWN
+                    state["rift_teleport_cooldown"] = 0.0
                     teleported = True
                     message = "RIFT TELEPORT COMPLETE"
                 state["rift_teleport_quadrant"] = None
@@ -5218,14 +5542,17 @@ def select_paradox_echo(player, echo_key):
     return True, f"RIFT ECHO STORED: {valid[echo_key][1].upper()}"
 
 
+
 def try_use_paradox_echo(player, aim_angle, obstacles, destructible_objects, actors, bullet_marks):
-    """Use the stored exact shared-class C ability once."""
+    """Use a stored copied class C without spending Paradox's native Rift Teleport C."""
     memory = get_paradox_memory(player)
     if memory is None or memory.get("stored_echo") is None:
         return False, "NO RIFT ECHO STORED", False
     echo_key = memory["stored_echo"]
     old_class = player["character_class"]
+    native_c_uses = player.get("c_uses_remaining", 0)
     geometry_changed = False
+    player["c_uses_remaining"] = 1
     try:
         if echo_key == "silence":
             player["character_class"] = "Phantom"
@@ -5245,6 +5572,7 @@ def try_use_paradox_echo(player, aim_angle, obstacles, destructible_objects, act
             return False, "INVALID RIFT ECHO", False
     finally:
         player["character_class"] = old_class
+        player["c_uses_remaining"] = native_c_uses
     if success:
         memory["stored_echo"] = None
         memory["echo_used_this_round"] = True
@@ -5286,8 +5614,9 @@ def get_paradox_reflection_choices(actors):
     return present
 
 
+
 def try_open_paradox_reflection(player, actors, rift_state):
-    """Open the match-only ultimate card menu at a valid unstable Rift."""
+    """Begin Paradox's one-second earned Rift Reflection acquisition channel."""
     if player.get("character_id") != PARADOX["id"]:
         return False, "RIFT REFLECTION UNAVAILABLE"
     memory = get_paradox_memory(player)
@@ -5296,16 +5625,19 @@ def try_open_paradox_reflection(player, actors, rift_state):
         return False, f"RIFT REFLECTION STORED: {memory['stored_ultimate_name'].upper()}"
     if memory.get("active_ultimate_source") is not None:
         return False, "COPIED ULTIMATE ALREADY ACTIVE"
-    if memory.get("reflection_used_this_round"):
-        return False, "RIFT REFLECTION USED THIS ROUND"
+    if not ultimate_charge_ready(player):
+        return False, ultimate_progress_message(player, "RIFT REFLECTION")
+    if state.get("reflection_charge_remaining", 0.0) > 0:
+        return False, "RIFT REFLECTION ALREADY CHANNELING"
     if not paradox_reflection_rift_valid(player, rift_state):
         return False, "RIFT REFLECTION REQUIRES A NEUTRAL, ENEMY, OR CHALLENGED RIFT"
-    choices = get_paradox_reflection_choices(actors)
-    if not choices:
+    if not get_paradox_reflection_choices(actors):
         return False, "NO NON-CONDUIT CHARACTER ULTIMATES ARE PRESENT"
     paradox_pause_echo_charge(player)
-    state["reflection_selection_open"] = True
-    return True, "RIFT REFLECTION - CHOOSE AN ULTIMATE"
+    state["reflection_charge_remaining"] = 1.0
+    state["reflection_selection_open"] = False
+    record_track_event(player, "ability")
+    return True, "RIFT REFLECTION CHANNELING 1.0s"
 
 
 def select_paradox_reflection(player, source_character_id, actors, rift_state):
@@ -5357,8 +5689,9 @@ def with_paradox_ultimate_identity(player, source_character_id, callback, *args)
         player["character_id"], player["character_name"], player["character_class"], player["ability_state"] = old
 
 
+
 def try_activate_paradox_stored_ultimate(player, actors, obstacles):
-    """Activate the stored X at full original strength; failed contextual casts stay stored."""
+    """Activate the stored copied X; each original ultimate controls its own spend timing."""
     memory = get_paradox_memory(player)
     if memory is None or memory.get("stored_ultimate_source") is None:
         return False, "NO RIFT REFLECTION STORED"
@@ -5387,7 +5720,6 @@ def try_activate_paradox_stored_ultimate(player, actors, obstacles):
         memory["active_ultimate_source"] = source
         memory["stored_ultimate_source"] = None
         memory["stored_ultimate_name"] = None
-        memory["reflection_used_this_round"] = True
     else:
         memory["ultimate_state"] = None
     return success, message
@@ -5452,8 +5784,9 @@ def update_paradox_shared_teleport(player, rift_state, obstacles, delta_time):
     return message, teleported
 
 
+
 def update_paradox_abilities(player, actors, walls, destructible_objects, bullet_marks, rift_state, delta_time):
-    """Advance Rift Echo, shared copied C timers, shared teleport, and copied X."""
+    """Advance Paradox Q/C plus earned copied-X acquisition and active copied ultimates."""
     if player.get("character_id") != PARADOX["id"]:
         return None, False, False
     state = player["ability_state"]
@@ -5462,27 +5795,23 @@ def update_paradox_abilities(player, actors, walls, destructible_objects, bullet
     geometry_changed = False
     teleported = False
 
-    # Exact copied-C active durations use the same balance constants as originals.
-    state["silence_cooldown"] = max(0.0, state["silence_cooldown"] - delta_time)
+    state["silence_cooldown"] = 0.0
     state["silence_remaining"] = max(0.0, state["silence_remaining"] - delta_time)
-    state["track_cooldown"] = max(0.0, state["track_cooldown"] - delta_time)
+    state["track_cooldown"] = 0.0
     state["track_remaining"] = max(0.0, state["track_remaining"] - delta_time)
-    state["breach_cooldown"] = max(0.0, state["breach_cooldown"] - delta_time)
+    state["breach_cooldown"] = 0.0
     state["breach_effect_remaining"] = max(0.0, state["breach_effect_remaining"] - delta_time)
     state["echo_flash_remaining"] = max(0.0, state["echo_flash_remaining"] - delta_time)
 
-    # A completed selection can be reopened after revive in the same round.
     if not actor_can_fight(player):
         state["echo_charging"] = False
         state["echo_selection_open"] = False
         state["reflection_selection_open"] = False
+        state["reflection_charge_remaining"] = 0.0
     elif state.get("echo_charging"):
         if paradox_inside_rift(player, rift_state):
             previous = state["echo_charge_progress"]
-            state["echo_charge_progress"] = min(
-                PARADOX_RIFT_ECHO_CHARGE_TIME,
-                state["echo_charge_progress"] + delta_time,
-            )
+            state["echo_charge_progress"] = min(PARADOX_RIFT_ECHO_CHARGE_TIME, previous + delta_time)
             if previous < PARADOX_RIFT_ECHO_CHARGE_TIME <= state["echo_charge_progress"]:
                 state["echo_charging"] = False
                 state["echo_ready"] = True
@@ -5492,6 +5821,16 @@ def update_paradox_abilities(player, actors, walls, destructible_objects, bullet
         else:
             state["echo_charging"] = False
             message = "RIFT ECHO PAUSED"
+
+    if state.get("reflection_charge_remaining", 0.0) > 0:
+        if not paradox_reflection_rift_valid(player, rift_state):
+            state["reflection_charge_remaining"] = 0.0
+            message = "RIFT REFLECTION INTERRUPTED - LEFT VALID RIFT STATE"
+        else:
+            state["reflection_charge_remaining"] = max(0.0, state["reflection_charge_remaining"] - delta_time)
+            if state["reflection_charge_remaining"] <= 0:
+                state["reflection_selection_open"] = True
+                message = "RIFT REFLECTION - CHOOSE AN ULTIMATE"
 
     if state.get("reflection_selection_open") and not paradox_reflection_rift_valid(player, rift_state):
         state["reflection_selection_open"] = False
@@ -5503,8 +5842,6 @@ def update_paradox_abilities(player, actors, walls, destructible_objects, bullet
     if teleport_message:
         message = teleport_message
 
-    # Field Treatment is shared mechanically; temporarily expose Guardian class only
-    # while its generic updater runs.
     if state.get("field_treatment_remaining", 0.0) > 0 or state.get("field_treatment_pending", False):
         old_class = player["character_class"]
         player["character_class"] = "Guardian"
@@ -5543,12 +5880,14 @@ def update_paradox_abilities(player, actors, walls, destructible_objects, bullet
             with_paradox_ultimate_identity(player, source, update_ward_abilities, delta_time)
 
         if not paradox_copied_ultimate_still_active(player):
+            # Refund only ultimates whose original rules say an interrupted cast is retained.
+            if ultimate_charge_ready(player) and source in (MIRI["id"], AUREL["id"]):
+                memory["stored_ultimate_source"] = source
+                memory["stored_ultimate_name"] = PARADOX_ULTIMATE_NAMES[source]
             memory["active_ultimate_source"] = None
             memory["ultimate_state"] = None
 
-    memory["reflection_warning_remaining"] = max(
-        0.0, memory.get("reflection_warning_remaining", 0.0) - delta_time
-    )
+    memory["reflection_warning_remaining"] = max(0.0, memory.get("reflection_warning_remaining", 0.0) - delta_time)
     if memory["reflection_warning_remaining"] <= 0:
         memory["reflection_warning_name"] = None
     return message, teleported, geometry_changed
@@ -5822,8 +6161,8 @@ def draw_paradox_selection_menus(screen, regular_font, large_font, player, actor
                 stats = {
                     "silence": f"Duration {MALPHAS_SILENCE_DURATION:.1f}s",
                     "track": f"Duration {LONGSHOT_TRACK_DURATION:.1f}s | Trail life {LONGSHOT_TRACK_EVENT_LIFETIME:.1f}s",
-                    "breach": f"Range {BREAKER_BREACH_RANGE} | Damage {BREAKER_BREACH_DAMAGE} | Push {BREAKER_BREACH_PUSH_DISTANCE}",
-                    "field_treatment": f"Radius {GUARDIAN_FIELD_TREATMENT_RADIUS} | Heal {GUARDIAN_FIELD_TREATMENT_MISSING_HEALTH_FRACTION*100:.0f}% missing HP",
+                    "breach": f"Range {BREAKER_BREACH_RANGE} | Damage 25% remaining HP | Push {BREAKER_BREACH_PUSH_DISTANCE}",
+                    "field_treatment": f"Radius {GUARDIAN_FIELD_TREATMENT_RADIUS} | Ally 50% / Self 40% missing HP",
                 }[key]
                 stat_surface = regular_font.render(stats, True, PARADOX_RIFT_COLOR)
                 screen.blit(stat_surface, stat_surface.get_rect(center=(rect.centerx, rect.top + 166)))
@@ -6669,6 +7008,17 @@ def draw_actor(screen, font, actor, camera):
             copy_label = font.render(source_name.upper(), True, PARADOX_CORE_COLOR)
             screen.blit(copy_label, copy_label.get_rect(center=(center.x, center.y - radius - 22)))
 
+    # Presentation 0.9: character bodies use replaceable head-and-shoulders art.
+    # Ability rings, health bars, and collision remain driven by the normal actor.
+    if actor.get("character_id") and not (
+        actor.get("character_id") == PARADOX["id"]
+        and paradox_active_ultimate_source(actor) is not None
+    ):
+        portrait_art = get_character_art(actor.get("character_id"), "portrait", (52, 52))
+        if portrait_art is not None:
+            portrait_rect = portrait_art.get_rect(center=center_tuple)
+            screen.blit(portrait_art, portrait_rect)
+
     health_fraction = actor["health"] / actor["max_health"]
     pygame.draw.rect(screen, (26, 29, 36), (bar_x, bar_y, bar_width, bar_height))
     pygame.draw.rect(
@@ -7296,28 +7646,49 @@ def draw_relay_world_effects(screen, player, rift_state, camera):
         pygame.draw.circle(screen, RELAY_RIFT_COLOR, center_tuple, ACTOR_RADIUS + 10 + pulse, width=3)
 
 
+
+def relay_teleport_card_rects(screen):
+    """Return the four clickable quadrant cards used by both Conduits."""
+    card_w = 250
+    card_h = 110
+    gap = 28
+    center_x = screen.get_width() // 2
+    center_y = screen.get_height() // 2
+    left = center_x - card_w - gap // 2
+    right = center_x + gap // 2
+    top = center_y - card_h - gap // 2
+    bottom = center_y + gap // 2
+    return [
+        ("top_left", pygame.Rect(left, top, card_w, card_h)),
+        ("top_right", pygame.Rect(right, top, card_w, card_h)),
+        ("bottom_left", pygame.Rect(left, bottom, card_w, card_h)),
+        ("bottom_right", pygame.Rect(right, bottom, card_w, card_h)),
+    ]
+
+
 def draw_relay_teleport_selector(screen, font, player):
-    """Overlay the four map quadrants while Relay chooses a teleport region."""
+    """Draw four mouse-selectable Rift Teleport quadrant cards."""
     if not relay_teleport_selecting(player):
         return
     overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-    overlay.fill((8, 9, 18, 145))
+    overlay.fill((8, 9, 18, 175))
     screen.blit(overlay, (0, 0))
-    mid_x = screen.get_width() // 2
-    mid_y = screen.get_height() // 2
-    pygame.draw.line(screen, RELAY_RIFT_COLOR, (mid_x, 0), (mid_x, screen.get_height()), width=3)
-    pygame.draw.line(screen, RELAY_RIFT_COLOR, (0, mid_y), (screen.get_width(), mid_y), width=3)
-    labels = [
-        ("1  TOP LEFT", (mid_x // 2, mid_y // 2)),
-        ("2  TOP RIGHT", (mid_x + mid_x // 2, mid_y // 2)),
-        ("3  BOTTOM LEFT", (mid_x // 2, mid_y + mid_y // 2)),
-        ("4  BOTTOM RIGHT", (mid_x + mid_x // 2, mid_y + mid_y // 2)),
-    ]
-    for label, position in labels:
-        surface = font.render(label, True, TEXT_COLOR)
-        screen.blit(surface, surface.get_rect(center=position))
-    title = font.render("RIFT TELEPORT - CHOOSE REGION (1-4 OR CLICK)", True, RELAY_RIFT_COLOR)
-    screen.blit(title, title.get_rect(center=(mid_x, 42)))
+    mouse = pygame.mouse.get_pos()
+    labels = {
+        "top_left": "TOP LEFT",
+        "top_right": "TOP RIGHT",
+        "bottom_left": "BOTTOM LEFT",
+        "bottom_right": "BOTTOM RIGHT",
+    }
+    for quadrant, rect in relay_teleport_card_rects(screen):
+        hovered = rect.collidepoint(mouse)
+        fill = (45, 31, 68) if hovered else (24, 27, 42)
+        pygame.draw.rect(screen, fill, rect, border_radius=12)
+        pygame.draw.rect(screen, RELAY_RIFT_COLOR, rect, width=3, border_radius=12)
+        label = font.render(labels[quadrant], True, TEXT_COLOR)
+        screen.blit(label, label.get_rect(center=rect.center))
+    title = font.render("RIFT TELEPORT - CLICK A MAP QUADRANT", True, RELAY_RIFT_COLOR)
+    screen.blit(title, title.get_rect(center=(screen.get_width() // 2, 70)))
 
 
 def format_ability_timer(seconds):
@@ -7480,335 +7851,131 @@ def draw_haze_enemy_perception(screen, font, local_player, actors, camera, obsta
         pygame.draw.circle(overlay, (*color, 48 if copied_by_paradox else 38), (38, 38), 34)
         screen.blit(overlay, (round(center.x - 38), round(center.y - 38)))
 
-def draw_character_panel(screen, font, player, status_message):
-    """Show the selected character's unique statistics, abilities, and timers."""
-    character_id = player.get("character_id")
-    if character_id not in (
-        MALPHAS["id"],
-        LONGSHOT["id"],
-        VAREK["id"],
-        MIRI["id"],
-        RELAY["id"],
-        HAZE["id"],
-        SABLE["id"],
-        AUREL["id"],
-        WARD["id"],
-        PARADOX["id"],
-    ):
-        return
 
+def draw_character_panel(screen, font, player, status_message):
+    """Show accurate per-round Q/C uses plus persistent earned-X progress."""
+    character_id = player.get("character_id")
+    if character_id not in {c["id"] for c in CHARACTER_ROSTER}:
+        return
     state = player["ability_state"]
-    panel_width = 530
-    panel_height = 158
+    panel_width = 600
+    panel_height = 178
     panel_x = 18
     panel_y = screen.get_height() - panel_height - 112
-
     panel = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
     panel.fill((10, 13, 18, 220))
     screen.blit(panel, (panel_x, panel_y))
 
-    if character_id == MALPHAS["id"]:
-        title_color = MALPHAS_HORN_COLOR
-    elif character_id == LONGSHOT["id"]:
-        title_color = LONGSHOT_VISOR_COLOR
-    elif character_id == VAREK["id"]:
-        title_color = VAREK_BLADE_COLOR
-    elif character_id == MIRI["id"]:
-        title_color = MIRI_HEAL_COLOR
-    elif character_id == RELAY["id"]:
-        title_color = RELAY_RIFT_COLOR
-    elif character_id == HAZE["id"]:
-        title_color = HAZE_GREEN_COLOR
-    elif character_id == SABLE["id"]:
-        title_color = SABLE_TRACK_COLOR
-    elif character_id == AUREL["id"]:
-        title_color = AUREL_FIRE_GOLD_COLOR
-    elif character_id == WARD["id"]:
-        title_color = WARD_SHIELD_COLOR
-    else:
-        title_color = PARADOX_CORE_COLOR
-    title = font.render(
-        f"{player['character_name'].upper()} - {player['character_class'].upper()}",
-        True,
-        title_color,
-    )
+    title_colors = {
+        MALPHAS["id"]: MALPHAS_HORN_COLOR,
+        LONGSHOT["id"]: LONGSHOT_VISOR_COLOR,
+        VAREK["id"]: VAREK_BLADE_COLOR,
+        MIRI["id"]: MIRI_HEAL_COLOR,
+        RELAY["id"]: RELAY_RIFT_COLOR,
+        HAZE["id"]: HAZE_GREEN_COLOR,
+        SABLE["id"]: SABLE_TRACK_COLOR,
+        AUREL["id"]: AUREL_FIRE_GOLD_COLOR,
+        WARD["id"]: WARD_SHIELD_COLOR,
+        PARADOX["id"]: PARADOX_CORE_COLOR,
+    }
+    status_color = title_colors[character_id]
+    title = font.render(f"{player['character_name'].upper()} - {player['character_class'].upper()}", True, status_color)
     screen.blit(title, (panel_x + 16, panel_y + 10))
-
     stats = font.render(
-        f"{player['max_health']} HP | {player['move_speed']:.0f} MOVE | "
-        f"{player['sprint_multiplier']:.2f}x SPRINT",
-        True,
-        (182, 198, 218),
+        f"{player['max_health']} HP | {player['move_speed']:.0f} MOVE | {player['sprint_multiplier']:.2f}x SPRINT | K {player.get('kills',0)} / D {player.get('deaths',0)}",
+        True, (182, 198, 218),
     )
     screen.blit(stats, (panel_x + 16, panel_y + 34))
 
+    q_uses = player.get("q_uses_remaining", 0)
+    c_uses = player.get("c_uses_remaining", 0)
+    threshold = get_ultimate_event_threshold(player)
+    progress = min(player.get("ultimate_progress", 0), threshold)
+    earned_x = "READY" if ultimate_charge_ready(player) else f"K+D {progress}/{threshold}"
+
     if character_id == MALPHAS["id"]:
-        if state["hellstep_windup"] > 0:
-            signature_status = f"MARKED {state['hellstep_windup']:.1f}s"
-        else:
-            signature_status = format_ability_timer(state["hellstep_cooldown"])
-
-        if state["silence_remaining"] > 0:
-            class_status = f"ACTIVE {state['silence_remaining']:.1f}s"
-        else:
-            class_status = format_ability_timer(state["silence_cooldown"])
-
-        if state["bloodlust_remaining"] > 0:
-            ultimate_status = f"ACTIVE {state['bloodlust_remaining']:.1f}s"
-        elif state["bloodlust_used"]:
-            ultimate_status = "USED THIS ROUND"
-        else:
-            ultimate_status = "READY"
-
-        lines = [
-            f"Q  HELLSTEP  - {signature_status}",
-            f"C  SILENCE   - {class_status}",
-            f"X  BLOODLUST - {ultimate_status}",
-        ]
-        status_color = MALPHAS_GLOW_COLOR
+        q = f"MARKED {state['hellstep_windup']:.1f}s" if state['hellstep_windup'] > 0 else format_ability_timer(state['hellstep_cooldown'])
+        c = f"ACTIVE {state['silence_remaining']:.1f}s" if state['silence_remaining'] > 0 else "READY" if c_uses else "USED"
+        x = f"ACTIVE {state['bloodlust_remaining']:.1f}s" if state['bloodlust_remaining'] > 0 else earned_x
+        lines=[f"Q  HELLSTEP - {q} | {q_uses} USE(S)", f"C  SILENCE - {c} | {c_uses} USE", f"X  BLOODLUST - {x}"]
     elif character_id == LONGSHOT["id"]:
-        signature_status = format_ability_timer(state["resonance_cooldown"])
-        if state["track_remaining"] > 0:
-            class_status = f"ACTIVE {state['track_remaining']:.1f}s"
-        else:
-            class_status = format_ability_timer(state["track_cooldown"])
-
-        if state["dead_line_active"]:
-            if state["dead_line_recovery"] > 0:
-                ultimate_status = (
-                    f"{state['dead_line_shots_remaining']} SHOT(S) | "
-                    f"RECOVER {state['dead_line_recovery']:.1f}s"
-                )
-            elif state["dead_line_charge"] > 0:
-                ultimate_status = (
-                    f"{state['dead_line_shots_remaining']} SHOT(S) | "
-                    f"AIM {state['dead_line_charge']:.1f}/{LONGSHOT_DEAD_LINE_AIM_TIME:.1f}s"
-                )
-            else:
-                ultimate_status = f"{state['dead_line_shots_remaining']} SHOT(S) READY"
-        elif state["dead_line_used"]:
-            ultimate_status = "USED THIS ROUND"
-        else:
-            ultimate_status = "READY"
-
-        lines = [
-            f"Q  RESONANCE SWEEP - {signature_status}",
-            f"C  TRACK           - {class_status}",
-            f"X  DEAD LINE       - {ultimate_status}",
-        ]
-        status_color = LONGSHOT_VISOR_COLOR
+        q=format_ability_timer(state['resonance_cooldown'])
+        c=f"ACTIVE {state['track_remaining']:.1f}s" if state['track_remaining']>0 else "READY" if c_uses else "USED"
+        if state['dead_line_active']:
+            x=f"ACTIVE | {state['dead_line_shots_remaining']} SHOT(S)"
+        else: x=earned_x
+        lines=[f"Q  RESONANCE SWEEP - {q} | {q_uses} USE(S)", f"C  TRACK - {c} | {c_uses} USE", f"X  DEAD LINE - {x}"]
     elif character_id == VAREK["id"]:
-        if state["oni_blade_remaining"] > 0:
-            signature_status = f"ACTIVE {state['oni_blade_remaining']:.1f}s"
-        elif state["fury_remaining"] > 0:
-            signature_status = "DRAWN BY FURY"
-        else:
-            signature_status = format_ability_timer(state["oni_blade_cooldown"])
-
-        class_status = format_ability_timer(state["breach_cooldown"])
-        if state["fury_remaining"] > 0:
-            ultimate_status = f"ACTIVE {state['fury_remaining']:.1f}s"
-        elif state["fury_used"]:
-            ultimate_status = "USED THIS ROUND"
-        else:
-            ultimate_status = "READY"
-
-        lines = [
-            f"Q  ONI BLADE      - {signature_status}",
-            f"C  BREACH CHARGE  - {class_status}",
-            f"X  UNBOUND FURY   - {ultimate_status}",
-        ]
-        status_color = VAREK_BLADE_COLOR
+        if state['oni_blade_remaining']>0: q=f"ACTIVE {state['oni_blade_remaining']:.1f}s"
+        elif state['fury_remaining']>0: q="DRAWN BY FURY"
+        else: q=format_ability_timer(state['oni_blade_cooldown'])
+        c="READY" if c_uses else "USED"
+        x=f"ACTIVE {state['fury_remaining']:.1f}s" if state['fury_remaining']>0 else earned_x
+        lines=[f"Q  ONI BLADE - {q} | {q_uses} USE(S)", f"C  BREACH CHARGE - {c} | {c_uses} USE", f"X  UNBOUND FURY - {x}"]
     elif character_id == MIRI["id"]:
-        if state["feline_lunge_remaining"] > 0:
-            signature_status = f"ACTIVE {state['feline_lunge_remaining']:.1f}s"
-        else:
-            signature_status = format_ability_timer(state["feline_lunge_cooldown"])
-
-        if state["field_treatment_remaining"] > 0:
-            class_status = f"CASTING {state['field_treatment_remaining']:.1f}s"
-        else:
-            class_status = format_ability_timer(state["field_treatment_cooldown"])
-
-        if state["nine_lives_remaining"] > 0:
-            ultimate_status = f"CHANNEL {state['nine_lives_remaining']:.1f}s"
-        elif state["nine_lives_used"]:
-            ultimate_status = "USED THIS ROUND"
-        else:
-            ultimate_status = "READY"
-
-        lines = [
-            f"Q  FELINE LUNGE    - {signature_status}",
-            f"C  FIELD TREATMENT - {class_status}",
-            f"X  NINE LIVES      - {ultimate_status}",
-        ]
-        status_color = MIRI_HEAL_COLOR
+        q=f"ACTIVE {state['feline_lunge_remaining']:.1f}s" if state['feline_lunge_remaining']>0 else format_ability_timer(state['feline_lunge_cooldown'])
+        c=f"CASTING {state['field_treatment_remaining']:.1f}s" if state['field_treatment_remaining']>0 else "READY" if c_uses else "USED"
+        x=f"CHANNEL {state['nine_lives_remaining']:.1f}s" if state['nine_lives_remaining']>0 else earned_x
+        lines=[f"Q  FELINE LUNGE - {q} | {q_uses} USE(S)", f"C  FIELD TREATMENT - {c} | {c_uses} USE", f"X  NINE LIVES - {x}"]
     elif character_id == RELAY["id"]:
-        if state["rift_boost_bullets_remaining"] > 0:
-            signature_status = f"{state['rift_boost_bullets_remaining']} PROJECTILES"
-        elif state["rift_boost_cooldown"] > 0:
-            signature_status = f"COOLDOWN {state['rift_boost_cooldown']:.1f}s"
-        elif state["rift_boost_charged"]:
-            signature_status = "READY"
-        elif state["rift_boost_charge_progress"] > 0:
-            signature_status = (
-                f"CHARGING {state['rift_boost_charge_progress']:.1f}/"
-                f"{RELAY_RIFT_BOOST_CHARGE_TIME:.1f}s"
-            )
-        else:
-            signature_status = "NEEDS RIFT CHARGE"
-
-        if state["rift_teleport_selecting"]:
-            class_status = "CHOOSE 1-4"
-        elif state["rift_teleport_remaining"] > 0:
-            class_status = f"CHANNEL {state['rift_teleport_remaining']:.1f}s"
-        else:
-            class_status = format_ability_timer(state["rift_teleport_cooldown"])
-
-        if state["rift_overclock_active"]:
-            ultimate_status = "ACTIVE - HOLD 1.5x"
-        elif state["rift_overclock_used"]:
-            ultimate_status = "USED THIS ROUND"
-        else:
-            ultimate_status = "READY AT OWNED RIFT"
-
-        lines = [
-            f"Q  RIFT BOOST     - {signature_status}",
-            f"C  RIFT TELEPORT  - {class_status}",
-            f"X  RIFT OVERCLOCK - {ultimate_status}",
-        ]
-        status_color = RELAY_RIFT_COLOR
+        if state['rift_boost_bullets_remaining']>0: q=f"{state['rift_boost_bullets_remaining']} PROJECTILES"
+        elif state['rift_boost_cooldown']>0: q=f"COOLDOWN {state['rift_boost_cooldown']:.1f}s"
+        elif state['rift_boost_charged']: q="CHARGED"
+        elif state['rift_boost_charge_progress']>0: q=f"CHARGING {state['rift_boost_charge_progress']:.1f}/{RELAY_RIFT_BOOST_CHARGE_TIME:.1f}s"
+        else: q="NEEDS RIFT CHARGE"
+        c="CHOOSE QUADRANT" if state['rift_teleport_selecting'] else "READY" if c_uses else "USED"
+        x="ACTIVE - HOLD 1.5x" if state['rift_overclock_active'] else earned_x
+        lines=[f"Q  RIFT BOOST - {q} | {q_uses} USE(S)", f"C  RIFT TELEPORT - {c} | {c_uses} USE", f"X  RIFT OVERCLOCK - {x}"]
     elif character_id == HAZE["id"]:
-        decoy = state.get("hallucination")
-        if decoy is not None:
-            signature_status = f"ACTIVE {decoy['remaining']:.1f}s | {decoy['health']:.0f} HP"
-        else:
-            signature_status = format_ability_timer(state["hallucination_cooldown"])
-
-        if state["silence_remaining"] > 0:
-            class_status = f"ACTIVE {state['silence_remaining']:.1f}s"
-        else:
-            class_status = format_ability_timer(state["silence_cooldown"])
-
-        if state["childs_play_remaining"] > 0:
-            ultimate_status = f"ACTIVE {state['childs_play_remaining']:.1f}s"
-        elif state["childs_play_used"]:
-            ultimate_status = "USED THIS ROUND"
-        else:
-            ultimate_status = "READY"
-
-        lines = [
-            f"Q  HALLUCINATION - {signature_status}",
-            f"C  SILENCE       - {class_status}",
-            f"X  CHILD'S PLAY  - {ultimate_status}",
-        ]
-        status_color = HAZE_GREEN_COLOR
+        decoy=state.get('hallucination')
+        q=f"ACTIVE {decoy['remaining']:.1f}s | {decoy['health']:.0f} HP" if decoy else format_ability_timer(state['hallucination_cooldown'])
+        c=f"ACTIVE {state['silence_remaining']:.1f}s" if state['silence_remaining']>0 else "READY" if c_uses else "USED"
+        x=f"ACTIVE {state['childs_play_remaining']:.1f}s" if state['childs_play_remaining']>0 else earned_x
+        lines=[f"Q  HALLUCINATION - {q} | {q_uses} USE(S)", f"C  SILENCE - {c} | {c_uses} USE", f"X  CHILD'S PLAY - {x}"]
     elif character_id == SABLE["id"]:
-        if state["scent_remaining"] > 0:
-            signature_status = f"ACTIVE {state['scent_remaining']:.1f}s | {len(state['scent_targets'])} PREY"
-        else:
-            signature_status = format_ability_timer(state["scent_cooldown"])
-        if state["track_remaining"] > 0:
-            class_status = f"ACTIVE {state['track_remaining']:.1f}s"
-        else:
-            class_status = format_ability_timer(state["track_cooldown"])
-        if state["wild_hunt_remaining"] > 0:
-            ultimate_status = f"ACTIVE {state['wild_hunt_remaining']:.1f}s"
-        elif state["wild_hunt_used"]:
-            ultimate_status = "USED THIS ROUND"
-        else:
-            ultimate_status = "READY"
-        lines = [
-            f"Q  SCENT OF BLOOD - {signature_status}",
-            f"C  TRACK          - {class_status}",
-            f"X  WILD HUNT      - {ultimate_status}",
-        ]
-        status_color = SABLE_TRACK_COLOR
+        q=f"ACTIVE {state['scent_remaining']:.1f}s | {len(state['scent_targets'])} PREY" if state['scent_remaining']>0 else format_ability_timer(state['scent_cooldown'])
+        c=f"ACTIVE {state['track_remaining']:.1f}s" if state['track_remaining']>0 else "READY" if c_uses else "USED"
+        x=f"ACTIVE {state['wild_hunt_remaining']:.1f}s" if state['wild_hunt_remaining']>0 else earned_x
+        lines=[f"Q  SCENT OF BLOOD - {q} | {q_uses} USE(S)", f"C  TRACK - {c} | {c_uses} USE", f"X  WILD HUNT - {x}"]
     elif character_id == AUREL["id"]:
-        signature_status = format_ability_timer(state["cinderbolt_cooldown"])
-        class_status = format_ability_timer(state["breach_cooldown"])
-        if state["inferno_charge_remaining"] > 0:
-            ultimate_status = f"CHARGING {state['inferno_charge_remaining']:.1f}s"
-        elif state["inferno_after_remaining"] > 0:
-            ultimate_status = f"INFERNO {state['inferno_after_remaining']:.1f}s"
-        elif state["inferno_used"]:
-            ultimate_status = "USED THIS ROUND"
-        else:
-            ultimate_status = "READY"
-        lines = [
-            f"Q  CINDERBOLT        - {signature_status}",
-            f"C  BREACH CHARGE     - {class_status}",
-            f"X  EXPLOSIVE INFERNO - {ultimate_status}",
-        ]
-        status_color = AUREL_FIRE_GOLD_COLOR
+        q=format_ability_timer(state['cinderbolt_cooldown'])
+        c="READY" if c_uses else "USED"
+        if state['inferno_charge_remaining']>0: x=f"CHARGING {state['inferno_charge_remaining']:.1f}s"
+        elif state['inferno_after_remaining']>0: x=f"AFTERMATH {state['inferno_after_remaining']:.1f}s"
+        else: x=earned_x
+        lines=[f"Q  CINDERBOLT - {q} | {q_uses} USE(S)", f"C  BREACH CHARGE - {c} | {c_uses} USE", f"X  EXPLOSIVE INFERNO - {x}"]
     elif character_id == WARD["id"]:
-        barrier = state.get("bulwark")
-        if barrier is not None and barrier.get("health", 0) > 0:
-            signature_status = f"{barrier['health']:.0f}/{barrier['max_health']:.0f} HP"
-        else:
-            signature_status = format_ability_timer(state["bulwark_cooldown"])
-        if state["field_treatment_remaining"] > 0:
-            class_status = f"CASTING {state['field_treatment_remaining']:.1f}s"
-        else:
-            class_status = format_ability_timer(state["field_treatment_cooldown"])
-        if state["personal_aegis_health"] > 0:
-            ultimate_status = f"{state['personal_aegis_health']:.0f}/{WARD_AEGIS_HEALTH} SHIELD"
-        elif state["personal_aegis_used"]:
-            ultimate_status = "USED THIS ROUND"
-        else:
-            ultimate_status = "READY"
-        lines = [
-            f"Q  BULWARK         - {signature_status}",
-            f"C  FIELD TREATMENT - {class_status}",
-            f"X  PERSONAL AEGIS  - {ultimate_status}",
-        ]
-        status_color = WARD_SHIELD_COLOR
+        barrier=state.get('bulwark')
+        if barrier: q=f"ACTIVE {barrier['health']:.0f}/{barrier['max_health']:.0f} HP"
+        else: q=format_ability_timer(state['bulwark_cooldown'])
+        c=f"CASTING {state['field_treatment_remaining']:.1f}s" if state['field_treatment_remaining']>0 else "READY" if c_uses else "USED"
+        x=f"ACTIVE {state['personal_aegis_health']:.0f} SHIELD" if state['personal_aegis_health']>0 else earned_x
+        lines=[f"Q  BULWARK - {q} | {q_uses} USE(S)", f"C  FIELD TREATMENT - {c} | {c_uses} USE", f"X  PERSONAL AEGIS - {x}"]
     else:
-        memory = get_paradox_memory(player)
-        stored_echo = memory.get("stored_echo")
-        echo_names = {option[0]: option[1] for option in PARADOX_ECHO_OPTIONS}
-        if stored_echo:
-            signature_status = f"STORED: {echo_names[stored_echo].upper()}"
-        elif state.get("echo_ready"):
-            signature_status = "CHOOSE ABILITY"
-        elif state.get("echo_charging"):
-            signature_status = f"CHARGE {state['echo_charge_progress']:.1f}/{PARADOX_RIFT_ECHO_CHARGE_TIME:.1f}s"
-        elif memory.get("echo_used_this_round"):
-            signature_status = "USED THIS ROUND"
-        elif state.get("echo_charge_progress", 0.0) > 0:
-            signature_status = f"PAUSED {state['echo_charge_progress']:.1f}/{PARADOX_RIFT_ECHO_CHARGE_TIME:.1f}s"
-        else:
-            signature_status = "READY AT RIFT"
-        if relay_teleport_channel_active(player):
-            class_status = f"CHANNEL {state['rift_teleport_remaining']:.1f}s"
-        elif relay_teleport_selecting(player):
-            class_status = "CHOOSE QUADRANT"
-        else:
-            class_status = format_ability_timer(state["rift_teleport_cooldown"])
-        if memory.get("stored_ultimate_name"):
-            ultimate_status = f"STORED: {memory['stored_ultimate_name'].upper()}"
-        elif memory.get("active_ultimate_source"):
-            ultimate_status = f"ACTIVE: {PARADOX_ULTIMATE_NAMES[memory['active_ultimate_source']].upper()}"
-        elif state.get("reflection_selection_open"):
-            ultimate_status = "CHOOSING"
-        elif memory.get("reflection_used_this_round"):
-            ultimate_status = "USED THIS ROUND"
-        else:
-            ultimate_status = "READY AT UNSTABLE RIFT"
-        lines = [
-            f"Q  RIFT ECHO       - {signature_status}",
-            f"C  RIFT TELEPORT   - {class_status}",
-            f"X  RIFT REFLECTION - {ultimate_status}",
-        ]
-        status_color = PARADOX_RIFT_COLOR
+        memory=get_paradox_memory(player)
+        stored_echo=memory.get('stored_echo')
+        echo_names={option[0]:option[1] for option in PARADOX_ECHO_OPTIONS}
+        if stored_echo: q=f"STORED: {echo_names[stored_echo].upper()}"
+        elif state.get('echo_ready'): q="CHOOSE ABILITY"
+        elif state.get('echo_charging'): q=f"CHARGE {state['echo_charge_progress']:.1f}/{PARADOX_RIFT_ECHO_CHARGE_TIME:.1f}s"
+        elif memory.get('echo_used_this_round'): q="USED THIS ROUND"
+        elif state.get('echo_charge_progress',0)>0: q=f"PAUSED {state['echo_charge_progress']:.1f}/{PARADOX_RIFT_ECHO_CHARGE_TIME:.1f}s"
+        else: q="READY AT RIFT"
+        c="CHOOSE QUADRANT" if state.get('rift_teleport_selecting') else "READY" if c_uses else "USED"
+        if memory.get('stored_ultimate_name'): x=f"STORED: {memory['stored_ultimate_name'].upper()}"
+        elif memory.get('active_ultimate_source'): x=f"ACTIVE: {PARADOX_ULTIMATE_NAMES[memory['active_ultimate_source']].upper()}"
+        elif state.get('reflection_charge_remaining',0)>0: x=f"CHANNEL {state['reflection_charge_remaining']:.1f}s"
+        elif state.get('reflection_selection_open'): x="CHOOSING"
+        elif ultimate_charge_ready(player): x="READY AT VALID RIFT"
+        else: x=earned_x
+        lines=[f"Q  RIFT ECHO - {q}", f"C  RIFT TELEPORT - {c} | {c_uses} USE", f"X  RIFT REFLECTION - {x}"]
 
-    for index, line in enumerate(lines):
-        rendered = font.render(line, True, TEXT_COLOR)
-        screen.blit(rendered, (panel_x + 16, panel_y + 62 + index * 23))
-
+    for index,line in enumerate(lines):
+        rendered=font.render(line,True,TEXT_COLOR)
+        screen.blit(rendered,(panel_x+16,panel_y+62+index*24))
     if status_message:
-        status = font.render(status_message, True, status_color)
-        screen.blit(status, (panel_x + 16, panel_y + 132))
+        status=font.render(status_message,True,status_color)
+        screen.blit(status,(panel_x+16,panel_y+142))
 
 
 def draw_knife(screen, player, camera, aim_angle, animation_timer):
@@ -9746,13 +9913,800 @@ def finish_round(
         match_state["message"] = round_message
 
 
+
+# =============================================================================
+# VERSION 0.9 - PRESENTATION LAYER
+# =============================================================================
+
+_CHARACTER_ART_CACHE = {}
+
+
+def _ensure_asset_directories():
+    """Create optional replacement-asset folders when the project is writable."""
+    try:
+        CHARACTER_ART_DIRECTORY.mkdir(parents=True, exist_ok=True)
+        AUDIO_ASSET_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+
+
+def _character_palette(character_id):
+    palettes = {
+        MALPHAS["id"]: (MALPHAS_BODY_COLOR, MALPHAS_GLOW_COLOR),
+        LONGSHOT["id"]: (LONGSHOT_ARMOR_COLOR, LONGSHOT_VISOR_COLOR),
+        VAREK["id"]: (VAREK_ARMOR_COLOR, VAREK_BLADE_COLOR),
+        MIRI["id"]: (MIRI_BODY_COLOR, MIRI_HEAL_COLOR),
+        RELAY["id"]: (RELAY_BODY_COLOR, RELAY_RIFT_COLOR),
+        HAZE["id"]: (HAZE_CLOAK_COLOR, HAZE_GREEN_COLOR),
+        SABLE["id"]: (SABLE_LEATHER_COLOR, SABLE_WARPAINT_COLOR),
+        AUREL["id"]: (AUREL_SUIT_COLOR, AUREL_GOLD_COLOR),
+        WARD["id"]: (WARD_COAT_COLOR, WARD_SHIELD_COLOR),
+        PARADOX["id"]: (PARADOX_RIFT_COLOR, PARADOX_CORE_COLOR),
+    }
+    return palettes.get(character_id, ((100, 110, 125), (210, 220, 235)))
+
+
+def _make_fallback_character_art(character_id, kind, size):
+    """Generate simple readable art when no replaceable PNG is present."""
+    width, height = size
+    surface = pygame.Surface(size, pygame.SRCALPHA)
+    primary, accent = _character_palette(character_id)
+    shadow = (14, 17, 24, 220)
+
+    if kind == "portrait":
+        shoulder_y = int(height * 0.76)
+        pygame.draw.ellipse(
+            surface,
+            shadow,
+            (int(width * 0.08), int(height * 0.45), int(width * 0.84), int(height * 0.58)),
+        )
+        pygame.draw.ellipse(
+            surface,
+            primary,
+            (int(width * 0.12), int(height * 0.48), int(width * 0.76), int(height * 0.50)),
+        )
+        pygame.draw.circle(
+            surface,
+            primary,
+            (width // 2, int(height * 0.38)),
+            max(6, int(min(width, height) * 0.24)),
+        )
+        pygame.draw.circle(
+            surface,
+            accent,
+            (width // 2, int(height * 0.38)),
+            max(3, int(min(width, height) * 0.08)),
+        )
+        pygame.draw.line(
+            surface,
+            accent,
+            (int(width * 0.22), shoulder_y),
+            (int(width * 0.78), shoulder_y),
+            width=max(2, width // 18),
+        )
+    else:
+        cx = width // 2
+        head_y = int(height * 0.18)
+        head_r = max(12, int(width * 0.12))
+        body_top = int(height * 0.29)
+        body_bottom = int(height * 0.72)
+        pygame.draw.ellipse(
+            surface,
+            shadow,
+            (int(width * 0.23), int(height * 0.26), int(width * 0.54), int(height * 0.50)),
+        )
+        pygame.draw.circle(surface, primary, (cx, head_y), head_r)
+        pygame.draw.polygon(
+            surface,
+            primary,
+            (
+                (int(width * 0.32), body_top),
+                (int(width * 0.68), body_top),
+                (int(width * 0.75), body_bottom),
+                (int(width * 0.25), body_bottom),
+            ),
+        )
+        pygame.draw.line(
+            surface,
+            primary,
+            (int(width * 0.31), int(height * 0.36)),
+            (int(width * 0.12), int(height * 0.61)),
+            width=max(6, width // 18),
+        )
+        pygame.draw.line(
+            surface,
+            primary,
+            (int(width * 0.69), int(height * 0.36)),
+            (int(width * 0.88), int(height * 0.61)),
+            width=max(6, width // 18),
+        )
+        pygame.draw.line(
+            surface,
+            primary,
+            (int(width * 0.42), body_bottom),
+            (int(width * 0.35), int(height * 0.96)),
+            width=max(7, width // 16),
+        )
+        pygame.draw.line(
+            surface,
+            primary,
+            (int(width * 0.58), body_bottom),
+            (int(width * 0.65), int(height * 0.96)),
+            width=max(7, width // 16),
+        )
+        pygame.draw.circle(surface, accent, (cx, head_y), max(4, head_r // 3))
+        pygame.draw.line(
+            surface,
+            accent,
+            (int(width * 0.34), int(height * 0.42)),
+            (int(width * 0.66), int(height * 0.42)),
+            width=max(3, width // 28),
+        )
+
+        # Tiny silhouette cues make fallback art easier to tell apart.
+        if character_id == MALPHAS["id"]:
+            pygame.draw.polygon(surface, accent, ((cx-head_r, head_y-head_r//2), (cx-head_r*2, head_y-head_r*2), (cx-head_r//2, head_y-head_r)))
+            pygame.draw.polygon(surface, accent, ((cx+head_r, head_y-head_r//2), (cx+head_r*2, head_y-head_r*2), (cx+head_r//2, head_y-head_r)))
+        elif character_id == LONGSHOT["id"]:
+            pygame.draw.line(surface, accent, (cx-head_r, head_y), (cx+head_r, head_y), width=max(3, width//24))
+        elif character_id == MIRI["id"]:
+            pygame.draw.polygon(surface, accent, ((cx-head_r, head_y-head_r), (cx-head_r//2, head_y-head_r*2), (cx, head_y-head_r)))
+            pygame.draw.polygon(surface, accent, ((cx+head_r, head_y-head_r), (cx+head_r//2, head_y-head_r*2), (cx, head_y-head_r)))
+        elif character_id == HAZE["id"]:
+            pygame.draw.circle(surface, (15, 13, 24), (cx, head_y), max(5, head_r - 4))
+        elif character_id == PARADOX["id"]:
+            pygame.draw.circle(surface, PARADOX_VOID_COLOR, (cx, head_y), max(5, head_r - 3))
+            pygame.draw.circle(surface, PARADOX_WINDOW_COLOR, (cx + head_r // 3, head_y), max(2, head_r // 5))
+
+    return surface
+
+
+def get_character_art(character_id, kind, size):
+    """Load replaceable PNG art or use generated fallback art."""
+    if character_id is None or kind not in ("portrait", "full"):
+        return None
+    cache_key = (character_id, kind, tuple(size))
+    if cache_key in _CHARACTER_ART_CACHE:
+        return _CHARACTER_ART_CACHE[cache_key]
+
+    filename = CHARACTER_ART_FILENAMES.get(character_id, {}).get(kind)
+    image = None
+    if filename:
+        path = CHARACTER_ART_DIRECTORY / filename
+        if path.exists():
+            try:
+                loaded = pygame.image.load(str(path)).convert_alpha()
+                image = pygame.transform.smoothscale(loaded, size)
+            except (pygame.error, OSError):
+                image = None
+    if image is None:
+        image = _make_fallback_character_art(character_id, kind, size)
+    _CHARACTER_ART_CACHE[cache_key] = image
+    return image
+
+
+def _make_generated_sound(frequencies, duration, volume=0.25):
+    """Create a tiny fallback tone without requiring external sound files."""
+    try:
+        mixer_info = pygame.mixer.get_init()
+        if not mixer_info:
+            return None
+        sample_rate, sample_format, channels = mixer_info
+        if abs(sample_format) != 16:
+            return None
+        sample_count = max(1, int(sample_rate * duration))
+        raw = bytearray()
+        for index in range(sample_count):
+            t = index / sample_rate
+            attack = min(1.0, t / 0.02) if duration > 0.04 else 1.0
+            release = min(1.0, max(0.0, (duration - t) / max(0.04, duration * 0.35)))
+            envelope = attack * release
+            wave = 0.0
+            for frequency in frequencies:
+                wave += math.sin(math.tau * frequency * t)
+            wave /= max(1, len(frequencies))
+            value = int(max(-1.0, min(1.0, wave * volume * envelope)) * 32767)
+            sample = int(value).to_bytes(2, "little", signed=True)
+            raw.extend(sample * channels)
+        return pygame.mixer.Sound(buffer=bytes(raw))
+    except (pygame.error, AttributeError, ValueError):
+        return None
+
+
+def _make_generated_music(frequencies, duration=4.0):
+    """Create a subtle looping fallback music bed."""
+    try:
+        mixer_info = pygame.mixer.get_init()
+        if not mixer_info:
+            return None
+        sample_rate, sample_format, channels = mixer_info
+        if abs(sample_format) != 16:
+            return None
+        sample_count = max(1, int(sample_rate * duration))
+        raw = bytearray()
+        for index in range(sample_count):
+            t = index / sample_rate
+            fade = min(1.0, t / 0.35, (duration - t) / 0.35)
+            pulse = 0.72 + 0.28 * math.sin(math.tau * 0.25 * t)
+            wave = sum(math.sin(math.tau * f * t) for f in frequencies) / len(frequencies)
+            value = int(max(-1.0, min(1.0, wave * 0.12 * fade * pulse)) * 32767)
+            sample = int(value).to_bytes(2, "little", signed=True)
+            raw.extend(sample * channels)
+        return pygame.mixer.Sound(buffer=bytes(raw))
+    except (pygame.error, AttributeError, ValueError):
+        return None
+
+
+class PresentationAudio:
+    """Small audio layer with external WAV hooks and generated fallbacks."""
+
+    def __init__(self, settings):
+        self.settings = settings
+        self.available = False
+        self.sounds = {}
+        self.music = {}
+        self.music_channel = None
+        self.music_context = None
+        try:
+            if not pygame.mixer.get_init():
+                pygame.mixer.init(frequency=44100, size=-16, channels=2)
+            self.available = bool(pygame.mixer.get_init())
+        except pygame.error:
+            self.available = False
+        if not self.available:
+            return
+
+        fallback_specs = {
+            "ui": ((480, 720), 0.08, 0.22),
+            "lock": ((420, 630, 840), 0.18, 0.28),
+            "buy": ((620, 930), 0.12, 0.22),
+            "shot": ((120, 210), 0.07, 0.35),
+            "melee": ((180, 310), 0.10, 0.28),
+            "ability": ((360, 540, 720), 0.16, 0.22),
+            "round": ((260, 390, 520), 0.28, 0.25),
+        }
+        for name, (frequencies, duration, volume) in fallback_specs.items():
+            external = AUDIO_ASSET_DIRECTORY / f"{name}.wav"
+            sound = None
+            if external.exists():
+                try:
+                    sound = pygame.mixer.Sound(str(external))
+                except pygame.error:
+                    sound = None
+            if sound is None:
+                sound = _make_generated_sound(frequencies, duration, volume)
+            self.sounds[name] = sound
+
+        for context, frequencies in {
+            "menu": (82.4, 123.5, 164.8),
+            "game": (73.4, 110.0, 146.8),
+        }.items():
+            external = AUDIO_ASSET_DIRECTORY / f"{context}_music.wav"
+            sound = None
+            if external.exists():
+                try:
+                    sound = pygame.mixer.Sound(str(external))
+                except pygame.error:
+                    sound = None
+            if sound is None:
+                sound = _make_generated_music(frequencies)
+            self.music[context] = sound
+        self.apply_volumes()
+
+    def apply_volumes(self):
+        if not self.available:
+            return
+        master = self.settings["master_volume"]
+        for sound in self.sounds.values():
+            if sound is not None:
+                sound.set_volume(master * self.settings["sfx_volume"])
+        for sound in self.music.values():
+            if sound is not None:
+                sound.set_volume(master * self.settings["music_volume"])
+
+    def play(self, name):
+        if not self.available:
+            return
+        sound = self.sounds.get(name)
+        if sound is not None:
+            sound.play()
+
+    def set_music_context(self, context):
+        if not self.available or context == self.music_context:
+            return
+        if self.music_channel is not None:
+            self.music_channel.fadeout(250)
+        self.music_context = context
+        sound = self.music.get(context)
+        if sound is not None:
+            self.music_channel = sound.play(loops=-1, fade_ms=250)
+
+
+def get_main_menu_buttons(screen):
+    """Version 0.9 title-screen controls."""
+    center_x = screen.get_width() // 2
+    button_width = 350
+    button_height = 58
+    start_y = screen.get_height() // 2 + 15
+    labels = (
+        ("PLAY", "play"),
+        ("TUTORIAL", "tutorial"),
+        ("SETTINGS", "settings"),
+        ("QUIT", "quit"),
+    )
+    return [
+        UIButton(
+            (center_x - button_width // 2, start_y + index * 70, button_width, button_height),
+            label,
+            action,
+        )
+        for index, (label, action) in enumerate(labels)
+    ]
+
+
+def draw_main_menu(screen, regular_font, large_font, title_font):
+    """Draw the Version 0.9 title screen."""
+    screen.fill((12, 16, 24))
+    center = (screen.get_width() // 2, screen.get_height() // 2 - 190)
+    ticks = pygame.time.get_ticks()
+    for index in range(4):
+        pulse = 10 + round(6 * math.sin(ticks * 0.0018 + index * 0.8))
+        radius = 60 + index * 30 + pulse
+        color = (45 + index * 8, 57 + index * 8, 78 + index * 10)
+        pygame.draw.circle(screen, color, center, radius, width=2)
+    pygame.draw.circle(screen, RIFT_BLUE_COLOR, center, 70, width=4)
+    pygame.draw.circle(screen, (20, 16, 34), center, 42)
+    pygame.draw.polygon(
+        screen,
+        RIFT_NEUTRAL_COLOR,
+        ((center[0], center[1]-38), (center[0]+30, center[1]), (center[0], center[1]+38), (center[0]-30, center[1])),
+    )
+    title = title_font.render("RIFTBOUND", True, TEXT_COLOR)
+    subtitle = large_font.render("RIFT HUNT", True, RIFT_BLUE_COLOR)
+    screen.blit(title, title.get_rect(center=(center[0], center[1] - 170)))
+    screen.blit(subtitle, subtitle.get_rect(center=(center[0], center[1] + 142)))
+    mouse = pygame.mouse.get_pos()
+    for button in get_main_menu_buttons(screen):
+        button.draw(screen, large_font, mouse)
+    footer = regular_font.render(
+        "Version 0.9 - Presentation | Offline 5v5 Prototype",
+        True,
+        (154, 167, 184),
+    )
+    screen.blit(footer, footer.get_rect(center=(screen.get_width() // 2, screen.get_height() - 36)))
+
+
+def _settings_buttons(screen, settings):
+    center_x = screen.get_width() // 2
+    y = screen.get_height() // 2 - 140
+    width = 440
+    height = 54
+    return [
+        UIButton((center_x-width//2, y, width, height), f"MASTER VOLUME  {round(settings['master_volume']*100)}%", "master"),
+        UIButton((center_x-width//2, y+70, width, height), f"MUSIC VOLUME   {round(settings['music_volume']*100)}%", "music"),
+        UIButton((center_x-width//2, y+140, width, height), f"SFX VOLUME     {round(settings['sfx_volume']*100)}%", "sfx"),
+        UIButton((center_x-width//2, y+210, width, height), f"SHOW FPS        {'ON' if settings['show_fps'] else 'OFF'}", "fps"),
+        UIButton((center_x-width//2, y+300, width, height), "BACK", "back"),
+    ]
+
+
+def draw_settings_screen(screen, regular_font, large_font, settings):
+    screen.fill((13, 17, 25))
+    heading = large_font.render("SETTINGS", True, TEXT_COLOR)
+    screen.blit(heading, heading.get_rect(center=(screen.get_width()//2, 120)))
+    help_text = regular_font.render("Click a volume row to cycle 0-100% in 10% steps.", True, (176, 190, 207))
+    screen.blit(help_text, help_text.get_rect(center=(screen.get_width()//2, 180)))
+    mouse = pygame.mouse.get_pos()
+    for button in _settings_buttons(screen, settings):
+        button.draw(screen, large_font if button.action != "back" else regular_font, mouse)
+
+
+def handle_settings_click(screen, settings, audio, position):
+    for button in _settings_buttons(screen, settings):
+        if not button.contains(position):
+            continue
+        if button.action == "back":
+            audio.play("ui")
+            return "back"
+        if button.action == "fps":
+            settings["show_fps"] = not settings["show_fps"]
+        else:
+            key = f"{button.action}_volume"
+            next_value = round(settings[key] + 0.10, 2)
+            settings[key] = 0.0 if next_value > 1.0 else next_value
+        audio.apply_volumes()
+        audio.play("ui")
+        return button.action
+    return None
+
+
+def _tutorial_buttons(screen, page):
+    buttons = [UIButton((80, screen.get_height()-92, 220, 54), "BACK", "back")]
+    if page < len(TUTORIAL_PAGES)-1:
+        buttons.append(UIButton((screen.get_width()-300, screen.get_height()-92, 220, 54), "NEXT", "next"))
+    else:
+        buttons.append(UIButton((screen.get_width()-300, screen.get_height()-92, 220, 54), "DONE", "done"))
+    return buttons
+
+
+def draw_tutorial_screen(screen, regular_font, large_font, page):
+    screen.fill((12, 16, 24))
+    page = max(0, min(len(TUTORIAL_PAGES)-1, page))
+    title_text, lines = TUTORIAL_PAGES[page]
+    heading = large_font.render(title_text, True, RIFT_BLUE_COLOR)
+    screen.blit(heading, heading.get_rect(center=(screen.get_width()//2, 120)))
+    progress = regular_font.render(f"PAGE {page+1} / {len(TUTORIAL_PAGES)}", True, (166, 180, 199))
+    screen.blit(progress, progress.get_rect(center=(screen.get_width()//2, 170)))
+    panel = pygame.Rect(screen.get_width()//2-520, 225, 1040, 420)
+    pygame.draw.rect(screen, (23, 29, 39), panel, border_radius=14)
+    pygame.draw.rect(screen, (90, 112, 140), panel, width=2, border_radius=14)
+    y = panel.top + 70
+    for line in lines:
+        surface = regular_font.render(line, True, TEXT_COLOR)
+        screen.blit(surface, surface.get_rect(center=(panel.centerx, y)))
+        y += 72
+    mouse = pygame.mouse.get_pos()
+    for button in _tutorial_buttons(screen, page):
+        button.draw(screen, regular_font, mouse)
+
+
+def character_options_for_class(class_name):
+    return [get_playable_character(character_id) for character_id in CLASS_CHARACTER_OPTIONS.get(class_name, ())]
+
+
+def assign_match_classes(actors):
+    """Assign one of each class to each 5-player team and prepare bot choices."""
+    for team in ("blue", "red"):
+        team_actors = [actor for actor in actors if actor["team"] == team]
+        classes = list(CLASS_ORDER)
+        random.shuffle(classes)
+        for actor, class_name in zip(team_actors, classes):
+            option_ids = list(CLASS_CHARACTER_OPTIONS[class_name])
+            actor["assigned_class"] = class_name
+            actor["selection_options"] = option_ids
+            actor["pending_character_id"] = random.choice(option_ids) if not actor["is_player"] else option_ids[0]
+            actor["character_locked"] = False
+            actor["bot_lock_delay"] = random.uniform(BOT_CHARACTER_LOCK_MIN, BOT_CHARACTER_LOCK_MAX)
+
+
+def lock_actor_character(actor, character_id=None):
+    """Commit one selection; clicking a card alone never locks the character."""
+    if actor.get("character_locked", False):
+        return False
+    options = actor.get("selection_options", [])
+    character_id = character_id or actor.get("pending_character_id")
+    if character_id not in options:
+        return False
+    character = get_playable_character(character_id)
+    if character is None:
+        return False
+    apply_character_to_actor(actor, character)
+    actor["pending_character_id"] = character_id
+    actor["character_locked"] = True
+    return True
+
+
+def all_character_choices_locked(actors):
+    return bool(actors) and all(actor.get("character_locked", False) for actor in actors)
+
+
+def update_character_selection(match_state, actors, delta_time):
+    """Let bots lock in independently and auto-lock everyone when the clock expires."""
+    match_state["timer"] = max(0.0, match_state["timer"] - delta_time)
+    for actor in actors:
+        if actor["is_player"] or actor.get("character_locked", False):
+            continue
+        actor["bot_lock_delay"] = max(0.0, actor.get("bot_lock_delay", 0.0) - delta_time)
+        if actor["bot_lock_delay"] <= 0:
+            lock_actor_character(actor)
+
+    if match_state["timer"] <= 0:
+        for actor in actors:
+            if not actor.get("character_locked", False):
+                lock_actor_character(actor)
+        if actors and actors[0].get("character_locked", False):
+            match_state["selected_character_id"] = actors[0].get("character_id")
+            match_state["character_status"] = "AUTO-LOCKED AT TIMER"
+
+    return all_character_choices_locked(actors)
+
+
+def _selection_card_rects(screen):
+    card_width = min(410, max(320, screen.get_width() // 4))
+    card_height = min(640, screen.get_height() - 250)
+    gap = 40
+    total = card_width * 2 + gap
+    left = screen.get_width() // 2 - total // 2
+    top = 170
+    return [
+        pygame.Rect(left, top, card_width, card_height),
+        pygame.Rect(left + card_width + gap, top, card_width, card_height),
+    ]
+
+
+def _lock_in_rect(screen):
+    return pygame.Rect(screen.get_width()//2 - 170, screen.get_height()-82, 340, 58)
+
+
+def handle_character_select_click(match_state, player, click_position):
+    """Choose one of the assigned class's two characters or press LOCK IN."""
+    if player.get("character_locked", False):
+        return False
+    option_ids = player.get("selection_options", [])
+    for character_id, rectangle in zip(option_ids, _selection_card_rects(pygame.display.get_surface())):
+        if rectangle.collidepoint(click_position):
+            player["pending_character_id"] = character_id
+            match_state["selected_character_id"] = character_id
+            character = get_playable_character(character_id)
+            match_state["character_status"] = f"{character['name'].upper()} READY - PRESS LOCK IN"
+            return True
+    if _lock_in_rect(pygame.display.get_surface()).collidepoint(click_position):
+        if lock_actor_character(player):
+            match_state["selected_character_id"] = player["character_id"]
+            match_state["character_status"] = f"{player['character_name'].upper()} LOCKED IN"
+            match_state["player_just_locked"] = True
+            return True
+    return False
+
+
+def _draw_team_lock_panel(screen, font, actors, team, rect):
+    team_color = RIFT_BLUE_COLOR if team == "blue" else ENEMY_COLOR
+    pygame.draw.rect(screen, (18, 23, 31), rect, border_radius=10)
+    pygame.draw.rect(screen, team_color, rect, width=2, border_radius=10)
+    heading = font.render(f"{team.upper()} TEAM", True, team_color)
+    screen.blit(heading, (rect.left+14, rect.top+12))
+    y = rect.top + 48
+    for actor in [a for a in actors if a["team"] == team]:
+        class_name = actor.get("assigned_class", "?")
+        if actor.get("character_locked", False):
+            choice = actor.get("character_name", "?")
+            state = "LOCKED"
+        else:
+            choice = "CHOOSING"
+            state = "..."
+        line = font.render(f"{actor['name']}: {class_name} | {choice} {state}", True, TEXT_COLOR)
+        screen.blit(line, (rect.left+14, y))
+        y += 30
+
+
+def draw_character_select(screen, regular_font, large_font, match_state):
+    """Draw the assigned-class, two-choice, explicit-lock character select."""
+    if match_state["phase"] != "character_select":
+        return
+    actors = match_state.get("actors", [])
+    player = next((a for a in actors if a.get("is_player")), None)
+    if player is None:
+        return
+
+    overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+    overlay.fill((7, 9, 14, 246))
+    screen.blit(overlay, (0, 0))
+    class_name = player.get("assigned_class", "UNASSIGNED")
+    heading = large_font.render(f"ASSIGNED CLASS: {class_name.upper()}", True, TEXT_COLOR)
+    screen.blit(heading, heading.get_rect(center=(screen.get_width()//2, 55)))
+    instruction = regular_font.render("Choose one character, then click LOCK IN.", True, (180, 196, 216))
+    screen.blit(instruction, instruction.get_rect(center=(screen.get_width()//2, 96)))
+    timer = large_font.render(f"{max(0.0, match_state['timer']):.1f}", True, BULLET_COLOR)
+    screen.blit(timer, timer.get_rect(center=(screen.get_width()//2, 132)))
+
+    mouse = pygame.mouse.get_pos()
+    option_ids = player.get("selection_options", [])
+    pending = player.get("pending_character_id")
+    for character_id, rectangle in zip(option_ids, _selection_card_rects(screen)):
+        character = get_playable_character(character_id)
+        selected = character_id == pending
+        hovered = rectangle.collidepoint(mouse)
+        fill = (40, 61, 78) if selected else ((34, 43, 56) if hovered else (23, 29, 39))
+        edge = RIFT_BLUE_COLOR if selected else ((165, 190, 220) if hovered else (85, 101, 122))
+        pygame.draw.rect(screen, fill, rectangle, border_radius=14)
+        pygame.draw.rect(screen, edge, rectangle, width=3, border_radius=14)
+        art_size = (min(300, rectangle.width-60), min(430, rectangle.height-150))
+        art = get_character_art(character_id, "full", art_size)
+        art_rect = art.get_rect(center=(rectangle.centerx, rectangle.top + art_size[1]//2 + 20))
+        screen.blit(art, art_rect)
+        name = large_font.render(character["name"].upper(), True, TEXT_COLOR)
+        screen.blit(name, name.get_rect(center=(rectangle.centerx, rectangle.bottom-82)))
+        role = regular_font.render(character["class"].upper(), True, edge)
+        screen.blit(role, role.get_rect(center=(rectangle.centerx, rectangle.bottom-42)))
+
+    lock_rect = _lock_in_rect(screen)
+    locked = player.get("character_locked", False)
+    if locked:
+        fill, edge, label = (38, 78, 57), HEALTH_COLOR, "LOCKED IN"
+    else:
+        hovered = lock_rect.collidepoint(mouse)
+        fill = (44, 82, 106) if hovered else (31, 56, 74)
+        edge, label = RIFT_BLUE_COLOR, "LOCK IN"
+    pygame.draw.rect(screen, fill, lock_rect, border_radius=9)
+    pygame.draw.rect(screen, edge, lock_rect, width=3, border_radius=9)
+    label_surface = large_font.render(label, True, TEXT_COLOR)
+    screen.blit(label_surface, label_surface.get_rect(center=lock_rect.center))
+
+    left_panel = pygame.Rect(24, 150, min(390, screen.get_width()//5), 210)
+    right_panel = pygame.Rect(screen.get_width()-left_panel.width-24, 150, left_panel.width, 210)
+    _draw_team_lock_panel(screen, regular_font, actors, "blue", left_panel)
+    _draw_team_lock_panel(screen, regular_font, actors, "red", right_panel)
+    if match_state.get("character_status"):
+        status = regular_font.render(match_state["character_status"], True, BULLET_COLOR)
+        screen.blit(status, status.get_rect(center=(screen.get_width()//2, screen.get_height()-112)))
+
+
+def _buy_weapon_rects(screen):
+    card_width = min(310, max(240, screen.get_width() // 5))
+    card_height = 250
+    gap = 24
+    count = len(WEAPONS)
+    total = card_width * count + gap * (count-1)
+    left = screen.get_width()//2 - total//2
+    top = 220
+    return [pygame.Rect(left+i*(card_width+gap), top, card_width, card_height) for i in range(count)]
+
+
+def buy_weapon_from_click(screen, position):
+    for index, rectangle in enumerate(_buy_weapon_rects(screen)):
+        if rectangle.collidepoint(position):
+            return index
+    return None
+
+
+def draw_buy_phase(screen, regular_font, large_font, match_state, player, actors, team_rift_energy, status_message):
+    """Full-screen weapon shop inspired by tactical buy-phase layouts."""
+    if match_state["phase"] != "buying":
+        return
+    overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+    overlay.fill((8, 11, 17, 244))
+    screen.blit(overlay, (0, 0))
+
+    heading = large_font.render("BUY PHASE", True, TEXT_COLOR)
+    screen.blit(heading, heading.get_rect(center=(screen.get_width()//2, 62)))
+    timer = large_font.render(f"{max(0.0, match_state['timer']):.1f}", True, BULLET_COLOR)
+    screen.blit(timer, timer.get_rect(center=(screen.get_width()//2, 116)))
+    credits = large_font.render(f"{player['credits']} CREDITS", True, HEALTH_COLOR)
+    screen.blit(credits, credits.get_rect(center=(screen.get_width()//2, 164)))
+
+    mouse = pygame.mouse.get_pos()
+    for index, (weapon, rectangle) in enumerate(zip(WEAPONS, _buy_weapon_rects(screen))):
+        owned = actor_owns_weapon(player, index)
+        affordable = player["credits"] >= weapon.get("price", 0)
+        hovered = rectangle.collidepoint(mouse)
+        if owned:
+            fill, edge = (31, 64, 50), HEALTH_COLOR
+        elif hovered:
+            fill, edge = (39, 53, 70), PLAYER_EDGE_COLOR
+        elif affordable:
+            fill, edge = (25, 33, 44), (103, 126, 153)
+        else:
+            fill, edge = (28, 29, 34), (71, 75, 84)
+        pygame.draw.rect(screen, fill, rectangle, border_radius=12)
+        pygame.draw.rect(screen, edge, rectangle, width=3, border_radius=12)
+        name = large_font.render(weapon["name"].upper(), True, TEXT_COLOR)
+        screen.blit(name, name.get_rect(center=(rectangle.centerx, rectangle.top+44)))
+        price_text = "OWNED" if owned else ("FREE" if weapon.get("price", 0) <= 0 else f"{weapon['price']} C")
+        price = regular_font.render(price_text, True, HEALTH_COLOR if owned else BULLET_COLOR)
+        screen.blit(price, price.get_rect(center=(rectangle.centerx, rectangle.top+88)))
+        if weapon["fire_mode"] == "melee":
+            details = (f"{weapon['damage']} DAMAGE", f"RANGE {weapon['melee_range']}")
+        else:
+            details = (
+                f"{weapon['damage']} DAMAGE",
+                f"MAG {weapon['magazine_size']} / RESERVE {weapon['starting_reserve_ammo']}",
+                "AUTO" if weapon["fire_mode"] == "automatic" else "SEMI-AUTO",
+            )
+        y = rectangle.top + 135
+        for detail in details:
+            line = regular_font.render(detail, True, (190, 204, 220))
+            screen.blit(line, line.get_rect(center=(rectangle.centerx, y)))
+            y += 30
+
+    team_panel = pygame.Rect(70, 520, screen.get_width()-140, min(250, screen.get_height()-590))
+    pygame.draw.rect(screen, (20, 26, 35), team_panel, border_radius=10)
+    pygame.draw.rect(screen, (76, 94, 118), team_panel, width=2, border_radius=10)
+    title = regular_font.render("TEAM LOADOUTS", True, RIFT_BLUE_COLOR)
+    screen.blit(title, (team_panel.left+20, team_panel.top+14))
+    team_members = [a for a in actors if a["team"] == player["team"]]
+    col_width = max(1, (team_panel.width-40)//max(1, len(team_members)))
+    for i, ally in enumerate(team_members):
+        x = team_panel.left + 20 + i*col_width
+        loadout = ", ".join(WEAPONS[idx]["name"] for idx in ally["owned_weapon_indices"])
+        actor_name = "YOU" if ally.get("is_player") else ally["name"]
+        for row, value in enumerate((actor_name, ally.get("character_name", "Recruit"), f"{ally['credits']} C", loadout)):
+            line = regular_font.render(value, True, TEXT_COLOR if row < 2 else (176, 194, 214))
+            screen.blit(line, (x, team_panel.top+50+row*28))
+
+    if status_message:
+        status = regular_font.render(status_message, True, BULLET_COLOR)
+        screen.blit(status, status.get_rect(center=(screen.get_width()//2, screen.get_height()-34)))
+
+
+def set_dialogue(match_state, actor, reason="round"):
+    """Choose one replaceable character line and display it briefly."""
+    character_id = actor.get("character_id")
+    lines = CHARACTER_DIALOGUE.get(character_id)
+    if not lines:
+        return
+    line = random.choice(lines)
+    match_state["dialogue_text"] = f"{actor.get('character_name', 'UNKNOWN').upper()}: {line}"
+    match_state["dialogue_timer"] = 4.0
+
+
+def update_dialogue(match_state, delta_time):
+    if match_state.get("dialogue_timer", 0.0) > 0:
+        match_state["dialogue_timer"] = max(0.0, match_state["dialogue_timer"] - delta_time)
+
+
+def draw_dialogue(screen, font, match_state):
+    if match_state.get("dialogue_timer", 0.0) <= 0 or not match_state.get("dialogue_text"):
+        return
+    text = font.render(match_state["dialogue_text"], True, TEXT_COLOR)
+    padding = 14
+    box = text.get_rect(midbottom=(screen.get_width()//2, screen.get_height()-90)).inflate(padding*2, padding*2)
+    panel = pygame.Surface(box.size, pygame.SRCALPHA)
+    panel.fill((9, 12, 18, 215))
+    screen.blit(panel, box)
+    pygame.draw.rect(screen, RIFT_BLUE_COLOR, box, width=2, border_radius=8)
+    screen.blit(text, text.get_rect(center=box.center))
+
+
+def begin_new_match(
+    match_state,
+    scores,
+    actors,
+    weapon_states,
+    bullets,
+    bullet_marks,
+    destructible_objects,
+    rift_state,
+    dropped_weapons,
+    team_rift_energy,
+):
+    """Reset the match and begin the Version 0.9 assigned-class lock-in phase."""
+    scores["blue"] = 0
+    scores["red"] = 0
+    team_rift_energy["blue"] = STARTING_TEAM_RIFT_ENERGY
+    team_rift_energy["red"] = STARTING_TEAM_RIFT_ENERGY
+    for actor in actors:
+        actor["credits"] = STARTING_CREDITS
+        actor["last_buy_round"] = 0
+        actor["paradox_memory"] = None
+        reset_actor_loadout(actor)
+    reset_round(
+        actors,
+        weapon_states,
+        bullets,
+        bullet_marks,
+        destructible_objects,
+        rift_state,
+        dropped_weapons,
+    )
+    assign_match_classes(actors)
+    player = next(actor for actor in actors if actor.get("is_player"))
+    match_state.clear()
+    match_state.update(
+        {
+            "phase": "character_select",
+            "timer": CHARACTER_SELECT_DURATION,
+            "message": "",
+            "round_number": 1,
+            "selected_character_id": player.get("pending_character_id"),
+            "character_status": f"ASSIGNED {player.get('assigned_class', '?').upper()}",
+            "actors": actors,
+            "dialogue_text": "",
+            "dialogue_timer": 0.0,
+            "player_just_locked": False,
+        }
+    )
+
+
 def main():
     pygame.init()
+    _ensure_asset_directories()
+    presentation_settings = dict(PRESENTATION_SETTINGS_DEFAULTS)
+    audio = PresentationAudio(presentation_settings)
     paradox_warning_sound = make_paradox_warning_sound()
     paradox_warning_audio_tokens = set()
 
     screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-    pygame.display.set_caption("Riftbound - Version 0.8 Characters - Paradox Conduit")
+    pygame.display.set_caption("Riftbound - Version 0.9 Presentation - Offline 5v5")
     pygame.mouse.set_visible(True)
 
     clock = pygame.time.Clock()
@@ -9811,6 +10765,10 @@ def main():
         "round_number": 1,
         "selected_character_id": None,
         "character_status": "",
+        "actors": actors,
+        "dialogue_text": "",
+        "dialogue_timer": 0.0,
+        "player_just_locked": False,
     }
     vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
     cached_world_polygon = []
@@ -9822,6 +10780,7 @@ def main():
     ability_status_message = ""
     ability_status_timer = 0.0
     ui_state = "main_menu"
+    tutorial_page = 0
     paused = False
     game_running = True
 
@@ -9848,7 +10807,10 @@ def main():
                 game_running = False
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    if (
+                    if ui_state in ("settings", "tutorial"):
+                        ui_state = "main_menu"
+                        audio.play("ui")
+                    elif (
                         ui_state == "game"
                         and not paused
                         and player.get("character_id") == PARADOX["id"]
@@ -9865,43 +10827,19 @@ def main():
                     if event.key == pygame.K_RETURN:
                         start_game_requested = True
                     continue
+                if ui_state in ("settings", "tutorial"):
+                    continue
 
                 if paused:
                     continue
 
                 if match_state["phase"] == "character_select":
-                    if event.key == pygame.K_1:
-                        character_select_requested = "malphas"
-                    elif event.key == pygame.K_2:
-                        character_select_requested = "longshot"
-                    elif event.key == pygame.K_3:
-                        character_select_requested = "varek"
-                    elif event.key == pygame.K_4:
-                        character_select_requested = "miri"
-                    elif event.key == pygame.K_5:
-                        character_select_requested = "relay"
-                    elif event.key == pygame.K_6:
-                        character_select_requested = "haze"
-                    elif event.key == pygame.K_7:
-                        character_select_requested = "sable"
-                    elif event.key == pygame.K_8:
-                        character_select_requested = "aurel"
-                    elif event.key == pygame.K_9:
-                        character_select_requested = "ward"
-                    elif event.key == pygame.K_0:
-                        character_select_requested = "paradox"
+                    options = player.get("selection_options", [])
+                    if event.key == pygame.K_1 and len(options) >= 1:
+                        character_select_requested = options[0]
+                    elif event.key == pygame.K_2 and len(options) >= 2:
+                        character_select_requested = options[1]
                     continue
-
-                if match_state["phase"] == "playing" and relay_teleport_selecting(player):
-                    quadrant_keys = {
-                        pygame.K_1: "top_left",
-                        pygame.K_2: "top_right",
-                        pygame.K_3: "bottom_left",
-                        pygame.K_4: "bottom_right",
-                    }
-                    if event.key in quadrant_keys:
-                        relay_teleport_quadrant_requested = quadrant_keys[event.key]
-                        continue
 
                 if event.key == pygame.K_r:
                     reload_requested = True
@@ -9958,16 +10896,10 @@ def main():
                     and match_state["phase"] == "playing"
                     and relay_teleport_selecting(player)
                 ):
-                    mid_x = screen.get_width() // 2
-                    mid_y = screen.get_height() // 2
-                    if event.pos[0] < mid_x and event.pos[1] < mid_y:
-                        relay_teleport_quadrant_requested = "top_left"
-                    elif event.pos[0] >= mid_x and event.pos[1] < mid_y:
-                        relay_teleport_quadrant_requested = "top_right"
-                    elif event.pos[0] < mid_x and event.pos[1] >= mid_y:
-                        relay_teleport_quadrant_requested = "bottom_left"
-                    else:
-                        relay_teleport_quadrant_requested = "bottom_right"
+                    for quadrant, rect in relay_teleport_card_rects(screen):
+                        if rect.collidepoint(event.pos):
+                            relay_teleport_quadrant_requested = quadrant
+                            break
                 elif (
                     ui_state == "game"
                     and not paused
@@ -9975,16 +10907,59 @@ def main():
                 ):
                     trigger_just_pressed = True
 
-        # Main menu interaction is kept outside the match simulation.
+        # Presentation menus stay completely outside match simulation.
+        if ui_state == "settings":
+            audio.set_music_context("menu")
+            if ui_click_position is not None:
+                result = handle_settings_click(screen, presentation_settings, audio, ui_click_position)
+                if result == "back":
+                    ui_state = "main_menu"
+            pygame.mouse.set_visible(True)
+            draw_settings_screen(screen, debug_font, ammunition_font, presentation_settings)
+            pygame.display.flip()
+            continue
+
+        if ui_state == "tutorial":
+            audio.set_music_context("menu")
+            if ui_click_position is not None:
+                for button in _tutorial_buttons(screen, tutorial_page):
+                    if not button.contains(ui_click_position):
+                        continue
+                    audio.play("ui")
+                    if button.action == "back":
+                        if tutorial_page > 0:
+                            tutorial_page -= 1
+                        else:
+                            ui_state = "main_menu"
+                    elif button.action == "next":
+                        tutorial_page = min(len(TUTORIAL_PAGES)-1, tutorial_page+1)
+                    elif button.action == "done":
+                        ui_state = "main_menu"
+                    break
+            pygame.mouse.set_visible(True)
+            draw_tutorial_screen(screen, debug_font, ammunition_font, tutorial_page)
+            pygame.display.flip()
+            continue
+
         if ui_state == "main_menu":
+            audio.set_music_context("menu")
             if ui_click_position is not None:
                 for button in get_main_menu_buttons(screen):
                     if button.contains(ui_click_position):
+                        audio.play("ui")
                         if button.action == "play":
                             start_game_requested = True
+                        elif button.action == "tutorial":
+                            tutorial_page = 0
+                            ui_state = "tutorial"
+                        elif button.action == "settings":
+                            ui_state = "settings"
                         elif button.action == "quit":
                             game_running = False
+                        break
 
+            if ui_state != "main_menu":
+                continue
             if not game_running:
                 break
 
@@ -10002,6 +10977,7 @@ def main():
                     team_rift_energy,
                 )
                 ui_state = "game"
+                audio.set_music_context("game")
                 paused = False
                 active_weapon_index = 0
                 buy_status_message = ""
@@ -10033,6 +11009,7 @@ def main():
                 elif button.action == "main_menu":
                     paused = False
                     ui_state = "main_menu"
+                    audio.set_music_context("menu")
                 elif button.action == "quit":
                     game_running = False
                 break
@@ -10069,35 +11046,26 @@ def main():
             )
         )
         pygame.mouse.set_visible(
-            paused or match_state["phase"] == "character_select" or paradox_selection_open
+            paused
+            or match_state["phase"] in ("character_select", "buying")
+            or paradox_selection_open
         )
 
         if not paused and match_state["phase"] == "character_select":
             if ui_click_position is not None:
-                selected = handle_character_select_click(
-                    match_state,
-                    player,
-                    ui_click_position,
-                )
+                selected = handle_character_select_click(match_state, player, ui_click_position)
                 if selected:
+                    audio.play("lock" if player.get("character_locked", False) else "ui")
                     stamina = player["max_stamina"]
                     sprint_exhausted = False
 
-            if character_select_requested is not None:
-                selected_character = get_playable_character(character_select_requested)
-                if selected_character is None:
-                    locked_name = character_select_requested.upper()
-                    match_state["character_status"] = (
-                        f"{locked_name} IS NOT IMPLEMENTED YET"
-                    )
-                else:
-                    apply_character_to_actor(player, selected_character)
-                    match_state["selected_character_id"] = selected_character["id"]
-                    match_state["character_status"] = (
-                        f"{selected_character['name'].upper()} SELECTED"
-                    )
-                    stamina = player["max_stamina"]
-                    sprint_exhausted = False
+            if character_select_requested is not None and not player.get("character_locked", False):
+                if character_select_requested in player.get("selection_options", []):
+                    player["pending_character_id"] = character_select_requested
+                    match_state["selected_character_id"] = character_select_requested
+                    selected_character = get_playable_character(character_select_requested)
+                    match_state["character_status"] = f"{selected_character['name'].upper()} READY - PRESS LOCK IN"
+                    audio.play("ui")
 
         if restart_requested and match_state["phase"] == "match_over":
             begin_new_match(
@@ -10143,6 +11111,8 @@ def main():
                 match_state["phase"] = "buying"
                 match_state["timer"] = BUY_PHASE_DURATION
                 match_state["message"] = ""
+                set_dialogue(match_state, player, "round")
+                audio.play("round")
                 buy_status_message = ""
                 share_status_timer = 0.0
                 ability_status_message = ""
@@ -10159,6 +11129,11 @@ def main():
                 camera_shake_strength = 0.0
                 vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
 
+        if not paused and match_state["phase"] == "buying" and ui_click_position is not None:
+            clicked_weapon = buy_weapon_from_click(screen, ui_click_position)
+            if clicked_weapon is not None:
+                purchase_weapon_requested = clicked_weapon
+
         if (
             not paused
             and match_state["phase"] == "buying"
@@ -10168,6 +11143,8 @@ def main():
                 player,
                 purchase_weapon_requested,
             )
+            if purchased:
+                audio.play("buy")
             if actor_owns_weapon(player, purchase_weapon_requested):
                 active_weapon_index = purchase_weapon_requested
 
@@ -10193,12 +11170,9 @@ def main():
                 share_status_timer = SHARE_STATUS_DURATION
 
         if match_state["phase"] == "character_select" and not paused:
-            match_state["timer"] = max(0.0, match_state["timer"] - delta_time)
-            if match_state["timer"] <= 0:
-                if match_state.get("selected_character_id") is None:
-                    apply_character_to_actor(player, MALPHAS)
-                    match_state["selected_character_id"] = MALPHAS["id"]
-                    match_state["character_status"] = "MALPHAS AUTO-SELECTED"
+            selection_complete = update_character_selection(match_state, actors, delta_time)
+            if selection_complete:
+                match_state["selected_character_id"] = player.get("character_id")
                 stamina = player["max_stamina"]
                 sprint_exhausted = False
                 match_state["phase"] = "buying"
@@ -10206,6 +11180,8 @@ def main():
                 match_state["message"] = ""
                 buy_status_message = ""
                 share_status_timer = 0.0
+                set_dialogue(match_state, player, "lock")
+                audio.play("round")
 
         if match_state["phase"] == "buying" and not paused:
             # Bots decide once per Buy Phase. Surviving bots with a purchased
@@ -10228,6 +11204,9 @@ def main():
             ability_status_timer = max(0.0, ability_status_timer - delta_time)
             if ability_status_timer == 0:
                 ability_status_message = ""
+
+        if not paused:
+            update_dialogue(match_state, delta_time)
 
         current_obstacle_signature = tuple(
             not destructible["destroyed"]
@@ -10404,6 +11383,8 @@ def main():
                     cached_world_polygon = []
                     vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
             ability_status_timer = 2.0
+            if ability_status_message and not any(word in ability_status_message for word in ("UNAVAILABLE", "NEED", "USED", "COOLDOWN", "NO ")):
+                audio.play("ability")
 
         if player_can_act and ultimate_requested:
             if player.get("character_id") == MALPHAS["id"]:
@@ -10444,12 +11425,17 @@ def main():
                         player, actors, rift_state
                     )
             ability_status_timer = 2.0
+            if ability_status_message and not any(word in ability_status_message for word in ("UNAVAILABLE", "NEED", "USED", "COOLDOWN", "NO ")):
+                audio.play("ability")
 
         if aurel_inferno_charging(player):
             movement_direction.update(0, 0)
         if (
             player.get("character_id") == PARADOX["id"]
-            and player.get("ability_state", {}).get("reflection_selection_open", False)
+            and (
+                player.get("ability_state", {}).get("reflection_selection_open", False)
+                or player.get("ability_state", {}).get("reflection_charge_remaining", 0.0) > 0
+            )
         ):
             movement_direction.update(0, 0)
 
@@ -10619,6 +11605,8 @@ def main():
                 else:
                     _, ability_status_message = try_activate_paradox_echo(player, rift_state)
             ability_status_timer = 2.0
+            if ability_status_message and not any(word in ability_status_message for word in ("UNAVAILABLE", "NEED", "USED", "COOLDOWN", "NO ")):
+                audio.play("ability")
 
         for weapon_state in weapon_states:
             weapon_state["shot_cooldown"] = max(
@@ -10646,6 +11634,7 @@ def main():
             and (
                 player.get("ability_state", {}).get("echo_selection_open", False)
                 or player.get("ability_state", {}).get("reflection_selection_open", False)
+                or player.get("ability_state", {}).get("reflection_charge_remaining", 0.0) > 0
             )
         )
         if (
@@ -10794,6 +11783,7 @@ def main():
             and not paradox_menu_blocks_weapon
         )
         if can_fire:
+            audio.play("melee" if active_weapon["fire_mode"] == "melee" else "shot")
             if active_weapon["fire_mode"] == "melee":
                 _, knife_geometry_changed = perform_knife_attack(
                     player,
@@ -11215,6 +12205,9 @@ def main():
             player,
             ability_status_message,
         )
+        if presentation_settings.get("show_fps", False):
+            fps_surface = debug_font.render(f"FPS {clock.get_fps():.0f}", True, TEXT_COLOR)
+            screen.blit(fps_surface, (screen.get_width()-110, 18))
         draw_match_panel(
             screen,
             debug_font,
@@ -11268,6 +12261,7 @@ def main():
             ammunition_font,
             match_state,
         )
+        draw_dialogue(screen, debug_font, match_state)
         draw_relay_teleport_selector(screen, ammunition_font, player)
         draw_paradox_selection_menus(screen, debug_font, ammunition_font, player, actors, rift_state)
         draw_paradox_enemy_reflection_warning(screen, debug_font, actors, player["team"])
