@@ -658,6 +658,15 @@ CLASS_ORDER = tuple(CLASS_CHARACTER_OPTIONS)
 BOT_CHARACTER_LOCK_MIN = 2.0
 BOT_CHARACTER_LOCK_MAX = 13.0
 
+# Bots make ability decisions at a modest interval instead of evaluating every
+# possibility on every rendered frame. This keeps 5v5 ability AI inexpensive.
+BOT_ABILITY_THINK_MIN = 0.22
+BOT_ABILITY_THINK_MAX = 0.42
+BOT_GUARDIAN_HEAL_THRESHOLD = 0.72
+BOT_AEGIS_HEALTH_THRESHOLD = 0.70
+BOT_TELEPORT_HEALTH_THRESHOLD = 0.35
+BOT_OFFENSIVE_ULT_RANGE = 650
+
 # Artwork and audio are intentionally external-file friendly. Drop replacements
 # into these locations and the prototype will use them on the next launch.
 ASSET_ROOT = Path(__file__).resolve().with_name("assets")
@@ -1538,6 +1547,7 @@ def make_actor(
         "last_buy_round": 0,
         "strafe_direction": random.choice((-1, 1)),
         "strafe_timer": random.uniform(0.7, 1.5),
+        "ability_think_timer": random.uniform(BOT_ABILITY_THINK_MIN, BOT_ABILITY_THINK_MAX),
         "route": [pygame.Vector2(point) for point in (route or [])],
         "route_index": 0,
         "navigation_path": [],
@@ -1628,6 +1638,7 @@ def reset_actor_for_round(actor):
     actor["resurrected_this_round"] = False
     actor["aim_angle"] = 0.0
     actor["shot_cooldown"] = random.uniform(0.0, BOT_FIRE_INTERVAL)
+    actor["ability_think_timer"] = random.uniform(BOT_ABILITY_THINK_MIN, BOT_ABILITY_THINK_MAX)
     actor["route_index"] = 0
     actor["navigation_path"] = []
     actor["navigation_path_index"] = 0
@@ -5223,13 +5234,468 @@ def get_bot_revival_destination(bot, downed_ally, walls):
     return get_bot_navigation_destination(bot, downed_ally["position"], walls)
 
 
-def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
-    """Run bot priorities; enemy Bulwarks affect movement but never line of sight."""
+def update_bot_movement_sound(bot):
+    """Give bot footsteps the same hearing-system meaning as human movement."""
+    state = bot.get("ability_state", {})
+    if state.get("silence_remaining", 0.0) > 0:
+        bot["movement_sound_radius"] = 0.0
+        return
+    previous = bot.get("activity_last_position")
+    if previous is None:
+        bot["movement_sound_radius"] = 0.0
+        return
+    moved = bot["position"].distance_squared_to(previous) >= 1.0
+    bot["movement_sound_radius"] = MALPHAS_WALK_SOUND_RADIUS if moved else 0.0
+
+
+def get_bot_real_visible_enemies(bot, actors, obstacles, rift_state):
+    """Return real enemies the bot can currently act on, excluding hallucination targets."""
+    enemy_team = "red" if bot["team"] == "blue" else "blue"
+    team_has_rift_intel = (
+        rift_state["owner"] == bot["team"] and rift_state["intel_remaining"] > 0
+    )
+    return [
+        actor for actor in actors
+        if actor["team"] == enemy_team
+        and actor_can_fight(actor)
+        and (team_has_rift_intel or sable_visible_to_bot(bot, actor, obstacles))
+    ]
+
+
+def get_bot_wounded_allies(bot, actors, radius=None):
+    """Return living teammates missing meaningful health, nearest first."""
+    result = []
+    for actor in actors:
+        if actor is bot or actor["team"] != bot["team"] or not actor_can_fight(actor):
+            continue
+        if actor["health"] >= actor["max_health"] * BOT_GUARDIAN_HEAL_THRESHOLD:
+            continue
+        if radius is not None and bot["position"].distance_to(actor["position"]) > radius:
+            continue
+        result.append(actor)
+    result.sort(key=lambda actor: bot["position"].distance_squared_to(actor["position"]))
+    return result
+
+
+def get_bot_eliminated_ally(bot, actors):
+    """Return the nearest teammate eligible for Nine Lives."""
+    candidates = [
+        actor for actor in actors
+        if actor is not bot
+        and actor["team"] == bot["team"]
+        and actor.get("eliminated", False)
+        and not actor.get("resurrected_this_round", False)
+    ]
+    if not candidates:
+        return None
+    return min(candidates, key=lambda actor: bot["position"].distance_squared_to(actor["position"]))
+
+
+def get_bot_ability_information_position(bot, actors):
+    """Turn information abilities into a historical position the bot can investigate."""
+    enemy_team = "red" if bot["team"] == "blue" else "blue"
+    character_id = bot.get("character_id")
+    state = bot.get("ability_state", {})
+
+    # Longshot's Resonance Sweep already stores an exact historical snapshot.
+    if character_id == LONGSHOT["id"]:
+        echoes = [
+            actor for actor in actors
+            if actor["team"] == enemy_team
+            and actor.get("resonance_echo_remaining", 0.0) > 0
+            and actor.get("resonance_echo_position") is not None
+        ]
+        if echoes:
+            actor = min(
+                echoes,
+                key=lambda target: bot["position"].distance_squared_to(target["resonance_echo_position"]),
+            )
+            return pygame.Vector2(actor["resonance_echo_position"])
+
+    # Track exposes recent event positions rather than a live wall-hack target.
+    track_state = state
+    if character_id == PARADOX["id"]:
+        track_state = state
+    if track_state.get("track_remaining", 0.0) > 0:
+        candidates = []
+        for actor in actors:
+            if actor["team"] != enemy_team:
+                continue
+            for event in actor.get("track_events", []):
+                if event.get("remaining", 0.0) <= 0:
+                    continue
+                candidates.append((event.get("remaining", 0.0), pygame.Vector2(event["position"])))
+        if candidates:
+            # Highest remaining lifetime is the newest evidence.
+            return max(candidates, key=lambda item: item[0])[1]
+
+    # Scent of Blood gives a pursuit direction. Prefer real trail evidence when
+    # available; otherwise investigate the prey's approximate current direction.
+    if character_id == SABLE["id"] and state.get("scent_remaining", 0.0) > 0:
+        targets = [actor for actor in state.get("scent_targets", []) if actor_can_fight(actor)]
+        if targets:
+            target = min(targets, key=lambda actor: bot["position"].distance_squared_to(actor["position"]))
+            events = [event for event in target.get("track_events", []) if event.get("remaining", 0.0) > 0]
+            if events:
+                return pygame.Vector2(max(events, key=lambda event: event["remaining"])["position"])
+            offset = target["position"] - bot["position"]
+            if offset.length_squared() > 0:
+                rough_distance = min(SABLE_SCENT_RADIUS * 0.70, max(180.0, offset.length()))
+                return bot["position"] + offset.normalize() * rough_distance
+    return None
+
+
+def bot_choose_teleport_quadrant(bot, actors):
+    """Choose the quadrant with the fewest currently standing enemies."""
+    enemy_team = "red" if bot["team"] == "blue" else "blue"
+    counts = {key: 0 for key in ("top_left", "top_right", "bottom_left", "bottom_right")}
+    for actor in actors:
+        if actor["team"] != enemy_team or not actor_can_fight(actor):
+            continue
+        x, y = actor["position"]
+        horizontal = "left" if x < WORLD_WIDTH / 2 else "right"
+        vertical = "top" if y < WORLD_HEIGHT / 2 else "bottom"
+        counts[f"{vertical}_{horizontal}"] += 1
+    minimum = min(counts.values())
+    safest = [quadrant for quadrant, count in counts.items() if count == minimum]
+    return random.choice(safest)
+
+
+def bot_choose_paradox_echo(bot, actors, visible_enemies):
+    """Choose one Rift Echo based on the bot's immediate needs."""
+    if (
+        bot["health"] < bot["max_health"] * BOT_GUARDIAN_HEAL_THRESHOLD
+        or get_bot_wounded_allies(bot, actors, GUARDIAN_FIELD_TREATMENT_RADIUS)
+    ):
+        return "field_treatment"
+    if visible_enemies:
+        nearest = min(visible_enemies, key=lambda actor: bot["position"].distance_squared_to(actor["position"]))
+        if bot["position"].distance_to(nearest["position"]) <= BREAKER_BREACH_RANGE * 1.25:
+            return "breach"
+    if any(
+        actor["team"] != bot["team"] and actor_can_fight(actor) and actor.get("track_events")
+        for actor in actors
+    ):
+        return "track"
+    return "silence"
+
+
+def bot_choose_paradox_reflection(bot, actors, visible_enemies):
+    """Pick a copied ultimate from the legal characters actually present in the match."""
+    choices = get_paradox_reflection_choices(actors)
+    if not choices:
+        return None
+    eliminated_ally = get_bot_eliminated_ally(bot, actors)
+    if eliminated_ally is not None and MIRI["id"] in choices:
+        return MIRI["id"]
+    health_fraction = bot["health"] / max(1.0, bot["max_health"])
+    if health_fraction <= BOT_AEGIS_HEALTH_THRESHOLD and WARD["id"] in choices:
+        return WARD["id"]
+    nearby = [
+        enemy for enemy in visible_enemies
+        if bot["position"].distance_to(enemy["position"]) <= AUREL_INFERNO_RADIUS
+    ]
+    if len(nearby) >= 2 and AUREL["id"] in choices:
+        return AUREL["id"]
+    if visible_enemies:
+        nearest = min(visible_enemies, key=lambda actor: bot["position"].distance_squared_to(actor["position"]))
+        distance = bot["position"].distance_to(nearest["position"])
+        if distance >= 650 and LONGSHOT["id"] in choices:
+            return LONGSHOT["id"]
+        if distance <= 360 and VAREK["id"] in choices:
+            return VAREK["id"]
+        for source in (MALPHAS["id"], SABLE["id"], HAZE["id"], AUREL["id"]):
+            if source in choices:
+                return source
+    return random.choice(choices)
+
+
+def bot_paradox_should_use_stored_echo(bot, actors, visible_enemies):
+    memory = get_paradox_memory(bot)
+    if memory is None:
+        return False
+    echo = memory.get("stored_echo")
+    if echo == "field_treatment":
+        return (
+            bot["health"] < bot["max_health"] * BOT_GUARDIAN_HEAL_THRESHOLD
+            or bool(get_bot_wounded_allies(bot, actors, GUARDIAN_FIELD_TREATMENT_RADIUS))
+        )
+    if echo == "breach":
+        return any(
+            bot["position"].distance_to(enemy["position"]) <= BREAKER_BREACH_RANGE
+            for enemy in visible_enemies
+        )
+    if echo == "track":
+        return bool(visible_enemies) or any(
+            actor["team"] != bot["team"] and actor_can_fight(actor) and actor.get("track_events")
+            for actor in actors
+        )
+    if echo == "silence":
+        return bool(visible_enemies)
+    return False
+
+
+def bot_paradox_should_use_stored_ultimate(bot, actors, visible_enemies):
+    memory = get_paradox_memory(bot)
+    if memory is None:
+        return False
+    source = memory.get("stored_ultimate_source")
+    if source is None:
+        return False
+    eliminated_ally = get_bot_eliminated_ally(bot, actors)
+    health_fraction = bot["health"] / max(1.0, bot["max_health"])
+    nearest_distance = min(
+        (bot["position"].distance_to(enemy["position"]) for enemy in visible_enemies),
+        default=float("inf"),
+    )
+    if source == MIRI["id"]:
+        return eliminated_ally is not None and bot["position"].distance_to(eliminated_ally["position"]) <= MIRI_NINE_LIVES_RANGE
+    if source == WARD["id"]:
+        return health_fraction <= BOT_AEGIS_HEALTH_THRESHOLD or len(visible_enemies) >= 2
+    if source == LONGSHOT["id"]:
+        return nearest_distance < float("inf")
+    if source == VAREK["id"]:
+        return nearest_distance <= 500
+    if source == MALPHAS["id"]:
+        return nearest_distance <= MALPHAS_BLOODLUST_RADIUS
+    if source == AUREL["id"]:
+        return len(visible_enemies) >= 2 or nearest_distance <= 650
+    return bool(visible_enemies)
+
+
+def update_bot_character_abilities(bot, actors, walls, destructible_objects, bullet_marks, active_obstacles, rift_state, delta_time, visible_enemies):
+    """Advance every active bot ability, including projectiles and copied Paradox ultimates."""
+    character_id = bot.get("character_id")
+    geometry_changed = False
+    if character_id == MALPHAS["id"]:
+        update_malphas_abilities(bot, actors, active_obstacles, delta_time)
+    elif character_id == LONGSHOT["id"]:
+        update_longshot_abilities(bot, delta_time)
+        state = bot["ability_state"]
+        if state.get("dead_line_active", False):
+            if state.get("dead_line_requires_release", False):
+                geometry_changed |= update_dead_line_weapon(
+                    bot, False, bot.get("aim_angle", 0.0), walls, destructible_objects, actors, delta_time
+                )
+            elif visible_enemies:
+                geometry_changed |= update_dead_line_weapon(
+                    bot, True, bot.get("aim_angle", 0.0), walls, destructible_objects, actors, delta_time
+                )
+    elif character_id == VAREK["id"]:
+        update_varek_abilities(bot, delta_time)
+    elif character_id == MIRI["id"]:
+        update_guardian_field_treatment(bot, actors, delta_time)
+        update_miri_abilities(bot, actors, active_obstacles, delta_time)
+    elif character_id == RELAY["id"]:
+        update_relay_abilities(bot, rift_state, active_obstacles, delta_time)
+    elif character_id == HAZE["id"]:
+        update_haze_abilities(bot, actors, active_obstacles, delta_time)
+    elif character_id == SABLE["id"]:
+        update_sable_abilities(bot, delta_time)
+    elif character_id == AUREL["id"]:
+        _, changed = update_aurel_abilities(
+            bot, actors, walls, destructible_objects, bullet_marks, delta_time
+        )
+        geometry_changed |= bool(changed)
+    elif character_id == WARD["id"]:
+        update_guardian_field_treatment(bot, actors, delta_time)
+        update_ward_abilities(bot, delta_time)
+    elif character_id == PARADOX["id"]:
+        _, _, changed = update_paradox_abilities(
+            bot, actors, walls, destructible_objects, bullet_marks, rift_state, delta_time
+        )
+        geometry_changed |= bool(changed)
+        memory = get_paradox_memory(bot) or {}
+        if memory.get("active_ultimate_source") == LONGSHOT["id"]:
+            state = memory.get("ultimate_state") or {}
+            if state.get("dead_line_active", False):
+                trigger = bool(visible_enemies) and not state.get("dead_line_requires_release", False)
+                geometry_changed |= update_paradox_dead_line_weapon(
+                    bot, trigger, bot.get("aim_angle", 0.0), walls, destructible_objects, actors, delta_time
+                )
+    return geometry_changed
+
+
+def bot_try_use_character_abilities(bot, actors, walls, destructible_objects, bullet_marks, active_obstacles, rift_state, visible_enemies):
+    """Let one bot make a small set of tactical Q/C/X decisions."""
+    if not actor_can_fight(bot):
+        return False
+    character_id = bot.get("character_id")
+    if get_playable_character(character_id) is None:
+        return False
+    geometry_changed = False
+    nearest = min(
+        visible_enemies,
+        key=lambda actor: bot["position"].distance_squared_to(actor["position"]),
+        default=None,
+    )
+    distance = bot["position"].distance_to(nearest["position"]) if nearest is not None else float("inf")
+    aim_angle = bot.get("aim_angle", 0.0)
+
+    # Q - signature ability.
+    if character_id == MALPHAS["id"] and nearest is not None and 240 <= distance <= MALPHAS_HELLSTEP_RANGE:
+        direction = nearest["position"] - bot["position"]
+        if direction.length_squared() > 0:
+            desired = nearest["position"] - direction.normalize() * 170
+            try_activate_hellstep(bot, desired, active_obstacles)
+    elif character_id == LONGSHOT["id"]:
+        if visible_enemies:
+            try_activate_resonance_sweep(bot, actors)
+    elif character_id == VAREK["id"] and nearest is not None and distance <= 330:
+        try_activate_oni_blade(bot)
+    elif character_id == MIRI["id"] and nearest is not None and distance <= 380:
+        try_activate_feline_lunge(bot)
+    elif character_id == RELAY["id"]:
+        if bot["ability_state"].get("rift_boost_charged", False) and visible_enemies:
+            try_activate_rift_boost(bot)
+    elif character_id == HAZE["id"] and visible_enemies:
+        try_activate_hallucination(bot)
+    elif character_id == SABLE["id"]:
+        if visible_enemies or any(actor["team"] != bot["team"] and actor.get("track_events") for actor in actors):
+            try_activate_scent_of_blood(bot, actors, active_obstacles)
+    elif character_id == AUREL["id"] and nearest is not None and 160 <= distance <= 1200:
+        try_activate_cinderbolt(bot, aim_angle)
+    elif character_id == WARD["id"] and nearest is not None and 220 <= distance <= WARD_BULWARK_RANGE + 150:
+        forward = nearest["position"] - bot["position"]
+        if forward.length_squared() > 0:
+            target = bot["position"] + forward.normalize() * min(170.0, max(100.0, distance * 0.42))
+            try_activate_bulwark(bot, target, aim_angle, active_obstacles)
+    elif character_id == PARADOX["id"]:
+        state = bot["ability_state"]
+        memory = get_paradox_memory(bot)
+        if memory.get("stored_echo") is not None and bot_paradox_should_use_stored_echo(bot, actors, visible_enemies):
+            success, _, changed = try_use_paradox_echo(
+                bot, aim_angle, active_obstacles, destructible_objects, actors, bullet_marks
+            )
+            geometry_changed |= bool(success and changed)
+        elif state.get("echo_selection_open", False):
+            select_paradox_echo(bot, bot_choose_paradox_echo(bot, actors, visible_enemies))
+        elif memory.get("stored_echo") is None and not memory.get("echo_used_this_round") and paradox_inside_rift(bot, rift_state):
+            try_activate_paradox_echo(bot, rift_state)
+
+    # C - one class use per round, evaluated separately from Q.
+    if bot.get("character_class") == "Phantom" and visible_enemies:
+        try_activate_silence(bot)
+    elif bot.get("character_class") == "Hunter":
+        if visible_enemies or any(actor["team"] != bot["team"] and actor.get("track_events") for actor in actors):
+            try_activate_track(bot)
+    elif bot.get("character_class") == "Breaker" and nearest is not None and distance <= BREAKER_BREACH_RANGE:
+        success, _, changed = try_activate_breach_charge(
+            bot, aim_angle, active_obstacles, destructible_objects, actors, bullet_marks
+        )
+        geometry_changed |= bool(success and changed)
+    elif bot.get("character_class") == "Guardian":
+        if (
+            bot["health"] < bot["max_health"] * BOT_GUARDIAN_HEAL_THRESHOLD
+            or get_bot_wounded_allies(bot, actors, GUARDIAN_FIELD_TREATMENT_RADIUS)
+        ):
+            try_activate_field_treatment(bot)
+    elif bot.get("character_class") == "Conduit":
+        health_fraction = bot["health"] / max(1.0, bot["max_health"])
+        if health_fraction <= BOT_TELEPORT_HEALTH_THRESHOLD and relay_inside_rift(bot, rift_state):
+            success, _ = try_activate_rift_teleport(bot, rift_state)
+            if success:
+                begin_relay_rift_teleport(bot, bot_choose_teleport_quadrant(bot, actors), rift_state)
+
+    # X - earned ultimate. Each activation function preserves its own spend timing.
+    if character_id == MALPHAS["id"] and ultimate_charge_ready(bot) and distance <= MALPHAS_BLOODLUST_RADIUS:
+        try_activate_bloodlust(bot)
+    elif character_id == LONGSHOT["id"] and ultimate_charge_ready(bot) and nearest is not None and distance >= 350:
+        try_activate_dead_line(bot)
+    elif character_id == VAREK["id"] and ultimate_charge_ready(bot) and nearest is not None and distance <= 520:
+        try_activate_unbound_fury(bot)
+    elif character_id == MIRI["id"] and ultimate_charge_ready(bot):
+        try_activate_nine_lives(bot, actors, active_obstacles)
+    elif character_id == RELAY["id"] and ultimate_charge_ready(bot):
+        try_activate_rift_overclock(bot, rift_state)
+    elif character_id == HAZE["id"] and ultimate_charge_ready(bot) and visible_enemies:
+        try_activate_childs_play(bot, actors, active_obstacles)
+    elif character_id == SABLE["id"] and ultimate_charge_ready(bot) and visible_enemies:
+        try_activate_wild_hunt(bot)
+    elif character_id == AUREL["id"] and ultimate_charge_ready(bot):
+        enemies_in_blast = [enemy for enemy in visible_enemies if bot["position"].distance_to(enemy["position"]) <= AUREL_INFERNO_RADIUS]
+        if len(enemies_in_blast) >= 2 or (nearest is not None and distance <= 520):
+            try_activate_explosive_inferno(bot)
+    elif character_id == WARD["id"] and ultimate_charge_ready(bot):
+        health_fraction = bot["health"] / max(1.0, bot["max_health"])
+        if health_fraction <= BOT_AEGIS_HEALTH_THRESHOLD or len(visible_enemies) >= 2:
+            try_activate_personal_aegis(bot)
+    elif character_id == PARADOX["id"]:
+        state = bot["ability_state"]
+        memory = get_paradox_memory(bot)
+        if state.get("reflection_selection_open", False):
+            source = bot_choose_paradox_reflection(bot, actors, visible_enemies)
+            if source is not None:
+                select_paradox_reflection(bot, source, actors, rift_state)
+        elif memory.get("stored_ultimate_source") is not None:
+            if bot_paradox_should_use_stored_ultimate(bot, actors, visible_enemies):
+                try_activate_paradox_stored_ultimate(bot, actors, active_obstacles)
+        elif ultimate_charge_ready(bot) and paradox_reflection_rift_valid(bot, rift_state):
+            try_open_paradox_reflection(bot, actors, rift_state)
+
+    return geometry_changed
+
+
+def bot_special_attack_active(bot):
+    """Return whether normal bot gunfire should yield to an ability weapon/channel."""
+    if longshot_dead_line_active(bot) or varek_blade_active(bot) or miri_feline_lunge_active(bot) or sable_wild_hunt_active(bot):
+        return True
+    if aurel_inferno_charging(bot) or guardian_field_treatment_active(bot) or miri_nine_lives_active(bot):
+        return True
+    if relay_teleport_channel_active(bot):
+        return True
+    if bot.get("character_id") == PARADOX["id"]:
+        state = bot.get("ability_state", {})
+        memory = get_paradox_memory(bot) or {}
+        source = memory.get("active_ultimate_source")
+        if state.get("reflection_charge_remaining", 0.0) > 0 or state.get("reflection_selection_open", False):
+            return True
+        if source in (LONGSHOT["id"], VAREK["id"], MIRI["id"], SABLE["id"]):
+            return True
+        if source == AUREL["id"] and aurel_inferno_charging(bot):
+            return True
+    return False
+
+
+def perform_bot_special_attack(bot, target, actors, walls, destructible_objects, bullet_marks, active_obstacles):
+    """Use ability-granted melee weapons instead of firing a normal gun."""
+    if target is None or target.get("is_haze_hallucination", False):
+        return False
+    aim_angle = bot.get("aim_angle", 0.0)
+    geometry_changed = False
+    if varek_blade_active(bot):
+        if bot["position"].distance_to(target["position"]) <= VAREK_ONI_BLADE_RANGE:
+            geometry_changed |= bool(perform_varek_blade_attack(
+                bot, aim_angle, actors, active_obstacles, destructible_objects, bullet_marks
+            ))
+    elif miri_feline_lunge_active(bot):
+        if bot["position"].distance_to(target["position"]) <= MIRI_CLAW_RANGE:
+            perform_miri_claw_attack(bot, aim_angle, actors, active_obstacles)
+    elif sable_wild_hunt_active(bot):
+        if bot["position"].distance_to(target["position"]) <= SABLE_HUNTING_KNIFE["melee_range"]:
+            geometry_changed |= bool(perform_sable_hunting_knife_attack(
+                bot, aim_angle, actors, active_obstacles, destructible_objects, bullet_marks
+            ))
+    elif bot.get("character_id") == PARADOX["id"]:
+        memory = get_paradox_memory(bot) or {}
+        if memory.get("active_ultimate_source") in (VAREK["id"], SABLE["id"]):
+            if bot["position"].distance_to(target["position"]) <= max(VAREK_ONI_BLADE_RANGE, SABLE_HUNTING_KNIFE["melee_range"]):
+                geometry_changed |= bool(perform_paradox_copied_melee(
+                    bot, aim_angle, actors, active_obstacles, destructible_objects, bullet_marks
+                ))
+    return geometry_changed
+
+
+def update_bot(bot, actors, walls, destructible_objects, active_obstacles, bullet_marks, bullets, delta_time, rift_state):
+    """Run bot movement, combat, and character-ability priorities."""
     if not actor_can_fight(bot):
         return
 
-    movement_walls = list(walls) + get_bulwark_movement_obstacles(bot, actors)
+    movement_walls = get_character_movement_obstacles(
+        bot, walls, destructible_objects, active_obstacles, actors
+    )
     bot["shot_cooldown"] = max(0.0, bot["shot_cooldown"] - delta_time)
+    bot["ability_think_timer"] = max(0.0, bot.get("ability_think_timer", 0.0) - delta_time)
     bot["heard_timer"] = max(0.0, bot["heard_timer"] - delta_time)
     if bot["heard_timer"] == 0:
         bot["heard_position"] = None
@@ -5237,6 +5703,51 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
     if bot["strafe_timer"] <= 0:
         bot["strafe_direction"] *= -1
         bot["strafe_timer"] = random.uniform(0.7, 1.5)
+
+    # Active abilities must keep advancing even while this bot is reviving,
+    # channeling Nine Lives, or otherwise taking a non-combat priority.
+    real_visible_enemies = get_bot_real_visible_enemies(
+        bot, actors, active_obstacles, rift_state
+    )
+    if real_visible_enemies:
+        pre_target = min(
+            real_visible_enemies,
+            key=lambda actor: bot["position"].distance_squared_to(actor["position"]),
+        )
+        pre_vector = pre_target["position"] - bot["position"]
+        if pre_vector.length_squared() > 0:
+            bot["aim_angle"] = math.atan2(pre_vector.y, pre_vector.x)
+    geometry_changed = update_bot_character_abilities(
+        bot, actors, walls, destructible_objects, bullet_marks, active_obstacles,
+        rift_state, delta_time, real_visible_enemies
+    )
+    update_bot_movement_sound(bot)
+
+    # Miri (and Paradox carrying Nine Lives) will actively travel to an eliminated
+    # teammate instead of waiting for that teammate to happen to be nearby.
+    eliminated_ally = get_bot_eliminated_ally(bot, actors)
+    paradox_memory = get_paradox_memory(bot) if bot.get("character_id") == PARADOX["id"] else None
+    wants_nine_lives = (
+        bot.get("character_id") == MIRI["id"] and ultimate_charge_ready(bot)
+    ) or (
+        paradox_memory is not None and paradox_memory.get("stored_ultimate_source") == MIRI["id"]
+    )
+    if eliminated_ally is not None and wants_nine_lives:
+        distance_to_eliminated = bot["position"].distance_to(eliminated_ally["position"])
+        if distance_to_eliminated > MIRI_NINE_LIVES_RANGE * 0.82 or not has_line_of_sight(bot["position"], eliminated_ally["position"], active_obstacles):
+            move_actor_toward(
+                bot,
+                get_bot_navigation_destination(bot, eliminated_ally["position"], movement_walls),
+                BOT_SPEED,
+                delta_time,
+                movement_walls,
+            )
+        else:
+            if bot.get("character_id") == MIRI["id"]:
+                try_activate_nine_lives(bot, actors, active_obstacles)
+            else:
+                try_activate_paradox_stored_ultimate(bot, actors, active_obstacles)
+        return geometry_changed
 
     downed_ally = find_nearest_actor(bot, actors, team=bot["team"], downed_only=True)
     if downed_ally is not None:
@@ -5258,7 +5769,7 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
 
     if downed_ally is not None:
         ally_distance = bot["position"].distance_to(downed_ally["position"])
-        ally_visible = has_line_of_sight(bot["position"], downed_ally["position"], walls)
+        ally_visible = has_line_of_sight(bot["position"], downed_ally["position"], active_obstacles)
         if ally_distance > REVIVE_RANGE or not ally_visible:
             move_actor_toward(
                 bot,
@@ -5268,20 +5779,44 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
                 movement_walls,
             )
         else:
-            try_revive(bot, downed_ally, delta_time, walls)
-        return
+            try_revive(bot, downed_ally, delta_time, active_obstacles)
+        return geometry_changed
 
     enemy_team = "red" if bot["team"] == "blue" else "blue"
     team_has_rift_intel = rift_state["owner"] == bot["team"] and rift_state["intel_remaining"] > 0
-    visible_enemies = [
-        actor for actor in actors
-        if actor["team"] == enemy_team
-        and actor_can_fight(actor)
-        and (team_has_rift_intel or sable_visible_to_bot(bot, actor, walls))
-    ]
-    visible_enemies.extend(get_haze_false_targets_for_bot(bot, actors, walls))
+
+    if bot["ability_think_timer"] <= 0:
+        geometry_changed |= bot_try_use_character_abilities(
+            bot, actors, walls, destructible_objects, bullet_marks, active_obstacles,
+            rift_state, real_visible_enemies
+        )
+        bot["ability_think_timer"] = random.uniform(BOT_ABILITY_THINK_MIN, BOT_ABILITY_THINK_MAX)
+
+    # Paradox needs to choose automatically after either acquisition menu opens.
+    if bot.get("character_id") == PARADOX["id"]:
+        state = bot.get("ability_state", {})
+        if state.get("echo_selection_open", False):
+            select_paradox_echo(bot, bot_choose_paradox_echo(bot, actors, real_visible_enemies))
+        if state.get("reflection_selection_open", False):
+            source = bot_choose_paradox_reflection(bot, actors, real_visible_enemies)
+            if source is not None:
+                select_paradox_reflection(bot, source, actors, rift_state)
+
+    visible_enemies = list(real_visible_enemies)
+    visible_enemies.extend(get_haze_false_targets_for_bot(bot, actors, active_obstacles))
 
     if not visible_enemies:
+        information_position = get_bot_ability_information_position(bot, actors)
+        if information_position is not None:
+            info_vector = information_position - bot["position"]
+            if info_vector.length_squared() > 0:
+                bot["aim_angle"] = math.atan2(info_vector.y, info_vector.x)
+            if info_vector.length() > 55:
+                move_actor_toward(
+                    bot, information_position, BOT_SPEED, delta_time, movement_walls
+                )
+            return geometry_changed
+
         heard_enemies = [
             actor for actor in actors
             if actor["team"] == enemy_team
@@ -5305,7 +5840,7 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
                 move_actor_toward(
                     bot, bot["heard_position"], BOT_SPEED, delta_time, movement_walls
                 )
-            return
+            return geometry_changed
 
         rift_distance = bot["position"].distance_to(rift_state["position"])
         if rift_distance > RIFT_RADIUS * 0.60:
@@ -5320,7 +5855,7 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
             outward = bot["position"] - rift_state["position"]
             if outward.length_squared() > 0:
                 bot["aim_angle"] = math.atan2(outward.y, outward.x)
-        return
+        return geometry_changed
 
     target = min(
         visible_enemies,
@@ -5329,28 +5864,58 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
     target_vector = target["position"] - bot["position"]
     target_distance = target_vector.length()
     if target_distance == 0:
-        return
+        return geometry_changed
 
     forward = target_vector.normalize()
     bot["aim_angle"] = math.atan2(forward.y, forward.x)
     if sable_wild_hunt_active(target) and not team_has_rift_intel:
-        target_in_line_of_sight = sable_visible_to_bot(bot, target, walls)
+        target_in_line_of_sight = sable_visible_to_bot(bot, target, active_obstacles)
     else:
-        target_in_line_of_sight = is_actor_visible(bot["position"], target, walls)
+        target_in_line_of_sight = is_actor_visible(bot["position"], target, active_obstacles)
 
-    if target_distance > BOT_PREFERRED_DISTANCE:
-        move_player(bot["position"], forward * BOT_SPEED * delta_time, movement_walls)
-    elif target_distance < BOT_RETREAT_DISTANCE:
-        move_player(bot["position"], -forward * BOT_SPEED * delta_time, movement_walls)
-    else:
-        sideways = pygame.Vector2(-forward.y, forward.x)
-        move_player(
-            bot["position"],
-            sideways * BOT_SPEED * 0.55 * bot["strafe_direction"] * delta_time,
-            movement_walls,
+    bot_move_speed = BOT_SPEED
+    if varek_unbound_fury_active(bot):
+        bot_move_speed *= VAREK_FURY_SPEED_MULTIPLIER
+    if sable_wild_hunt_active(bot):
+        bot_move_speed *= SABLE_WILD_HUNT_SPEED_MULTIPLIER
+    if bot.get("character_id") == PARADOX["id"]:
+        copied_source = (get_paradox_memory(bot) or {}).get("active_ultimate_source")
+        if copied_source == VAREK["id"]:
+            bot_move_speed *= VAREK_FURY_SPEED_MULTIPLIER
+        elif copied_source == SABLE["id"]:
+            bot_move_speed *= SABLE_WILD_HUNT_SPEED_MULTIPLIER
+
+    melee_mode = varek_blade_active(bot) or miri_feline_lunge_active(bot) or sable_wild_hunt_active(bot)
+    if bot.get("character_id") == PARADOX["id"]:
+        melee_mode = melee_mode or (get_paradox_memory(bot) or {}).get("active_ultimate_source") in (VAREK["id"], SABLE["id"])
+    desired_distance = 95 if melee_mode else BOT_PREFERRED_DISTANCE
+    retreat_distance = 0 if melee_mode else BOT_RETREAT_DISTANCE
+
+    # Channels that explicitly forbid movement hold the bot in place.
+    movement_blocked = guardian_field_treatment_active(bot) or miri_nine_lives_active(bot) or aurel_inferno_charging(bot)
+    if bot.get("character_id") == PARADOX["id"]:
+        pstate = bot.get("ability_state", {})
+        movement_blocked = movement_blocked or pstate.get("reflection_charge_remaining", 0.0) > 0 or pstate.get("reflection_selection_open", False)
+
+    if not movement_blocked:
+        if target_distance > desired_distance:
+            move_player(bot["position"], forward * bot_move_speed * delta_time, movement_walls)
+        elif target_distance < retreat_distance:
+            move_player(bot["position"], -forward * bot_move_speed * delta_time, movement_walls)
+        elif not melee_mode:
+            sideways = pygame.Vector2(-forward.y, forward.x)
+            move_player(
+                bot["position"],
+                sideways * bot_move_speed * 0.55 * bot["strafe_direction"] * delta_time,
+                movement_walls,
+            )
+
+    if target_in_line_of_sight and bot_special_attack_active(bot):
+        geometry_changed |= perform_bot_special_attack(
+            bot, target, actors, walls, destructible_objects, bullet_marks, active_obstacles
         )
 
-    if bot["shot_cooldown"] <= 0 and target_in_line_of_sight:
+    if bot["shot_cooldown"] <= 0 and target_in_line_of_sight and not bot_special_attack_active(bot):
         bot_weapon_index = get_bot_weapon_index(bot, target_distance)
         bot_weapon = WEAPONS[bot_weapon_index]
         projectile_count = bot_weapon.get("projectiles_per_shot", 1)
@@ -5367,6 +5932,8 @@ def update_bot(bot, actors, walls, bullets, delta_time, rift_state):
                 )
             )
         bot["shot_cooldown"] = max(BOT_FIRE_INTERVAL, bot_weapon["seconds_per_shot"])
+
+    return geometry_changed
 
 
 def reset_revival_sources(actors):
@@ -10706,7 +11273,7 @@ def main():
     paradox_warning_audio_tokens = set()
 
     screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-    pygame.display.set_caption("Riftbound - Version 0.9 Presentation - Offline 5v5")
+    pygame.display.set_caption("Riftbound - Version 0.9 Presentation - Bot Abilities - Offline 5v5")
     pygame.mouse.set_visible(True)
 
     clock = pygame.time.Clock()
@@ -11888,16 +12455,31 @@ def main():
                 )
                 share_status_timer = SHARE_STATUS_DURATION
 
+            bot_ability_geometry_changed = False
             for actor in actors:
                 if not actor["is_player"]:
-                    update_bot(
+                    bot_ability_geometry_changed |= bool(update_bot(
                         actor,
                         actors,
+                        walls,
+                        destructible_objects,
                         active_obstacles,
+                        bullet_marks,
                         bullets,
                         delta_time,
                         rift_state,
-                    )
+                    ))
+
+            if bot_ability_geometry_changed:
+                active_obstacles = get_active_obstacle_rects(walls, destructible_objects)
+                active_obstacle_signature = tuple(
+                    not destructible["destroyed"]
+                    for destructible in destructible_objects
+                )
+                wall_segments = get_wall_segments(active_obstacles)
+                wall_corners = get_wall_corners(active_obstacles)
+                cached_world_polygon = []
+                vision_frames_since_update = VISION_RENDER_FRAMES_PER_UPDATE
 
             separate_standing_actors(actors, active_obstacles)
             finish_unattended_revives(actors)
